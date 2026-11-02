@@ -216,6 +216,8 @@ fn new(name: String, from: Option<String>, branch: Option<String>) -> Result<()>
     for w in out["warnings"].as_array().into_iter().flatten() {
         eprintln!("warning: {}", w.as_str().unwrap_or_default());
     }
+    // stderr: stdout is the path alone, for `cd "$(strata new x)"`.
+    eprintln!("dependencies: {}", out["seed"].as_str().unwrap_or("?"));
     println!("{}", out["agent"]["path"].as_str().unwrap_or_default());
     Ok(())
 }
@@ -391,6 +393,9 @@ fn status(json: bool) -> Result<()> {
                 field("branch"),
                 field("path")
             );
+            if let Some(tier) = a["seed_tier"].as_str() {
+                println!("      dependencies: {tier}");
+            }
             if a["memory_bytes"].as_u64().unwrap_or(0) > 0 {
                 let note = match a["budget"].as_str() {
                     Some("over") => " (over budget)",

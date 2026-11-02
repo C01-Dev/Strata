@@ -89,7 +89,7 @@ impl Default for Repo {
 impl Default for Seed {
     fn default() -> Self {
         Self {
-            paths: vec!["node_modules".into()],
+            paths: vec!["**/node_modules".into()],
             fallback: Fallback::Install,
             warm_pool: 1,
         }
@@ -253,7 +253,7 @@ base = {base:?}                     # branch Strata's own base worktree follows
 worktree_dir = {worktree_dir:?} # where agent worktrees live
 
 [seed]
-paths = ["node_modules", "apps/*/node_modules", "packages/*/node_modules"]
+paths = ["**/node_modules"]       # ignored folders cloned from a donor (`*` = one folder, `**` = any depth)
 fallback = "install"              # after clone: install | copy | hardlink
 warm_pool = 1
 

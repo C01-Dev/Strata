@@ -34,9 +34,11 @@ pub struct Agent {
     pub path: PathBuf,
     pub branch: String,
     pub state: AgentState,
-    /// How dependencies got into the worktree: install, install-failed, none (not a JS repo);
-    /// absent for adopted worktrees.
+    /// How dependencies got into the worktree: clone, install, install-failed, none (not a JS
+    /// repo); absent for adopted worktrees.
     pub seed_tier: Option<String>,
+    /// Dependency identity when it was seeded (PLAN's dep_key).
+    pub dep_key: Option<String>,
     pub created_at: i64,
 }
 
@@ -142,7 +144,7 @@ fn text(path: &Path) -> Result<&str> {
     })
 }
 
-const AGENT_COLS: &str = "id, repo_id, name, path, branch, state, created_at, seed_tier";
+const AGENT_COLS: &str = "id, repo_id, name, path, branch, state, created_at, seed_tier, dep_key";
 
 fn agent(r: &Row) -> rusqlite::Result<Agent> {
     Ok(Agent {
@@ -154,6 +156,7 @@ fn agent(r: &Row) -> rusqlite::Result<Agent> {
         state: AgentState::parse(&r.get::<_, String>(5)?)?,
         created_at: r.get(6)?,
         seed_tier: r.get(7)?,
+        dep_key: r.get(8)?,
     })
 }
 
@@ -270,21 +273,56 @@ impl Store {
         Ok(())
     }
 
-    /// Deletes the agent with its process records, ports and snapshot record.
+    /// Deletes the agent with its process records, ports, snapshot record and donor entry.
     pub fn delete_agent(&self, id: i64) -> Result<()> {
         for table in ["processes", "ports", "snapshots"] {
             self.conn
                 .execute(&format!("DELETE FROM {table} WHERE agent_id = ?1"), [id])?;
         }
+        self.conn.execute(
+            "DELETE FROM donors WHERE path = (SELECT path FROM agents WHERE id = ?1)",
+            [id],
+        )?;
         self.conn
             .execute("DELETE FROM agents WHERE id = ?1", [id])?;
         Ok(())
     }
 
-    pub fn set_agent_seed_tier(&self, id: i64, tier: &str) -> Result<()> {
+    pub fn set_agent_seed(&self, id: i64, tier: &str, dep_key: Option<&str>) -> Result<()> {
         self.conn.execute(
-            "UPDATE agents SET seed_tier = ?1 WHERE id = ?2",
-            params![tier, id],
+            "UPDATE agents SET seed_tier = ?1, dep_key = ?2 WHERE id = ?3",
+            params![tier, dep_key, id],
+        )?;
+        Ok(())
+    }
+
+    /// The checkout registered as donor for `dep_key` (PLAN 4.1).
+    pub fn donor(&self, repo_id: i64, dep_key: &str) -> Result<Option<PathBuf>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT path FROM donors WHERE repo_id = ?1 AND dep_key = ?2",
+                params![repo_id, dep_key],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()?
+            .map(PathBuf::from))
+    }
+
+    /// Makes `path` the donor for `dep_key`, replacing any other; a checkout donates one key.
+    pub fn set_donor(&self, repo_id: i64, dep_key: &str, path: &Path) -> Result<()> {
+        self.delete_donor(repo_id, path)?;
+        self.conn.execute(
+            "INSERT OR REPLACE INTO donors (repo_id, dep_key, path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![repo_id, dep_key, text(path)?, now()],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_donor(&self, repo_id: i64, path: &Path) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM donors WHERE repo_id = ?1 AND path = ?2",
+            params![repo_id, text(path)?],
         )?;
         Ok(())
     }

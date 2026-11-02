@@ -8,7 +8,9 @@ publish.workspace = true
 
 [dependencies]
 strata-core.workspace = true
+strata-seed.workspace = true
 strata-git.workspace = true
+strata-overlay.workspace = true
 axum.workspace = true
 clap.workspace = true
 libc.workspace = true

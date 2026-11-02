@@ -264,6 +264,26 @@ pub fn uninitialized_submodules(path: &Path) -> Result<Vec<String>> {
         .collect())
 }
 
+/// Ignored files and outermost ignored folders (folders end in `/`), relative to `dir`.
+pub fn ignored(dir: &Path) -> Result<Vec<String>> {
+    let out = git(
+        dir,
+        &[
+            "ls-files",
+            "-z",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+        ],
+    )?;
+    Ok(out
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(String::from)
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

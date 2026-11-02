@@ -60,8 +60,12 @@ pub fn run(no_service: bool) -> Result<()> {
     }
     let registered = client::post("/v1/repos", json!({ "root": root }))?;
     println!(
-        "base worktree: {}",
-        registered["base_worktree"].as_str().unwrap_or("?")
+        "base worktree: {} (dependencies: {})",
+        registered["base_worktree"].as_str().unwrap_or("?"),
+        registered["seed"].as_str().unwrap_or("?")
     );
+    for w in registered["warnings"].as_array().into_iter().flatten() {
+        eprintln!("warning: {}", w.as_str().unwrap_or_default());
+    }
     Ok(())
 }

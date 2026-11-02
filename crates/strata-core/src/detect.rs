@@ -2,7 +2,8 @@
 //! the repo's own TypeScript version and its dev script.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageManager {
@@ -193,6 +194,29 @@ fn yarn_pnp(root: &Path) -> bool {
         .find_map(|l| l.trim().strip_prefix("nodeLinker:"))
         .map(|v| v.trim().trim_matches(['"', '\'']));
     linker.is_none_or(|v| v == "pnp")
+}
+
+/// The `node` to run: `STRATA_NODE`, else `node` on `PATH`.
+pub fn node() -> PathBuf {
+    std::env::var_os("STRATA_NODE").map_or_else(|| PathBuf::from("node"), PathBuf::from)
+}
+
+/// Node ABI and platform (`"127 darwin-arm64"`), part of every `dep_key`: native addons built
+/// for one do not load in another. Asked once per process.
+pub fn node_runtime() -> crate::Result<String> {
+    static RUNTIME: OnceLock<String> = OnceLock::new();
+    if let Some(r) = RUNTIME.get() {
+        return Ok(r.clone());
+    }
+    let out = std::process::Command::new(node())
+        .args([
+            "-p",
+            "process.versions.modules + ' ' + process.platform + '-' + process.arch",
+        ])
+        .output()
+        .map_err(|e| crate::Error::Refused(format!("cannot run node ({e})")))?;
+    let r = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    Ok(RUNTIME.get_or_init(|| r).clone())
 }
 
 #[cfg(test)]

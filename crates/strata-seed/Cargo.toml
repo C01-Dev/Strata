@@ -1,0 +1,13 @@
+[package]
+name = "strata-seed"
+description = "Dependency seeding: clone a donor's ignored folders into a worktree"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

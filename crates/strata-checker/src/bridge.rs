@@ -35,9 +35,7 @@ pub fn install_script(home: &Path) -> Result<PathBuf> {
 }
 
 /// `$STRATA_NODE`, else `node` from PATH.
-pub fn node() -> PathBuf {
-    std::env::var_os("STRATA_NODE").map_or_else(|| PathBuf::from("node"), PathBuf::from)
-}
+pub use strata_core::detect::node;
 
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value>>>>>;
 

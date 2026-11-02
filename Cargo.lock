@@ -1285,8 +1285,10 @@ dependencies = [
  "strata-core",
  "strata-git",
  "strata-mcp",
+ "strata-overlay",
  "strata-proc",
  "strata-proxy",
+ "strata-seed",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
@@ -1371,6 +1373,14 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
+]
+
+[[package]]
+name = "strata-seed"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "tempfile",
 ]
 
 [[package]]

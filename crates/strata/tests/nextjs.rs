@@ -1,6 +1,6 @@
 //! Gate 3: five Next.js dev servers behind the proxy, hot reload checked over each one's HMR
 //! WebSocket (through the proxy), and no process or port left after `strata rm`. Ignored by
-//! default: each agent installs Next with `npm ci` (from the npm cache after the first run).
+//! default: the base installs Next with `npm ci` (from the npm cache after the first run).
 //! Run: cargo test -p strata --test nextjs -- --ignored --nocapture
 
 mod common;
@@ -141,7 +141,7 @@ fn five_next_servers_hot_reload_behind_the_proxy_and_rm_leaves_nothing() {
     for agent in AGENTS {
         let t = Instant::now();
         e.strata(&["new", agent]);
-        println!("strata new {agent} (npm ci): {}", secs(t));
+        println!("strata new {agent}: {}", secs(t));
     }
     let t = Instant::now();
     for agent in AGENTS {

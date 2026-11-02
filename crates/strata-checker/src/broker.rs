@@ -205,19 +205,10 @@ impl Broker {
     async fn runtime(&self) -> Result<&str> {
         self.runtime
             .get_or_try_init(|| async {
-                let out = tokio::process::Command::new(node())
-                    .args([
-                        "-p",
-                        "process.versions.modules + ' ' + process.platform + '-' + process.arch",
-                    ])
-                    .output()
+                tokio::task::spawn_blocking(strata_core::detect::node_runtime)
                     .await
-                    .map_err(|e| {
-                        Error::Checker(format!(
-                            "cannot run node ({e}); the shared checker needs Node.js"
-                        ))
-                    })?;
-                Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+                    .map_err(|e| Error::Checker(e.to_string()))?
+                    .map_err(|e| Error::Checker(format!("{e}; the shared checker needs Node.js")))
             })
             .await
             .map(String::as_str)

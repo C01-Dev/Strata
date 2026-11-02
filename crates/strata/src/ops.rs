@@ -4,9 +4,10 @@
 use crate::api::Daemon;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use strata_checker::broker::{Op, Request, Settings};
 use strata_core::config::{Config, is_dns_label, to_dns_label};
@@ -67,50 +68,13 @@ fn ensure_base(root: &Path, cfg: &Config) -> Result<(PathBuf, bool)> {
             if moved {
                 git::checkout_detached(&path, &commit)?;
             }
-            link_dependencies(root, &path, &cfg.seed.paths)?;
             return Ok((path, moved));
         }
         git::forget(root, &path)?;
     }
     fs::create_dir_all(cfg.worktree_dir(root))?;
     git::add_detached(root, &path, &commit)?;
-    link_dependencies(root, &path, &cfg.seed.paths)?;
     Ok((path, true))
-}
-
-/// Phase 2 stopgap until Phase 4 seeds `.base` by clone: symlink each `seed.paths` folder
-/// (`node_modules`, `apps/*/node_modules`, ...) that exists in the main checkout into the base
-/// worktree, so the shared checker can resolve packages. Agents share the base's resolution.
-fn link_dependencies(root: &Path, base: &Path, patterns: &[String]) -> Result<()> {
-    for pattern in patterns {
-        let mut matches = vec![PathBuf::new()];
-        for part in pattern.split('/') {
-            let mut next = vec![];
-            for m in &matches {
-                if part == "*" {
-                    for entry in fs::read_dir(root.join(m)).into_iter().flatten().flatten() {
-                        if entry.file_type().is_ok_and(|t| t.is_dir()) {
-                            next.push(m.join(entry.file_name()));
-                        }
-                    }
-                } else {
-                    next.push(m.join(part));
-                }
-            }
-            matches = next;
-        }
-        for rel in matches {
-            let (from, to) = (root.join(&rel), base.join(&rel));
-            if from.is_dir()
-                && !to.exists()
-                && to.symlink_metadata().is_err()
-                && to.parent().is_some_and(Path::exists)
-            {
-                std::os::unix::fs::symlink(&from, &to)?;
-            }
-        }
-    }
-    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -136,7 +100,10 @@ pub fn register_repo(d: &Daemon, req: RegisterRepo) -> Result<Value> {
     let (base, _) = ensure_base(&root, &cfg)?;
     d.store()
         .event(None, "repo.registered", &root.to_string_lossy())?;
-    Ok(json!({ "repo": repo, "base_worktree": base }))
+    let seeded = seed_base(d, &repo)?;
+    Ok(
+        json!({ "repo": repo, "base_worktree": base, "seed": seeded.describe(), "warnings": seeded.warnings }),
+    )
 }
 
 #[derive(Deserialize)]
@@ -212,18 +179,160 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
     // Installing can take minutes; other agents' git operations need not wait for it. The agent
     // stays `creating` until it is done, so `rm` and the maintenance pass leave it alone.
     drop(git_lock);
-    let (tier, failed) = install_dependencies(&path, &name);
+    let seeded = seed(d, &repo, &cfg, &path, &name, None);
     let mut warnings = warnings;
-    warnings.extend(failed);
-    d.store().set_agent_seed_tier(agent.id, tier)?;
+    warnings.extend(seeded.warnings.iter().cloned());
+    d.store()
+        .set_agent_seed(agent.id, seeded.tier, seeded.dep_key.as_deref())?;
     let port = crate::ports::ensure(d, &agent, &cfg)?;
     d.store().set_agent_state(agent.id, AgentState::Ready)?;
     d.store().event(
         Some(agent.id),
         "agent.created",
-        &format!("{name} (dependencies: {tier})"),
+        &format!("{name} (dependencies: {})", seeded.describe()),
     )?;
-    Ok(json!({ "agent": d.store().agent(repo.id, &name)?, "port": port, "warnings": warnings }))
+    Ok(
+        json!({ "agent": d.store().agent(repo.id, &name)?, "port": port, "seed": seeded.describe(), "warnings": warnings }),
+    )
+}
+
+/// What seeding did for one checkout.
+#[derive(Default)]
+pub struct Seeded {
+    /// clone, install, install-failed, or none (no package.json)
+    pub tier: &'static str,
+    pub dep_key: Option<String>,
+    pub donor: Option<PathBuf>,
+    pub warnings: Vec<String>,
+}
+
+impl Seeded {
+    pub fn describe(&self) -> String {
+        match &self.donor {
+            Some(from) => format!("{} from {}", self.tier, from.display()),
+            None => self.tier.to_string(),
+        }
+    }
+}
+
+/// PLAN's dep_key of a checkout, computed exactly as the checker does.
+fn dep_key(path: &Path, cfg: &Config) -> Result<String> {
+    let mut tree = strata_overlay::Tree::new(path, &cfg.checker.extra_paths);
+    tree.scan()?;
+    Ok(tree.dep_key(&detect::node_runtime()?)?)
+}
+
+/// The registered donor for `key` if it still has that key. A stale or vanished one is dropped:
+/// a stale donor measured slower than a fresh install.
+fn donor(d: &Daemon, repo: &Repo, cfg: &Config, key: &str) -> Option<PathBuf> {
+    let path = d.store().donor(repo.id, key).ok().flatten()?;
+    if dep_key(&path, cfg).is_ok_and(|k| k == key) {
+        return Some(path);
+    }
+    let _ = d.store().delete_donor(repo.id, &path);
+    None
+}
+
+/// Clones `from`'s `seed.paths` folders into `path`; false if `from` has none to give.
+fn clone_from(from: &Path, path: &Path, cfg: &Config) -> Result<bool> {
+    let folders = strata_seed::folders(&git::ignored(from)?, &cfg.seed.paths);
+    Ok(!strata_seed::clone_folders(from, path, &folders)?.is_empty())
+}
+
+/// Seeds a checkout's dependencies (PLAN Phase 4): clones the `seed.paths` folders from the
+/// donor with the same dep_key (or from `also`, if it has that key), else installs, after which
+/// the checkout is the donor for its key. The checkout is usable whatever happens.
+fn seed(
+    d: &Daemon,
+    repo: &Repo,
+    cfg: &Config,
+    path: &Path,
+    log: &str,
+    also: Option<&Path>,
+) -> Seeded {
+    let mut s = Seeded {
+        tier: "none",
+        ..Default::default()
+    };
+    if !path.join("package.json").exists() {
+        return s;
+    }
+    match dep_key(path, cfg) {
+        Ok(k) => s.dep_key = Some(k),
+        Err(e) => s.warnings.push(format!(
+            "cannot compute the dependency key ({e}); installing"
+        )),
+    }
+    if let Some(key) = s.dep_key.clone() {
+        let also = || also.filter(|a| dep_key(a, cfg).is_ok_and(|k| k == key));
+        if let Some(from) = donor(d, repo, cfg, &key).or_else(|| also().map(Path::to_path_buf)) {
+            match clone_from(&from, path, cfg) {
+                Ok(true) => {
+                    s.tier = "clone";
+                    s.donor = Some(from);
+                    return s;
+                }
+                Ok(false) => {}
+                Err(e) => s.warnings.push(format!(
+                    "cloning dependencies from {} failed ({e}); installing instead",
+                    from.display()
+                )),
+            }
+        }
+    }
+    let (tier, failed) = install_dependencies(path, log);
+    s.tier = tier;
+    s.warnings.extend(failed);
+    if tier == "install"
+        && let Some(key) = &s.dep_key
+    {
+        let _ = d.store().set_donor(repo.id, key, path);
+    }
+    s
+}
+
+/// Repos whose base worktree is being seeded right now.
+static SEEDING: Mutex<BTreeSet<i64>> = Mutex::new(BTreeSet::new());
+
+/// Gives the base worktree its own dependencies so it is the donor for its dep_key (PLAN 4.1):
+/// cloned from a donor or from the main checkout when either has the base's key, else
+/// installed. Does nothing when the base already donates its current key. Replaces Phase 2's
+/// links into the main checkout.
+pub fn seed_base(d: &Daemon, repo: &Repo) -> Result<Seeded> {
+    if !SEEDING.lock().unwrap().insert(repo.id) {
+        return Ok(Seeded {
+            tier: "seeding",
+            ..Default::default()
+        });
+    }
+    let result = (|| {
+        let cfg = Config::load(&repo.root)?;
+        let base = base_path(&repo.root, &cfg);
+        if base.join("package.json").exists() {
+            let key = dep_key(&base, &cfg)?;
+            if d.store().donor(repo.id, &key)?.as_deref() == Some(base.as_path()) {
+                return Ok(Seeded {
+                    tier: "seeded",
+                    dep_key: Some(key),
+                    ..Default::default()
+                });
+            }
+        }
+        d.store().delete_donor(repo.id, &base)?;
+        for rel in strata_seed::folders(&git::ignored(&base)?, &cfg.seed.paths) {
+            strata_seed::remove(&base.join(rel))?;
+        }
+        let s = seed(d, repo, &cfg, &base, ".base", Some(&repo.root));
+        if s.tier == "clone"
+            && let Some(key) = &s.dep_key
+        {
+            d.store().set_donor(repo.id, key, &base)?;
+        }
+        d.store().event(None, "base.seeded", &s.describe())?;
+        Ok(s)
+    })();
+    SEEDING.lock().unwrap().remove(&repo.id);
+    result
 }
 
 /// `$STRATA_HOME/logs/<agent>/`.
@@ -463,12 +572,19 @@ pub fn recover(d: &Daemon) -> Result<()> {
 pub async fn maintain(d: Arc<Daemon>) {
     let mut every = tokio::time::interval(Duration::from_secs(2));
     let mut n = 0u64;
+    // At start, a base that is not yet the donor for its key (new, or seeded by Phase 2's links).
+    for repo in d.store().repos().unwrap_or_default() {
+        reseed_base(&d, repo);
+    }
     loop {
         every.tick().await;
         n += 1;
         let dd = d.clone();
         match tokio::task::spawn_blocking(move || tick(&dd)).await {
-            Ok(Ok(orphaned)) => {
+            Ok(Ok((orphaned, moved))) => {
+                for repo in moved {
+                    reseed_base(&d, repo);
+                }
                 for (repo, agent) in orphaned {
                     crate::procs::stop_agent(&d, &agent).await;
                     d.checker.dispose_agent(&repo, &agent.name).await;
@@ -484,10 +600,24 @@ pub async fn maintain(d: Arc<Daemon>) {
     }
 }
 
-/// Returns agents it marked orphaned, with their repo root, so their processes and snapshots can go.
-fn tick(d: &Daemon) -> Result<Vec<(PathBuf, Agent)>> {
+/// Seeds the base in the background: installing can take minutes.
+fn reseed_base(d: &Arc<Daemon>, repo: Repo) {
+    let d = d.clone();
+    tokio::task::spawn_blocking(move || {
+        if let Err(e) = seed_base(&d, &repo) {
+            tracing::warn!("seeding the base worktree of {}: {e}", repo.root.display());
+        }
+    });
+}
+
+/// Agents marked orphaned, with their repo root.
+type Orphans = Vec<(PathBuf, Agent)>;
+
+/// Returns agents it marked orphaned, with their repo root, so their processes and snapshots
+/// can go, and repos whose base moved, so it can be seeded again if its dep_key changed.
+fn tick(d: &Daemon) -> Result<(Orphans, Vec<Repo>)> {
     crate::procs::refresh(d);
-    let mut orphaned = vec![];
+    let (mut orphaned, mut moved) = (vec![], vec![]);
     let _git = d.git.lock().unwrap();
     // Bind first: a `for` keeps its iterator expression's temporaries (the store guard) alive
     // for the whole loop, and the body takes the store lock again.
@@ -504,6 +634,7 @@ fn tick(d: &Daemon) -> Result<Vec<(PathBuf, Agent)>> {
             Ok((path, true)) => {
                 tracing::info!(base = %path.display(), "base worktree moved to {}", cfg.repo.base);
                 d.store().event(None, "base.advanced", &cfg.repo.base)?;
+                moved.push(repo.clone());
             }
             Ok(_) => {}
             Err(e) => tracing::warn!("base worktree for {}: {e}", repo.root.display()),
@@ -531,7 +662,7 @@ fn tick(d: &Daemon) -> Result<Vec<(PathBuf, Agent)>> {
             }
         }
     }
-    Ok(orphaned)
+    Ok((orphaned, moved))
 }
 
 #[derive(Deserialize)]
