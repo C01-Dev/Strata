@@ -422,3 +422,18 @@ Two runs on macOS (M-series, warm npm cache), both passed:
 - `strata init` warns when `repo.worktree_dir` is on another volume than the repo (different `st_dev`): the base then cannot clone the main checkout and installs; agents still clone from the base, which shares their volume. (`doctor` is Phase 5.)
 - Measured cost of the opt-ins on cal.com (APFS, 4.2): copy 20 s, hardlink 56 s. APFS hardlinks are slower than a parallel copy, so on macOS `hardlink` buys nothing; it is for filesystems where links are cheap and copies are not.
 - Test hook: `STRATA_FAULT=no-clone` (debug builds only) makes every clone fail like ext4. Test: with it, `copy` gives the worktree its own files (different inode), `hardlink` the donor's (same inode) plus the warning, `install` installs with the warning. The fixture ships `fallback = "copy"` so its base has files to give on Linux too.
+
+## Phase 4 — task 4.4 fix-ups
+
+- After any seeding from a donor (clone, copy or hardlink, including main checkout → base), `strata_seed::fix_up` runs over each seed folder:
+  - **Paths:** donor paths become the worktree's in pnpm's `.pnpm-workspace-state-v1.json` and `.modules.yaml`, and in every regular file of the folder's `.bin` (old pnpm shims carried absolute `NODE_PATH`s; symlinked bins are skipped).
+  - **Timestamp:** `lastValidatedTimestamp` is set to now.
+  - **Addons:** packages with a node-gyp `build/config.gypi` whose `build/` files (`config.gypi`, `Makefile`, `*.mk`) name the donor are rebuilt with the package manager's own command (`npm rebuild`, `pnpm rebuild`, Yarn Berry `yarn rebuild`; npm's for Yarn 1 and bun, which have none). The log goes to `logs/<agent>/rebuild.log` and the tier reads `clone from X, rebuilt a, b`.
+  - **Hardlink tier:** nothing is rebuilt, with a warning, since a rebuild would write into the donor's files.
+  - **No donor writes:** a rewritten file is a new file renamed over the old one, so a hardlinked donor is never changed.
+- What reality showed:
+  - **cal.com** (Yarn 4, `nodeLinker: node-modules`): no file under any of its `node_modules` contains the checkout's absolute path (`grep -rlF`, 8.7 s over 3.3 GB). Its 6 native addons (msgpackr-extract, node-cpu-profiler, sqlite3, @parcel/watcher, deasync, sharp) all ship prebuilt binaries, with no `build/config.gypi`. So cal.com needs no fix-ups and no rebuilds.
+  - **pnpm 12.11.2:** only `.pnpm-workspace-state-v1.json` holds absolute paths (the `projects` keys); `.bin` shims now resolve their own location and `.modules.yaml` has none. A clone *without* the fix-up still ran `pnpm run` with `verify-deps-before-run=error` and `pnpm install --frozen-lockfile --offline` without reinstalling. The pnpm 10 behaviour PLAN cites (pnpm #14041) does not reproduce on 12, so the fix-up is kept because it is cheap and leaves the state true, not because 12 needs it.
+- Not done: `.bin` folders nested inside pnpm's `.pnpm/*/node_modules/*/node_modules` are not scanned, which would mean walking the whole store; build caches inside `node_modules` (`.cache`, `.vite`) are cloned as they are, since most are content-keyed and deleting them costs time.
+- Found on the way: a pnpm workspace with no lockfile and no `packageManager` field was detected as npm, which then fails on `workspace:` dependencies. `pnpm-workspace.yaml` now means pnpm.
+- Tests: a unit test (state and shim rewritten, timestamp reset, hardlinked donor untouched, two stale addons found including one in `.pnpm`); e2e, a pnpm workspace whose clone's state file names the agent and whose `pnpm run` works (skipped without pnpm); a fake node-gyp addon built in the main checkout is rebuilt in the base and again in the agent, each time in its own folder.

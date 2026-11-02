@@ -44,6 +44,20 @@ impl PackageManager {
         }
     }
 
+    /// Rebuilds the named native addons in place (PLAN 4.4). Yarn 1 and bun have no rebuild
+    /// command; npm's works on any `node_modules`.
+    pub fn rebuild(self, root: &Path, names: &[String]) -> Vec<String> {
+        let base = match self {
+            Self::Pnpm => ["pnpm", "rebuild"],
+            Self::Yarn if root.join(".yarnrc.yml").exists() => ["yarn", "rebuild"],
+            _ => ["npm", "rebuild"],
+        };
+        base.iter()
+            .map(|a| a.to_string())
+            .chain(names.iter().cloned())
+            .collect()
+    }
+
     pub fn run(self, script: &str) -> String {
         match self {
             Self::Npm | Self::Bun => format!("{} run {script}", self.name()),
@@ -152,12 +166,14 @@ pub fn detect(root: &Path) -> Detected {
     } else if exists("package-lock.json") || exists("npm-shrinkwrap.json") {
         Some(PackageManager::Npm)
     } else {
-        // No lockfile yet: trust `packageManager`, else npm if there is a package.json at all.
+        // No lockfile yet: trust `packageManager`, then a pnpm workspace file, else npm if
+        // there is a package.json at all.
         match package_json["packageManager"]
             .as_str()
             .and_then(|s| s.split('@').next())
         {
             Some("pnpm") => Some(PackageManager::Pnpm),
+            None if exists("pnpm-workspace.yaml") => Some(PackageManager::Pnpm),
             Some("yarn") => Some(PackageManager::Yarn),
             Some("bun") => Some(PackageManager::Bun),
             _ if exists("package.json") => Some(PackageManager::Npm),
@@ -250,6 +266,11 @@ mod tests {
             assert_eq!(d.package_manager, Some(pm), "{lock}");
             assert_eq!(d.dev_command, Some(pm.run("dev")));
         }
+        assert_eq!(
+            detect(repo(&[("package.json", "{}"), ("pnpm-workspace.yaml", "")]).path())
+                .package_manager,
+            Some(PackageManager::Pnpm)
+        );
         assert_eq!(
             detect(repo(&[("package.json", r#"{"packageManager":"pnpm@10.0.0"}"#)]).path())
                 .package_manager,

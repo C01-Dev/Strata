@@ -221,3 +221,97 @@ fn without_clones_the_configured_fallback_runs() {
     );
     assert_eq!(agent["seed_tier"], "install");
 }
+
+fn have(tool: &str) -> bool {
+    std::process::Command::new(tool)
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+#[test]
+fn pnpm_state_points_at_the_new_worktree() {
+    if !have("pnpm") || !CLONES {
+        eprintln!("skipped: needs pnpm and clones");
+        return;
+    }
+    let e = common::env(&[
+        (".gitignore", "node_modules\n"),
+        (
+            "package.json",
+            r#"{"name":"root","private":true,"scripts":{"hi":"tool"},"dependencies":{"tool":"workspace:*"}}"#,
+        ),
+        ("pnpm-workspace.yaml", "packages:\n  - \"packages/*\"\n"),
+        (
+            "packages/tool/package.json",
+            r#"{"name":"tool","version":"1.0.0","bin":{"tool":"bin/tool.js"}}"#,
+        ),
+        (
+            "packages/tool/bin/tool.js",
+            "#!/usr/bin/env node\nconsole.log('tool ok')\n",
+        ),
+    ]);
+    std::fs::set_permissions(
+        e.root.join("packages/tool/bin/tool.js"),
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
+    common::git(&e.root, &["add", "."]);
+    common::git(&e.root, &["commit", "-q", "-m", "exec"]);
+    e.strata(&["init", "--no-service"]);
+    let (a, stderr, _) = new(&e, &["a"]);
+    assert!(stderr.contains("dependencies: clone from"), "{stderr}");
+    let state =
+        std::fs::read_to_string(a.join("node_modules/.pnpm-workspace-state-v1.json")).unwrap();
+    let base = e.root.parent().unwrap().join(".strata/app/.base");
+    assert!(state.contains(&format!("\"{}\"", a.display())), "{state}");
+    assert!(!state.contains(&base.display().to_string()), "{state}");
+    let out = std::process::Command::new("pnpm")
+        .args(["--config.verify-deps-before-run=error", "run", "hi"])
+        .current_dir(&a)
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("tool ok"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn addons_built_in_the_donor_are_rebuilt() {
+    if !CLONES {
+        return;
+    }
+    let e = common::env(&[
+        (".gitignore", "node_modules\n"),
+        (
+            "package.json",
+            r#"{"name":"app","private":true,"dependencies":{"addon":"1.0.0"}}"#,
+        ),
+    ]);
+    // A node-gyp addon built in the main checkout: its build files name that folder. Its
+    // install script stands in for the compile and records where it ran.
+    let addon = e.root.join("node_modules/addon");
+    std::fs::create_dir_all(addon.join("build")).unwrap();
+    std::fs::write(
+        addon.join("package.json"),
+        r#"{"name":"addon","version":"1.0.0","scripts":{"install":"node -e \"require('fs').writeFileSync('build/config.gypi', JSON.stringify(process.cwd()))\""}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        addon.join("build/config.gypi"),
+        format!("\"{}\"", addon.display()),
+    )
+    .unwrap();
+    let init = e.strata(&["init", "--no-service"]);
+    assert!(init.contains(", rebuilt addon)"), "{init}");
+    let (a, stderr, _) = new(&e, &["a"]);
+    assert!(stderr.contains(", rebuilt addon"), "{stderr}");
+    let built = std::fs::read_to_string(a.join("node_modules/addon/build/config.gypi")).unwrap();
+    assert_eq!(
+        built,
+        format!("\"{}\"", a.join("node_modules/addon").display())
+    );
+    assert!(e.home.join("logs/a/rebuild.log").exists());
+}

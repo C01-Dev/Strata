@@ -217,15 +217,21 @@ pub struct Seeded {
     pub tier: &'static str,
     pub dep_key: Option<String>,
     pub donor: Option<PathBuf>,
+    /// Native addons rebuilt after seeding (PLAN 4.4).
+    pub rebuilt: Vec<String>,
     pub warnings: Vec<String>,
 }
 
 impl Seeded {
     pub fn describe(&self) -> String {
-        match &self.donor {
+        let mut d = match &self.donor {
             Some(from) => format!("{} from {}", self.tier, from.display()),
             None => self.tier.to_string(),
+        };
+        if !self.rebuilt.is_empty() {
+            d += &format!(", rebuilt {}", self.rebuilt.join(", "));
         }
+        d
     }
 }
 
@@ -247,13 +253,42 @@ fn donor(d: &Daemon, repo: &Repo, cfg: &Config, key: &str) -> Option<PathBuf> {
     None
 }
 
-/// Seeds `from`'s `seed.paths` folders into `path` the given way; false if `from` has none.
-fn seed_from(from: &Path, path: &Path, cfg: &Config, way: Way) -> Result<bool> {
+/// Seeds `from`'s `seed.paths` folders into `path` the given way. Returns them all (for the
+/// fix-ups), or nothing if none was seeded.
+fn seed_from(from: &Path, path: &Path, cfg: &Config, way: Way) -> Result<Vec<PathBuf>> {
     if way == Way::Clone && faulty("no-clone") {
         return Err(std::io::Error::from(std::io::ErrorKind::Unsupported).into());
     }
     let folders = strata_seed::folders(&git::ignored(from)?, &cfg.seed.paths);
-    Ok(!strata_seed::seed_folders(from, path, &folders, way)?.is_empty())
+    let seeded = strata_seed::seed_folders(from, path, &folders, way)?;
+    Ok(if seeded.is_empty() { vec![] } else { folders })
+}
+
+/// Records how a checkout was seeded, then PLAN 4.4's fix-ups: state files pointed at the
+/// checkout, and node-gyp addons built in the donor rebuilt with the package manager. Not when
+/// hardlinked: a rebuild would write into the donor's files.
+fn seeded(s: &mut Seeded, from: PathBuf, path: &Path, folders: &[PathBuf], way: Way, log: &str) {
+    s.tier = way.name();
+    match strata_seed::fix_up(&from, path, folders) {
+        Ok(f) if f.rebuild.is_empty() => {}
+        Ok(f) if way == Way::Hardlink => s.warnings.push(format!(
+            "native addons {} were built in {}; not rebuilt, since that would write into its hardlinked files",
+            f.rebuild.join(", "),
+            from.display()
+        )),
+        Ok(f) => {
+            if let Some(pm) = detect::detect(path).package_manager {
+                match run_logged(path, log, "rebuild", &pm.rebuild(path, &f.rebuild)) {
+                    Ok(()) => s.rebuilt = f.rebuild,
+                    Err(warning) => s.warnings.push(warning),
+                }
+            }
+        }
+        Err(e) => s.warnings.push(format!(
+            "pointing state files at the new worktree failed ({e})"
+        )),
+    }
+    s.donor = Some(from);
 }
 
 /// Seeds a checkout's dependencies (PLAN Phase 4): clones the `seed.paths` folders from the
@@ -284,12 +319,11 @@ fn seed(
         let also = || also.filter(|a| dep_key(a, cfg).is_ok_and(|k| k == key));
         if let Some(from) = donor(d, repo, cfg, &key).or_else(|| also().map(Path::to_path_buf)) {
             match seed_from(&from, path, cfg, Way::Clone) {
-                Ok(true) => {
-                    s.tier = "clone";
-                    s.donor = Some(from);
+                Ok(folders) if !folders.is_empty() => {
+                    seeded(&mut s, from, path, &folders, Way::Clone, log);
                     return s;
                 }
-                Ok(false) => {}
+                Ok(_) => {}
                 // An install would fill the disk too: stop, the partial clone is already gone.
                 Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::StorageFull => {
                     s.tier = "clone-failed";
@@ -315,15 +349,14 @@ fn seed(
                         Fallback::Hardlink => Some(Way::Hardlink),
                     };
                     match way.map(|w| (w, seed_from(&from, path, cfg, w))) {
-                        Some((way, Ok(_))) => {
+                        Some((way, Ok(folders))) => {
                             if way == Way::Hardlink {
                                 s.warnings.push(format!(
                                     "dependencies are hardlinked from {}: the files are shared, so a write to one in this worktree changes it there too",
                                     from.display()
                                 ));
                             }
-                            s.tier = way.name();
-                            s.donor = Some(from);
+                            seeded(&mut s, from, path, &folders, way, log);
                             return s;
                         }
                         Some((way, Err(e))) => s.warnings.push(format!(
@@ -408,12 +441,26 @@ fn install_dependencies(path: &Path, agent: &str) -> (&'static str, Option<Strin
     else {
         return ("none", None);
     };
-    let args = pm.install(path);
-    let log = log_dir(agent).join("install.log");
+    let args: Vec<String> = pm.install(path).iter().map(|a| a.to_string()).collect();
+    match run_logged(path, agent, "install", &args) {
+        Ok(()) => ("install", None),
+        Err(warning) => ("install-failed", Some(warning)),
+    }
+}
+
+/// Runs `args` in `path` with its output in `$STRATA_HOME/logs/<agent>/<name>.log`; the
+/// warning to give if it fails.
+fn run_logged(
+    path: &Path,
+    agent: &str,
+    name: &str,
+    args: &[String],
+) -> std::result::Result<(), String> {
+    let log = log_dir(agent).join(format!("{name}.log"));
     let run = || -> std::io::Result<std::process::ExitStatus> {
         fs::create_dir_all(log_dir(agent))?;
         let out = fs::File::create(&log)?;
-        std::process::Command::new(args[0])
+        std::process::Command::new(&args[0])
             .args(&args[1..])
             .current_dir(path)
             .stdin(std::process::Stdio::null())
@@ -422,19 +469,13 @@ fn install_dependencies(path: &Path, agent: &str) -> (&'static str, Option<Strin
             .status()
     };
     match run() {
-        Ok(status) if status.success() => ("install", None),
-        Ok(status) => (
-            "install-failed",
-            Some(format!(
-                "`{}` failed ({status}); see {}",
-                args.join(" "),
-                log.display()
-            )),
-        ),
-        Err(e) => (
-            "install-failed",
-            Some(format!("could not run `{}`: {e}", args.join(" "))),
-        ),
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(format!(
+            "`{}` failed ({status}); see {}",
+            args.join(" "),
+            log.display()
+        )),
+        Err(e) => Err(format!("could not run `{}`: {e}", args.join(" "))),
     }
 }
 

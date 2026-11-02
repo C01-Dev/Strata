@@ -87,6 +87,133 @@ pub fn seed_folders(
     Ok(done)
 }
 
+/// What `fix_up` changed or found.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct FixUps {
+    /// State files and `.bin` shims whose donor paths now point at the worktree.
+    pub rewritten: Vec<PathBuf>,
+    /// Native addons built by node-gyp whose build files name the donor's folder.
+    pub rebuild: Vec<String>,
+}
+
+/// After seeding `folders` from `donor` into `target` (PLAN 4.4): points known state files
+/// that hold absolute paths at the worktree (pnpm's `.pnpm-workspace-state-v1.json` and
+/// `.modules.yaml`, old pnpm's `.bin` shims), resets pnpm's `lastValidatedTimestamp` to now, and
+/// lists node-gyp addons whose build files name the donor. A rewritten file is a new file
+/// renamed over the old one, so a hardlinked donor's copy is never touched.
+pub fn fix_up(donor: &Path, target: &Path, folders: &[PathBuf]) -> io::Result<FixUps> {
+    let (from, to) = (donor.to_string_lossy(), target.to_string_lossy());
+    let mut out = FixUps::default();
+    for rel in folders {
+        let dir = target.join(rel);
+        let mut files = vec![
+            dir.join(".pnpm-workspace-state-v1.json"),
+            dir.join(".modules.yaml"),
+        ];
+        files.extend(
+            fs::read_dir(dir.join(".bin"))
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path()),
+        );
+        for f in files {
+            if rewrite(&f, &from, &to)? {
+                out.rewritten.push(f);
+            }
+        }
+        out.rebuild.extend(addons(&dir, &from));
+    }
+    out.rebuild.sort();
+    out.rebuild.dedup();
+    Ok(out)
+}
+
+fn rewrite(file: &Path, from: &str, to: &str) -> io::Result<bool> {
+    let Ok(meta) = fs::symlink_metadata(file) else {
+        return Ok(false);
+    };
+    let Some(text) = meta
+        .is_file()
+        .then(|| fs::read(file).ok().and_then(|b| String::from_utf8(b).ok()))
+        .flatten()
+    else {
+        return Ok(false);
+    };
+    let mut new = text.replace(from, to);
+    if file.ends_with(".pnpm-workspace-state-v1.json") {
+        new = reset_timestamp(&new);
+    }
+    if new == text {
+        return Ok(false);
+    }
+    let tmp = file.with_extension("strata-tmp");
+    fs::write(&tmp, new)?;
+    fs::set_permissions(&tmp, meta.permissions())?;
+    fs::rename(&tmp, file)?;
+    Ok(true)
+}
+
+/// pnpm skips its "are dependencies up to date" check while manifests are older than this.
+fn reset_timestamp(json: &str) -> String {
+    let key = "\"lastValidatedTimestamp\":";
+    let Some(at) = json.find(key) else {
+        return json.to_string();
+    };
+    let start = at + key.len();
+    let rest = &json[start..];
+    let digits = rest.trim_start();
+    let pad = rest.len() - digits.len();
+    let len = digits.bytes().take_while(u8::is_ascii_digit).count();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    format!("{}{now}{}", &json[..start + pad], &digits[len..])
+}
+
+/// Packages in a `node_modules` folder (and pnpm's `.pnpm/*/node_modules`) with a node-gyp
+/// `build/config.gypi` whose `build/` files name the donor.
+fn addons(node_modules: &Path, donor: &str) -> Vec<String> {
+    fn packages(dir: &Path, out: &mut Vec<(String, PathBuf)>) {
+        for e in fs::read_dir(dir).into_iter().flatten().flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with('@') {
+                for s in fs::read_dir(e.path()).into_iter().flatten().flatten() {
+                    let sub = s.file_name().to_string_lossy().into_owned();
+                    out.push((format!("{name}/{sub}"), s.path()));
+                }
+            } else if !name.starts_with('.') {
+                out.push((name, e.path()));
+            }
+        }
+    }
+    let mut pkgs = vec![];
+    packages(node_modules, &mut pkgs);
+    for e in fs::read_dir(node_modules.join(".pnpm"))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        packages(&e.path().join("node_modules"), &mut pkgs);
+    }
+    pkgs.into_iter()
+        .filter(|(_, p)| p.join("build/config.gypi").is_file())
+        .filter(|(_, p)| {
+            fs::read_dir(p.join("build"))
+                .into_iter()
+                .flatten()
+                .flatten()
+                .any(|f| {
+                    let n = f.file_name().to_string_lossy().into_owned();
+                    (n == "config.gypi" || n == "Makefile" || n.ends_with(".mk"))
+                        && fs::read_to_string(f.path()).is_ok_and(|t| t.contains(donor))
+                })
+        })
+        .map(|(name, _)| name)
+        .collect()
+}
+
 /// Bytes free to an unprivileged user on the volume holding `path`.
 pub fn free_space(path: &Path) -> io::Result<u64> {
     use std::os::unix::ffi::OsStrExt;
@@ -306,6 +433,75 @@ mod tests {
         assert_ne!(
             ino(&t.path().join("Copy/pkg/index.js")),
             ino(&src.join("pkg/index.js"))
+        );
+    }
+
+    #[test]
+    fn fix_up_points_state_at_the_worktree_and_finds_stale_addons() {
+        let t = tempfile::tempdir().unwrap();
+        let (donor, target) = (t.path().join("donor"), t.path().join("target"));
+        let nm = target.join("node_modules");
+        for d in [
+            ".bin",
+            "napi/build",
+            "@s/pure",
+            ".pnpm/x@1/node_modules/@s/gyp/build",
+        ] {
+            fs::create_dir_all(nm.join(d)).unwrap();
+        }
+        let d = donor.display();
+        let state = format!(
+            "{{\n  \"lastValidatedTimestamp\": 1000,\n  \"projects\": {{ \"{d}\": {{}}, \"{d}/packages/a\": {{}} }}\n}}"
+        );
+        fs::write(nm.join(".pnpm-workspace-state-v1.json"), &state).unwrap();
+        fs::write(
+            nm.join(".bin/tool"),
+            format!("NODE_PATH={d}/node_modules/.pnpm\n"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("../tool/bin.js", nm.join(".bin/link")).unwrap();
+        fs::write(nm.join("napi/build/config.gypi"), "{}").unwrap();
+        fs::write(
+            nm.join("napi/build/napi.target.mk"),
+            format!("INCS := -I{d}/node_modules/nan\n"),
+        )
+        .unwrap();
+        fs::write(
+            nm.join(".pnpm/x@1/node_modules/@s/gyp/build/config.gypi"),
+            format!("\"{d}\""),
+        )
+        .unwrap();
+        // A hardlinked donor file must not change.
+        fs::create_dir_all(&donor).unwrap();
+        fs::hard_link(nm.join(".bin/tool"), donor.join("tool")).unwrap();
+
+        let fixed = fix_up(&donor, &target, &["node_modules".into()]).unwrap();
+        assert_eq!(fixed.rebuild, ["@s/gyp", "napi"]);
+        assert_eq!(fixed.rewritten.len(), 2, "{fixed:?}");
+        let state = fs::read_to_string(nm.join(".pnpm-workspace-state-v1.json")).unwrap();
+        let t = target.display();
+        assert!(
+            state.contains(&format!("\"{t}\": {{}}, \"{t}/packages/a\"")),
+            "{state}"
+        );
+        assert!(!state.contains("1000,"), "timestamp reset: {state}");
+        assert!(
+            fs::read_to_string(nm.join(".bin/tool"))
+                .unwrap()
+                .contains(&t.to_string())
+        );
+        assert!(
+            fs::read_to_string(donor.join("tool"))
+                .unwrap()
+                .contains(&d.to_string())
+        );
+        assert_eq!(
+            fix_up(&donor, &target, &["node_modules".into()])
+                .unwrap()
+                .rewritten
+                .len(),
+            1,
+            "only the timestamp, again"
         );
     }
 
