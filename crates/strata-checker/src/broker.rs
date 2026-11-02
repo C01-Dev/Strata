@@ -308,7 +308,16 @@ impl Broker {
         };
         let mut params = params;
         params["agent"] = json!(req.agent);
-        let mut result = bridge.call(method, params, timeout).await?;
+        let mut result = bridge
+            .call(method, params, timeout)
+            .await
+            .map_err(|e| match e {
+                // Messages name files by base path, like results do.
+                Error::NotFound(m) => Error::NotFound(tr.text_to_wt(&m)),
+                Error::Refused(m) => Error::Refused(tr.text_to_wt(&m)),
+                Error::Checker(m) => Error::Checker(tr.text_to_wt(&m)),
+                e => e,
+            })?;
         tr.response(&mut result);
         one_based(&mut result);
         if let Value::Object(map) = &mut result {

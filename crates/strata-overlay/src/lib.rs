@@ -87,6 +87,11 @@ impl Tree {
         self.files.len()
     }
 
+    /// Relative paths of every walked file (unordered).
+    pub fn files(&self) -> impl Iterator<Item = &str> {
+        self.files.keys().map(String::as_str)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
     }

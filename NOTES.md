@@ -266,3 +266,20 @@ Not covered: Linux x86_64 (CI's `ubuntu-latest` is x86_64; it would need an emul
 - `huge_diff_ratio` is measured against the program's file count from `openBase` (PLAN: "share of project files", libs and dependency types included), not the walked checkout; on a 4-file toy repo one edit was 25% of the checkout.
 - The daemon's socket client moved to `strata-core::client` so the CLI and the MCP server share it.
 - Tests: `strata check` output and exit codes, status, snapshot disposal on `rm`; an rmcp client spawning `strata mcp` lists the 6 tools and calls each; agent found from MCP roots (cwd outside), from `STRATA_AGENT`, and refused with no match. 86 tests in total.
+
+## Phase 2 — task 2.7 parity suite
+
+- `crates/strata-checker/tests/parity.rs`. Shared = one broker on the base, each worktree layered at base paths. Dedicated = per worktree its own broker (own bridge, own tsgo) whose base *is* the worktree, i.e. a snapshot at its own paths. Compared per worktree: whole-project diagnostics; for each sampled file (the agent's changed `.ts`/`.tsx` plus evenly spread untouched ones) its diagnostics and symbols; for 3 identifiers per file (after the first 30%) hover and definition, and references for the first. Results must be equal JSON (minus the `sharing` field); errors must be equal strings.
+- New fixture `tests/fixtures/monorepo`: two packages and an app, three tsconfigs extending one base config, cross-package imports via `paths`; class, interface, enum and namespace for symbols. The test applies three diffs: a signature change breaking callers in other packages plus an added file; a deleted module; a tsconfig change (`noUnusedLocals`) plus an unused local (PLAN's "tsconfig changed in a worktree" row).
+- The Phase 0 fixtures shipped TypeScript 5.9.3 in `node_modules` (Phase 0's harness used its own 7.1 copy). `bench/setup.sh` now links the pinned 7.1.0-beta into every checkout's `node_modules/typescript` (PLAN 0.1: "moves them to the TypeScript 7.1 Beta"); the repo's own copy stays at `node_modules/.typescript-repo`.
+- The broker now translates paths in error messages too (a not-in-project error named the base path).
+- Results (M5 Pro, release build):
+
+| Fixture | Worktrees | Answers compared | Mismatches | Errors (same both sides) | Empty | Diagnostics | Shared / dedicated time |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| monorepo | 3 | 111 | **0** | 0 | 34 | 13 | 0.9 s / 1.2 s |
+| excalidraw | 5 | 500 | **0** | 45 | 140 | 41 | 11.1 s / 11.9 s |
+| cal.com | 5 | 500 | **0** | 0 | 153 | 3,680 | 71.5 s / 70.7 s |
+
+  The 45 excalidraw errors are "not in any configured project" for sampled files under `dev-docs/` (outside the root tsconfig), identical on both sides with worktree paths. Empty = no symbol at a position (keywords, punctuation) or no declarations.
+- `monorepo` runs in `cargo test` (and CI); `excalidraw` and `calcom` are `#[ignore]` (they need `bench/setup.sh` fixtures and ~3 min): `cargo test --release -p strata-checker --test parity -- --ignored --nocapture`.

@@ -71,6 +71,16 @@ worktrees() { # name tsconfig
   done
 }
 
+ts71() { # name: every checkout of the fixture checks with the pinned TypeScript 7.1 (PLAN 0.1);
+          # the repo's own TypeScript stays at node_modules/.typescript-repo
+  local d
+  for d in "$FIX/$1"/base "$FIX/$1"/wt*; do
+    [ -L "$d/node_modules/typescript" ] && continue
+    [ -d "$d/node_modules/typescript" ] && mv "$d/node_modules/typescript" "$d/node_modules/.typescript-repo"
+    ln -s "$BENCH/node_modules/typescript" "$d/node_modules/typescript"
+  done
+}
+
 want=("$@")
 for spec in "${FIXTURES[@]}"; do
   read -r name repo sha tsconfig <<<"$spec"
@@ -79,5 +89,6 @@ for spec in "${FIXTURES[@]}"; do
   migrate "$name"
   install "$name"
   worktrees "$name" "$tsconfig"
+  ts71 "$name"
 done
 log "typescript $(node -p 'require("./node_modules/typescript/package.json").version')"
