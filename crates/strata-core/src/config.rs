@@ -242,15 +242,22 @@ fn normalize(path: &Path) -> PathBuf {
 }
 
 /// The file `strata init` writes, with detected values filled in.
+/// A TOML string literal. Not Rust's `{:?}`: that writes some characters as `\u{afb}`, which
+/// TOML rejects (it wants `\u0AFB`), so a repo folder with one broke `strata init`.
+fn quote(s: &str) -> String {
+    toml::Value::String(s.to_string()).to_string()
+}
+
 pub fn template(base: &str, worktree_dir: &str, dev_command: Option<&str>, app: &str) -> String {
+    let (base, worktree_dir, app) = (quote(base), quote(worktree_dir), quote(app));
     let dev = match dev_command {
-        Some(cmd) => format!("command = {cmd:?}"),
+        Some(cmd) => format!("command = {}", quote(cmd)),
         None => "# command = \"npm run dev\"       # no dev script found in package.json".into(),
     };
     format!(
         r#"[repo]
-base = {base:?}                     # branch Strata's own base worktree follows
-worktree_dir = {worktree_dir:?} # where agent worktrees live
+base = {base}                     # branch Strata's own base worktree follows
+worktree_dir = {worktree_dir} # where agent worktrees live
 
 [seed]
 paths = ["**/node_modules"]       # ignored folders cloned from a donor (`*` = one folder, `**` = any depth)
@@ -271,7 +278,7 @@ port_env = "PORT"
 restart = false                   # restart dev servers after a reboot
 port_range = [4100, 4999]
 proxy_port = 7355
-app = {app:?}                     # gives <agent>.{app}.localhost
+app = {app}                       # agents get <agent>.<app>.localhost
 
 [budget]
 per_agent_mb = 4096
@@ -283,6 +290,91 @@ action = "warn"                   # warn | stop
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    /// Lines a hand-edited strata.toml might hold: known and unknown sections and keys, with
+    /// values of every TOML type, or not TOML at all.
+    fn toml_ish() -> impl Strategy<Value = String> {
+        let section = prop::sample::select(vec![
+            "[repo]",
+            "[seed]",
+            "[checker]",
+            "[dev]",
+            "[budget]",
+            "[nope]",
+            "[[dev]]",
+            "",
+        ]);
+        let key = prop::sample::select(vec![
+            "base",
+            "worktree_dir",
+            "paths",
+            "fallback",
+            "warm_pool",
+            "typescript",
+            "tsconfig",
+            "huge_diff_ratio",
+            "port_range",
+            "proxy_port",
+            "app",
+            "per_agent_mb",
+            "action",
+            "x",
+        ]);
+        let value = prop_oneof![
+            any::<i64>().prop_map(|n| n.to_string()),
+            any::<f64>().prop_map(|f| f.to_string()),
+            any::<String>().prop_map(|s| format!("{s:?}")),
+            Just("[1, 2]".to_string()),
+            Just("[\"a\", 3]".to_string()),
+            Just("{ a = 1 }".to_string()),
+            Just("true".to_string()),
+            any::<String>(),
+        ];
+        prop::collection::vec((section, key, value), 0..12).prop_map(|lines| {
+            lines
+                .into_iter()
+                .map(|(s, k, v)| format!("{s}\n{k} = {v}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+    }
+
+    proptest! {
+        #[test]
+        fn any_name_becomes_a_hostname_label(name in any::<String>()) {
+            prop_assert!(is_dns_label(&to_dns_label(&name)));
+        }
+
+        #[test]
+        fn parsing_never_panics(text in any::<String>()) {
+            let _ = Config::parse(&text);
+        }
+
+        #[test]
+        fn hand_edited_files_parse_or_say_why(text in toml_ish()) {
+            if let Err(e) = Config::parse(&text) {
+                prop_assert!(!e.is_empty());
+            }
+        }
+
+        /// Whatever the branch, folder and dev command are, `strata init` writes a file that
+        /// parses back to them (the app is a hostname label, as `init` makes it).
+        #[test]
+        fn the_template_always_parses_back(
+            base in any::<String>().prop_filter("a branch", |b| !b.trim().is_empty()),
+            dir in any::<String>(),
+            folder in any::<String>(),
+            dev in proptest::option::of(any::<String>()),
+        ) {
+            let app = to_dns_label(&folder);
+            let c = Config::parse(&template(&base, &dir, dev.as_deref(), &app)).unwrap();
+            prop_assert_eq!(&c.repo.base, &base);
+            prop_assert_eq!(c.repo.worktree_dir.as_deref(), Some(std::path::Path::new(&dir)));
+            prop_assert_eq!(c.dev.app.as_deref(), Some(app.as_str()));
+            prop_assert_eq!(c.dev.command.as_deref(), dev.as_deref());
+        }
+    }
 
     #[test]
     fn empty_file_gives_plan_defaults() {

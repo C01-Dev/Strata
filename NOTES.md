@@ -595,3 +595,18 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
   - **Conductor:** `.conductor/settings.toml`, `[scripts] setup = "strata adopt ."` and `archive = "strata rm . --force --keep-branch"`; its scripts run in the workspace folder.
 - For those recipes, `strata rm` now takes a worktree path (or `.` inside it) as well as a name: Conductor's archive script and Claude Code's remove hook know the folder, not Strata's name. Test: `rm .` inside a worktree and `rm <path>` both remove; the main checkout's path is refused.
 - Not checked by running the tools themselves: Claude Code's hook contract was read from its docs and simulated, and Conductor's archive behaviour around its own worktree deletion is untested. If Conductor deletes the folder itself, Strata orphans the agent and `strata gc` clears it.
+
+## Phase 5 — task 5.5 robustness
+
+- Deviation: PLAN says fuzz and property tests. `cargo-fuzz` needs nightly and the toolchain is pinned to stable, so the fuzzing is proptest with arbitrary input (`any::<String>()`, recursive JSON), which runs in every `cargo test`.
+- Config (`strata-core`):
+  - `Config::parse` never panics on arbitrary text.
+  - Generated hand-edited files (known and unknown sections, every TOML value type, junk) parse or give a non-empty reason.
+  - `to_dns_label` makes any string a valid hostname label.
+  - `template()` output parses back to the same base branch, worktree dir and dev command for any input.
+- **Bug found by the last one:** the template quoted values with Rust's `{:?}`, which writes some characters (here an unassigned code point) as `\u{afb}`; TOML only knows `\uXXXX`, so a repo folder or branch name with such a character made `strata init` write a `strata.toml` it could not read back. Values are now quoted with the `toml` crate's own string encoding, and the app comment no longer interpolates the app name. The failing seeds are kept in `crates/strata-core/proptest-regressions/`.
+- Path translator (`strata-checker`):
+  - Relative paths with anything a file name can hold (spaces, Unicode, inner dots; no `.`/`..` segments) round-trip between worktree and base.
+  - Arbitrary text never panics, and text without the base root comes back unchanged.
+  - Arbitrary JSON answers never panic, and after `response()` no `file` field still starts with the base root and no `message` or `text` still contains it.
+- A first version of the last property, "no base path survives anywhere", failed on a bare string in an array. That is by design: `response()` rewrites only the `file`, `message` and `text` fields, where the bridge's answers carry paths. The property was narrowed, not the code.

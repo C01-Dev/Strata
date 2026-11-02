@@ -157,7 +157,80 @@ mod tests {
         prop::collection::vec("[a-zA-Z0-9_.@-]{1,12}", 1..6).prop_map(|parts| parts.join("/"))
     }
 
+    /// Path segments with anything a file name may hold: spaces, Unicode, dots inside names.
+    fn wild_rel_path() -> impl Strategy<Value = String> {
+        prop::collection::vec("[^/\\x00]{1,12}", 1..5)
+            .prop_filter("no . or .. segments", |parts| {
+                parts.iter().all(|p| p != "." && p != "..")
+            })
+            .prop_map(|parts| parts.join("/"))
+    }
+
+    /// Any JSON shape tsgo could answer with.
+    fn json() -> impl Strategy<Value = Value> {
+        let leaf = prop_oneof![
+            Just(Value::Null),
+            any::<bool>().prop_map(Value::from),
+            any::<i64>().prop_map(Value::from),
+            any::<String>().prop_map(Value::from),
+            wild_rel_path().prop_map(|r| Value::from(format!("{BASE}/{r}"))),
+        ];
+        leaf.prop_recursive(4, 32, 6, |inner| {
+            prop_oneof![
+                prop::collection::vec(inner.clone(), 0..6).prop_map(Value::from),
+                prop::collection::hash_map(
+                    prop_oneof![
+                        Just("file".to_string()),
+                        Just("message".to_string()),
+                        Just("text".to_string()),
+                        "[a-zA-Z]{1,8}"
+                    ],
+                    inner,
+                    0..6
+                )
+                .prop_map(|m| Value::Object(m.into_iter().collect())),
+            ]
+        })
+    }
+
     proptest! {
+        #[test]
+        fn wild_paths_round_trip(rel in wild_rel_path()) {
+            let base = format!("{BASE}/{rel}");
+            prop_assert_eq!(t().to_base(Path::new(&format!("{WT}/{rel}"))), PathBuf::from(&base));
+            prop_assert_eq!(t().to_agent(&base), rel.clone());
+        }
+
+        /// Arbitrary text never panics, and text that does not contain the base root comes
+        /// back unchanged.
+        #[test]
+        fn any_text_is_safe(text in any::<String>()) {
+            let out = t().text_to_wt(&text);
+            if !text.contains(BASE) {
+                prop_assert_eq!(&out, &text);
+            }
+            let _ = (t().to_wt(&text), t().to_agent(&text));
+        }
+
+        /// No answer shape panics, no `file` field still names the base, and no `message` or
+        /// `text` still mentions it (other fields carry no paths and are left alone).
+        #[test]
+        fn any_answer_is_translated(mut v in json()) {
+            t().response(&mut v);
+            fn walk(v: &Value) -> Result<(), String> {
+                match v {
+                    Value::Object(m) => m.iter().try_for_each(|(k, v)| match (k.as_str(), v) {
+                        ("file", Value::String(s)) if s.starts_with(&format!("{BASE}/")) => Err(format!("file {s}")),
+                        ("message" | "text", Value::String(s)) if s.contains(&format!("{BASE}/")) => Err(format!("{k} {s}")),
+                        _ => walk(v),
+                    }),
+                    Value::Array(a) => a.iter().try_for_each(walk),
+                    _ => Ok(()),
+                }
+            }
+            prop_assert_eq!(walk(&v), Ok(()));
+        }
+
         #[test]
         fn round_trips(rel in rel_path()) {
             let base = format!("{BASE}/{rel}");
