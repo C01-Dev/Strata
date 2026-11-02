@@ -209,3 +209,11 @@ Not covered: Linux x86_64 (CI's `ubuntu-latest` is x86_64; it would need an emul
 - Built from checker calls, since the 7.1 language service has no quick-info or go-to-definition: hover = keyword from symbol flags + name + `typeToString` (declared type for type aliases) + documentation; definition = aliased symbol's declarations, located at their name; references = `getReferencedSymbolsForNode` on the deepest real node; symbols = top-level declarations, with members of classes, interfaces, enums and namespaces.
 - Base replacement (`openBase` on an existing group) keeps the old base alive, reference-counted, until every agent derived from it has moved to the new base; then it is disposed. That is PLAN's "re-create agent snapshots before disposing the old base".
 - `node --test` suite (4 tests): layered snapshot vs an unshared snapshot of the same worktree agree on diagnostics, hover, definition, references and symbols after path translation; error codes; base retirement. CI runs it.
+
+## Phase 2 — task 2.2 bridge client
+
+- `strata-checker::bridge::Bridge`: spawns `node bridge.mjs <repo>` (`$STRATA_NODE` overrides `node` from PATH), `kill_on_drop`, checks `hello` (protocol 1, TypeScript version), matches replies by id from a reader task, applies per-call timeouts (a timed-out reply that arrives later is dropped, later calls are fine), and on EOF marks itself dead and fails every pending call with "checker restarting, retry in a few seconds". Restarting is the broker's job (task 2.5).
+- Bridge error codes map to Strata errors: `not_in_project` → not found, `bad_request` → refused, `restarting` → refused (retry), `internal` → a new `Error::Checker`.
+- The script is embedded with `include_str!` and written once to `$STRATA_HOME/tsbridge/<version>-<xxh3 of the script>/bridge.mjs` (atomic rename), so a changed script gets a new folder.
+- Verified: SIGKILL of the Node bridge also ends tsgo (its stdio closes); no orphans after the tests.
+- `xxhash-rust` is BSL-1.0 (Boost, permissive); added to the `cargo deny` allow list.

@@ -16,6 +16,9 @@ pub enum Error {
     Refused(String),
     #[error("{0}")]
     NotFound(String),
+    /// The type checker failed (tsgo or the bridge), not the request.
+    #[error("checker: {0}")]
+    Checker(String),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
