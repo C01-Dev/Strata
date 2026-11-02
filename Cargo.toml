@@ -16,6 +16,7 @@ strata-overlay = { path = "crates/strata-overlay" }
 axum = "0.8.9"
 clap = { version = "4.6.7", features = ["derive"] }
 libc = "0.2"
+proptest = "1.12.0"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

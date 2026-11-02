@@ -232,3 +232,10 @@ Not covered: Linux x86_64 (CI's `ubuntu-latest` is x86_64; it would need an emul
 | excalidraw | 818 | 93 ms | 3.7 ms | 0.1 ms | 6 changed, 1 removed |
 
   The layers match Phase 0's. A warm rescan of cal.com costs ~55 ms, so the broker rescans an agent's worktree on every query but the base at most every 2 s (the maintenance tick's cadence).
+
+## Phase 2 — task 2.4 path translator
+
+- `strata-checker::translate::Translator { base, wt }`: `to_base` for request paths (absolute, or relative to the worktree), `to_wt` / `to_agent` for result paths (`to_agent` = relative when inside the worktree, absolute otherwise, MCP's convention), `text_to_wt` for message and hover text, and `response()` to rewrite a whole bridge result (`file` fields, `message` and `text` fields). `identity(root)` serves unshared snapshots.
+- Each root is matched in its given and its real (symlink-resolved) spelling, longest first, and only as a whole root: preceded by start or a non-name character and followed by `/`, end, or a non-name character. So `/x/.base2/...`, `/y/x/.base/...` and `a/x/.base/...` are left alone.
+- proptest (also run with 2,000 cases): round trips for random relative paths; outside and lookalike paths unchanged; every whole root replaced in text. It found nothing in the translator; the case it flagged was a test mistake (a root glued to a word is correctly left alone). Writing the fix exposed one real bug: when two matches touched, the preceding-character check ignored the text already emitted.
+- Lowercased `PathKey`s never reach Rust: the bridge reports `fileName` from resolved nodes (task 2.1).
