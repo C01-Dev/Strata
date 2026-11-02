@@ -610,3 +610,21 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
   - Arbitrary text never panics, and text without the base root comes back unchanged.
   - Arbitrary JSON answers never panic, and after `response()` no `file` field still starts with the base root and no `message` or `text` still contains it.
 - A first version of the last property, "no base path survives anywhere", failed on a bare string in an array. That is by design: `response()` rewrites only the `file`, `message` and `text` fields, where the bridge's answers carry paths. The property was narrowed, not the code.
+
+## Gate 5 preparation (2026-11-02)
+
+- `bench/gate5.sh`, for a clean VM, times the run from the README's install command to an agent getting a type error from the shared checker over MCP:
+  1. the shell installer, fetched from `RELEASE` with `STRATA_DOWNLOAD_URL` pointing at the same local release directory (there is no GitHub release yet);
+  2. a TypeScript 7.1 repo with one error;
+  3. `strata init` (with the service), `strata doctor`, `strata new`;
+  4. a Node MCP client calling `strata_diagnostics` through `strata mcp`.
+
+  `INIT_ARGS=--no-service` exists only for a dry run in a container without systemd.
+- The README now gives a clean machine's prerequisites: git through `xcode-select --install` and Node through Homebrew on macOS, git through apt and Node 22 through NodeSource on Ubuntu (Ubuntu's own `nodejs` is older than 20), and `typescript@7.1.0-beta` for the checker.
+- The release directory: the macOS tarball from `dist build`, and the Linux arm64 tarball built in the `rust:1.99.1-bookworm` container (`--profile dist`, 2.98 MB xz, packed in dist's layout with its `.sha256`), in `target/gate5-release/`.
+- **Tart: not installed, Gate 5 not run.**
+  - The `cirruslabs/cli` Homebrew tap's formula fails on current Homebrew (`depends_on macos:` outside `on_macos`); the tap was removed again.
+  - Downloading Tart's release binary was refused by this session's safety check (code from outside), so the owner downloaded it.
+  - The download from GitHub's release servers ran at about 50 KB/s in `curl` and in the browser, and the browser's copy arrived truncated (1.2 MB, gzip "unexpected end of file"), while a Cloudflare test download ran at 4.8 MB/s on the same connection.
+  - Tart's VM images come from `ghcr.io`, so the roughly 25 GB macOS image was impractical over that route. The partial files were removed.
+- Owner discussion, same day: the shared checker's measured saving (20–30% for whole-project checks, 60–65% for per-file checks, Gate 2) is weaker than the README's first wording ("about one checker plus their diffs"), which is corrected; seeding and process cleanup are the strongest results.

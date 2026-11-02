@@ -2,7 +2,7 @@
 
 Strata is a local runtime for running several coding agents on one TypeScript repo at once. Each agent gets its own git worktree, and Strata makes the expensive parts shared or cheap:
 
-- **One type checker for every worktree.** A single `tsgo` (TypeScript 7.1) holds the base program, and each agent's changes are layered on top of it. Five agents cost about one checker plus their diffs, not five checkers. Agents ask it through MCP: diagnostics, hover, definition, references, symbols.
+- **One type checker for every worktree.** A single `tsgo` (TypeScript 7.1) holds the base program, and each agent's changes are layered on top of it. With five agents on excalidraw and cal.com it used 20–30% less memory than five separate checkers when every agent checked the whole project, and 60–65% less when each checked the files it edited (`NOTES.md`, Gate 2). Agents ask it through MCP: diagnostics, hover, definition, references, symbols.
 - **Dependencies by copy-on-write clone.** `strata new` clones `node_modules` (and any other ignored folders you list) from a worktree that has the same lockfile and manifests. On cal.com that takes about 5–8 s, against a fresh install; with the warm pool, under 1 s.
 - **Dev servers with their own URL, budget and cleanup.** `strata dev <agent>` starts the agent's dev server on its own port behind `http://<agent>.<app>.localhost:7355`, hot reload included. Memory per agent is metered against a budget, and `strata rm` leaves no process or port behind.
 
@@ -17,6 +17,34 @@ It is one binary: CLI, daemon and MCP server.
 - Node.js 20 or later (the shared checker runs `tsgo` through Node)
 - For the shared checker: the repo's own TypeScript 7.1 or later in `node_modules`. Without it, worktrees, seeding, dev servers and budgets still work.
 - For fast seeding: a filesystem with clones (APFS; btrfs, XFS with `reflink=1` or OpenZFS 2.2+ on Linux). Elsewhere (ext4) each new worktree installs its dependencies instead.
+
+On a machine that has neither git nor Node yet:
+
+macOS (git comes with the Command Line Tools; Node from Homebrew):
+
+```bash
+xcode-select --install
+```
+
+```bash
+brew install node
+```
+
+Ubuntu (Node 22 from NodeSource, since Ubuntu's own `nodejs` is older than 20):
+
+```bash
+sudo apt-get update && sudo apt-get install -y git curl xz-utils
+```
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs
+```
+
+To use the shared checker, the repo needs TypeScript 7.1:
+
+```bash
+npm install --save-dev typescript@7.1.0-beta
+```
 
 ## Install
 
