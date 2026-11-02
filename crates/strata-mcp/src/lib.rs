@@ -62,6 +62,31 @@ fn failure(s: String) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(s)])
 }
 
+/// PLAN: an agent over its memory budget is warned "through status, events and MCP", so every
+/// answer carries the warning while it lasts.
+async fn budget_note(agent: &Agent) -> String {
+    let Ok(status) = blocking(|| client::get("/v1/status")).await else {
+        return String::new();
+    };
+    let me = status["repos"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|r| r["agents"].as_array().cloned().unwrap_or_default())
+        .find(|a| a["path"] == agent.path.to_str().unwrap_or_default());
+    let Some(me) = me else { return String::new() };
+    let mb = me["memory_bytes"].as_u64().unwrap_or(0) / 1048576;
+    match me["budget"].as_str() {
+        Some("over") => {
+            format!("\nwarning: your processes use {mb} MB, over this agent's memory budget")
+        }
+        Some("warning") => {
+            format!("\nwarning: your processes use {mb} MB, near this agent's memory budget")
+        }
+        _ => String::new(),
+    }
+}
+
 /// `file:///a%20b` -> `/a b`.
 fn file_uri_path(uri: &str) -> Option<PathBuf> {
     let rest = uri.strip_prefix("file://")?;
@@ -277,7 +302,7 @@ impl Server {
         body["repo"] = json!(agent.repo);
         let path = format!("/v1/agents/{}/check", agent.name);
         match blocking(move || client::post(&path, body)).await {
-            Ok(v) => text(fmt(&v)),
+            Ok(v) => text(fmt(&v) + &budget_note(&agent).await),
             Err(e) => failure(e.to_string()),
         }
     }

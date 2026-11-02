@@ -17,6 +17,7 @@ pub struct Daemon {
     store: Mutex<Store>,
     pub checker: Broker,
     pub procs: procs::Table,
+    pub meter: procs::Meter,
     /// Linux with systemd delegation: the daemon's cgroup, with one child per agent.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     cgroup: Option<std::path::PathBuf>,
@@ -34,6 +35,7 @@ impl Daemon {
             store: Mutex::new(store),
             checker: Broker::new(home),
             procs: Default::default(),
+            meter: Default::default(),
             cgroup: cgroup_root(),
             git: Mutex::new(()),
             shutdown: Notify::new(),
@@ -50,6 +52,14 @@ impl Daemon {
         #[cfg(target_os = "linux")]
         if let Some(root) = &self.cgroup {
             return strata_proc::cgroup::agent(root, _agent).ok();
+        }
+        None
+    }
+
+    pub fn agent_memory_from_cgroup(&self, _agent: &str) -> Option<u64> {
+        #[cfg(target_os = "linux")]
+        if self.cgroup.is_some() {
+            return strata_proc::cgroup::memory(&self.agent_cgroup(_agent)?);
         }
         None
     }
@@ -143,6 +153,15 @@ async fn status(State(d): State<Shared>) -> ApiResult {
                 let mut ps = store.processes(agent.id).map_err(ApiError)?;
                 ps.truncate(10);
                 a["processes"] = json!(ps);
+                let (bytes, level) = d
+                    .meter
+                    .lock()
+                    .unwrap()
+                    .get(&agent.id)
+                    .copied()
+                    .unwrap_or((0, procs::Level::Ok));
+                a["memory_bytes"] = json!(bytes);
+                a["budget"] = json!(level);
                 agents.push(a);
             }
             r["agents"] = json!(agents);
@@ -156,6 +175,7 @@ async fn status(State(d): State<Shared>) -> ApiResult {
         "started_at": d.started_at,
         "repos": repos,
         "checker": d.checker.status().await,
+        "events": d.store().events(20).map_err(ApiError)?,
     })))
 }
 

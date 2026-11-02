@@ -475,6 +475,7 @@ pub async fn maintain(d: Arc<Daemon>) {
             Ok(Err(e)) => tracing::warn!("maintenance: {e}"),
             Err(e) => tracing::warn!("maintenance: {e}"),
         }
+        crate::procs::meter(&d).await;
         if n.is_multiple_of(15) {
             d.checker.maintain().await;
         }

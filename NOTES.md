@@ -323,3 +323,11 @@ Gate 2: "parity passes on all three fixtures, and `strata bench` reproduces the 
 - `strata rm`: validations first (`ops::removable`), then the agent's processes are stopped, then the worktree is removed. An orphaned agent's processes are stopped too.
 - Daemon restart: a process is re-adopted only if pid and start time both match (then polled for exit); otherwise `dead`. With `dev.restart = true`, dead dev servers of ready agents are started again with the same command and port. A graceful `daemon stop` leaves processes running, so an upgrade does not take dev servers down.
 - 6 e2e tests: run output, exit code, worktree cwd, `STRATA_AGENT`, timeout; a child escaped with `setsid` is gone after `rm`; one dev server per agent; another agent cannot stop it; re-adoption after SIGKILL of the daemon; `dead` plus `dev.restart`; orphan cleanup. No stray processes after the suite.
+
+## Phase 3 — task 3.2 memory meter and budgets
+
+- Every maintenance tick (2 s) measures each agent with running processes: its cgroup's `memory.current` where the daemon has delegation, else the sum of macOS `phys_footprint` / Linux PSS over every live process recorded in its trees (deduplicated). The shared checker is reported on its own line (`checker` in status, per group).
+- Budget = `budget.per_agent_mb` (the `agents.budget_mb` column exists but no command sets it yet). Levels: ok, warning (≥ 90%), over (> 100%). Each change upward writes one event (`budget.warning`, `budget.exceeded`). With `budget.action = "stop"`, going over stops the agent's dev and run processes (`budget.stopped` event); the agent and its worktree stay.
+- Warnings reach: `strata status` (`memory N MB (over budget)`), `/v1/status` (`memory_bytes`, `budget`, plus the last 20 `events`), and every MCP answer (a warning line appended while the agent is near or over).
+- Found while doing this: two scripted edits in task 3.1 had silently not applied (the `strata status` process lines); scripted replacements now assert that they matched.
+- Tests: a 60 MB process against a 10 MB budget is metered and reported over budget (warn keeps it running), and with `stop` its process is stopped while the agent stays ready.

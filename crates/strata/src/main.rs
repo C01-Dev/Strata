@@ -362,6 +362,31 @@ fn status(json: bool) -> Result<()> {
                 field("branch"),
                 field("path")
             );
+            if a["memory_bytes"].as_u64().unwrap_or(0) > 0 {
+                let note = match a["budget"].as_str() {
+                    Some("over") => " (over budget)",
+                    Some("warning") => " (near budget)",
+                    _ => "",
+                };
+                println!(
+                    "      memory {} MB{note}",
+                    a["memory_bytes"].as_u64().unwrap_or(0) / 1048576
+                );
+            }
+            let running = a["processes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|p| p["state"] == "running");
+            for p in running {
+                let kind = p["kind"].as_str().unwrap_or("?");
+                println!(
+                    "      process {} ({kind}, pid {}): {}",
+                    p["id"],
+                    p["pid"],
+                    p["cmd"].as_str().unwrap_or("?")
+                );
+            }
         }
     }
     Ok(())

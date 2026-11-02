@@ -262,6 +262,124 @@ pub fn restart_dev_servers(d: &Arc<Daemon>, dead: Vec<Process>) {
     }
 }
 
+/// Budget level per agent: below 90% of the budget, from 90%, above it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Level {
+    Ok,
+    Warning,
+    Over,
+}
+
+/// The latest reading per agent id: bytes used by its processes, and its budget level.
+pub type Meter = std::sync::Mutex<HashMap<i64, (u64, Level)>>;
+
+/// PLAN 3.2, every maintenance tick: memory per agent (its cgroup's `memory.current` where the
+/// daemon has one, else the footprint/PSS of every live process recorded in its trees), then
+/// budgets: a warning event at 90% of `budget.per_agent_mb`, an event above it, and with
+/// `budget.action = "stop"` its dev and run processes are stopped (never the agent itself).
+pub async fn meter(d: &Arc<Daemon>) {
+    let dd = d.clone();
+    let Ok(readings) = tokio::task::spawn_blocking(move || measure(&dd)).await else {
+        return;
+    };
+    for (agent_id, bytes) in readings {
+        let Some((agent, budget)) = budget_for(d, agent_id) else {
+            continue;
+        };
+        let limit = budget.per_agent_mb * 1024 * 1024;
+        let level = if bytes > limit {
+            Level::Over
+        } else if bytes * 10 >= limit * 9 {
+            Level::Warning
+        } else {
+            Level::Ok
+        };
+        let previous = d
+            .meter
+            .lock()
+            .unwrap()
+            .insert(agent_id, (bytes, level))
+            .map(|(_, l)| l);
+        if previous == Some(level) || level == Level::Ok {
+            continue;
+        }
+        let detail = format!(
+            "{} uses {} MB of its {} MB budget",
+            agent.name,
+            bytes / 1048576,
+            budget.per_agent_mb
+        );
+        let kind = if level == Level::Over {
+            "budget.exceeded"
+        } else {
+            "budget.warning"
+        };
+        tracing::warn!("{detail}");
+        let _ = d.store().event(Some(agent_id), kind, &detail);
+        if level == Level::Over && budget.action == strata_core::config::BudgetAction::Stop {
+            stop_agent(d, &agent).await;
+            let _ = d.store().event(
+                Some(agent_id),
+                "budget.stopped",
+                &format!("stopped {}'s processes: {detail}", agent.name),
+            );
+            d.meter.lock().unwrap().insert(agent_id, (0, Level::Ok));
+        }
+    }
+}
+
+fn measure(d: &Daemon) -> Vec<(i64, u64)> {
+    let trees: Vec<(i64, Vec<(u32, u64)>)> = {
+        let mut procs = d.procs.lock().unwrap();
+        procs
+            .values_mut()
+            .map(|t| {
+                record_descendants(t);
+                (t.agent_id, t.recorded.clone())
+            })
+            .collect()
+    };
+    let mut per_agent: HashMap<i64, Vec<(u32, u64)>> = HashMap::new();
+    for (agent, recorded) in trees {
+        per_agent.entry(agent).or_default().extend(recorded);
+    }
+    per_agent
+        .into_iter()
+        .map(|(agent, mut pids)| {
+            pids.sort();
+            pids.dedup();
+            let cgroup = d
+                .store()
+                .agent_by_id(agent)
+                .ok()
+                .flatten()
+                .and_then(|a| d.agent_memory_from_cgroup(&a.name));
+            let bytes = cgroup.unwrap_or_else(|| {
+                pids.iter()
+                    .filter(|&&(p, s)| strata_proc::alive(p, s))
+                    .map(|&(p, _)| strata_proc::process_memory(p))
+                    .sum()
+            });
+            (agent, bytes)
+        })
+        .collect()
+}
+
+fn budget_for(d: &Daemon, agent_id: i64) -> Option<(Agent, strata_core::config::Budget)> {
+    let store = d.store();
+    let agent = store.agent_by_id(agent_id).ok()??;
+    let repo = store
+        .repos()
+        .ok()?
+        .into_iter()
+        .find(|r| r.id == agent.repo_id)?;
+    Some((
+        agent,
+        strata_core::config::Config::load(&repo.root).ok()?.budget,
+    ))
+}
+
 /// The last `n` lines of a log file.
 pub fn tail(path: &Path, n: usize) -> Vec<String> {
     let text = std::fs::read(path)
