@@ -34,6 +34,9 @@ pub struct Agent {
     pub path: PathBuf,
     pub branch: String,
     pub state: AgentState,
+    /// How dependencies got into the worktree: install, install-failed, none (not a JS repo);
+    /// absent for adopted worktrees.
+    pub seed_tier: Option<String>,
     pub created_at: i64,
 }
 
@@ -103,7 +106,7 @@ fn text(path: &Path) -> Result<&str> {
     })
 }
 
-const AGENT_COLS: &str = "id, repo_id, name, path, branch, state, created_at";
+const AGENT_COLS: &str = "id, repo_id, name, path, branch, state, created_at, seed_tier";
 
 fn agent(r: &Row) -> rusqlite::Result<Agent> {
     Ok(Agent {
@@ -114,6 +117,7 @@ fn agent(r: &Row) -> rusqlite::Result<Agent> {
         branch: r.get(4)?,
         state: AgentState::parse(&r.get::<_, String>(5)?)?,
         created_at: r.get(6)?,
+        seed_tier: r.get(7)?,
     })
 }
 
@@ -228,6 +232,14 @@ impl Store {
     pub fn delete_agent(&self, id: i64) -> Result<()> {
         self.conn
             .execute("DELETE FROM agents WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn set_agent_seed_tier(&self, id: i64, tier: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE agents SET seed_tier = ?1 WHERE id = ?2",
+            params![tier, id],
+        )?;
         Ok(())
     }
 

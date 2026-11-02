@@ -22,6 +22,27 @@ impl PackageManager {
         }
     }
 
+    /// The install command for a checkout at `root`: frozen to the lockfile when there is one;
+    /// without one, told not to write a lockfile (that would dirty the worktree and change its
+    /// dependency key).
+    pub fn install(self, root: &Path) -> Vec<&'static str> {
+        let has = |f: &str| root.join(f).exists();
+        match self {
+            Self::Npm if has("package-lock.json") || has("npm-shrinkwrap.json") => {
+                vec!["npm", "ci"]
+            }
+            Self::Npm => vec!["npm", "install", "--no-package-lock"],
+            Self::Pnpm if has("pnpm-lock.yaml") => vec!["pnpm", "install", "--frozen-lockfile"],
+            Self::Pnpm => vec!["pnpm", "install", "--lockfile=false"],
+            Self::Yarn if has(".yarnrc.yml") => vec!["yarn", "install", "--immutable"],
+            Self::Yarn => vec!["yarn", "install", "--frozen-lockfile"],
+            Self::Bun if has("bun.lock") || has("bun.lockb") => {
+                vec!["bun", "install", "--frozen-lockfile"]
+            }
+            Self::Bun => vec!["bun", "install", "--no-save"],
+        }
+    }
+
     pub fn run(self, script: &str) -> String {
         match self {
             Self::Npm | Self::Bun => format!("{} run {script}", self.name()),
@@ -160,6 +181,30 @@ mod tests {
             Some(PackageManager::Pnpm)
         );
         assert_eq!(detect(repo(&[]).path()).package_manager, None);
+    }
+
+    #[test]
+    fn install_commands_follow_the_lockfile() {
+        let r = repo(&[("package.json", "{}")]);
+        assert_eq!(
+            PackageManager::Npm.install(r.path()),
+            ["npm", "install", "--no-package-lock"]
+        );
+        let r = repo(&[("package.json", "{}"), ("package-lock.json", "{}")]);
+        assert_eq!(PackageManager::Npm.install(r.path()), ["npm", "ci"]);
+        let r = repo(&[
+            ("yarn.lock", ""),
+            (".yarnrc.yml", "nodeLinker: node-modules\n"),
+        ]);
+        assert_eq!(
+            PackageManager::Yarn.install(r.path()),
+            ["yarn", "install", "--immutable"]
+        );
+        let r = repo(&[("pnpm-lock.yaml", "")]);
+        assert_eq!(
+            PackageManager::Pnpm.install(r.path()),
+            ["pnpm", "install", "--frozen-lockfile"]
+        );
     }
 
     #[test]

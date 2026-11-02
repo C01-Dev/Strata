@@ -307,3 +307,10 @@ Gate 2: "parity passes on all three fixtures, and `strata bench` reproduces the 
   Largest difference 5 points (excalidraw per-file), mostly the shared side's Node bridge (~50 MB on ~0.5 GiB). One run per configuration; Phase 0 saw run-to-run GC noise of a few hundred MB on whole-project peaks.
 - Timing seen in passing (not a gate item, not investigated): cal.com whole-project diagnostics for 5 agents took 5.8 s shared vs 8.2 s baseline in `strata bench`, where Phase 0's Node harness measured 18 s vs 10.6 s.
 - Not covered: Linux (Phase 2 code ran on macOS only; the `strata-proc` Linux path and the bridge on Linux have not run), CI (no remote), and the daemon's `.base` uses `node_modules` symlinks until Phase 4.
+
+## Phase 3 — task 3.0 install tier
+
+- `strata new` installs dependencies in the new worktree with the worktree's own package manager: `npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable` (Berry) or `--frozen-lockfile` (Yarn 1), `bun install --frozen-lockfile`. Without a lockfile it tells the manager not to write one (`--no-package-lock`, `--lockfile=false`, `--no-save`): a new lockfile would dirty the worktree and change its `dep_key`. Lifecycle scripts run (postinstall steps such as `prisma generate` are usually needed for dev servers). Output goes to `$STRATA_HOME/logs/<agent>/install.log`.
+- The daemon's git lock is released before installing, so other agents' git operations do not wait minutes. The agent stays `creating` meanwhile: `rm` refuses it, the maintenance pass skips it, and crash recovery undoes it.
+- A failed install leaves a usable worktree: `seed_tier = install-failed` and a warning naming the log. `seed_tier` (`install`, `install-failed`, `none` for repos without `package.json`) is now in the agent record and status; adopted worktrees have none.
+- Deviation, decided for the whole phase: process groups use `std`'s `process_group(0)` plus `libc` signals and descendant tracking instead of the `process-wrap` crate; v0.1 has no Windows job objects to justify it.

@@ -148,7 +148,7 @@ pub struct NewAgent {
 }
 
 pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
-    let _git = d.git.lock().unwrap();
+    let git_lock = d.git.lock().unwrap();
     let (repo, cfg) = repo_for(d, &req.repo)?;
     let (root, name) = (&repo.root, req.name);
     if !is_dns_label(&name) {
@@ -209,9 +209,65 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
         .into_iter()
         .map(|s| format!("submodule {s} is not initialized; run `git submodule update --init {s}` in the worktree"))
         .collect();
+    // Installing can take minutes; other agents' git operations need not wait for it. The agent
+    // stays `creating` until it is done, so `rm` and the maintenance pass leave it alone.
+    drop(git_lock);
+    let (tier, failed) = install_dependencies(&path, &name);
+    let mut warnings = warnings;
+    warnings.extend(failed);
+    d.store().set_agent_seed_tier(agent.id, tier)?;
     d.store().set_agent_state(agent.id, AgentState::Ready)?;
-    d.store().event(Some(agent.id), "agent.created", &name)?;
+    d.store().event(
+        Some(agent.id),
+        "agent.created",
+        &format!("{name} (dependencies: {tier})"),
+    )?;
     Ok(json!({ "agent": d.store().agent(repo.id, &name)?, "warnings": warnings }))
+}
+
+/// `$STRATA_HOME/logs/<agent>/`.
+pub fn log_dir(agent: &str) -> PathBuf {
+    strata_core::strata_home().join("logs").join(agent)
+}
+
+/// PLAN 3.0, the plain-install tier (Phase 4 puts cloning in front of it): the worktree's
+/// package manager installs into it. Returns the tier and, if the install failed, a warning;
+/// the worktree is usable either way.
+fn install_dependencies(path: &Path, agent: &str) -> (&'static str, Option<String>) {
+    let Some(pm) = detect::detect(path)
+        .package_manager
+        .filter(|_| path.join("package.json").exists())
+    else {
+        return ("none", None);
+    };
+    let args = pm.install(path);
+    let log = log_dir(agent).join("install.log");
+    let run = || -> std::io::Result<std::process::ExitStatus> {
+        fs::create_dir_all(log_dir(agent))?;
+        let out = fs::File::create(&log)?;
+        std::process::Command::new(args[0])
+            .args(&args[1..])
+            .current_dir(path)
+            .stdin(std::process::Stdio::null())
+            .stdout(out.try_clone()?)
+            .stderr(out)
+            .status()
+    };
+    match run() {
+        Ok(status) if status.success() => ("install", None),
+        Ok(status) => (
+            "install-failed",
+            Some(format!(
+                "`{}` failed ({status}); see {}",
+                args.join(" "),
+                log.display()
+            )),
+        ),
+        Err(e) => (
+            "install-failed",
+            Some(format!("could not run `{}`: {e}", args.join(" "))),
+        ),
+    }
 }
 
 #[derive(Deserialize)]
@@ -291,6 +347,12 @@ pub fn remove(d: &Daemon, req: Remove) -> Result<Value> {
             req.name
         ))
     })?;
+    if agent.state == AgentState::Creating {
+        return Err(Error::Refused(format!(
+            "{} is still being created; try again when `strata new` returns",
+            agent.name
+        )));
+    }
     let mut notes = vec![];
     if agent.path.exists() {
         let changed = git::changes(&agent.path)?;
