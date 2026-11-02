@@ -59,7 +59,8 @@ worktrees() { # name tsconfig
       local t0=$SECONDS
       # Seed every ignored path (node_modules, generated clients) by APFS clone (cp -c), keeping symlinks as-is.
       git -C "$base" ls-files -z --others --ignored --exclude-standard --directory |
-        while IFS= read -r -d '' p; do p=${p%/}; mkdir -p "$wt/$(dirname "$p")"; cp -c -R "$base/$p" "$wt/$p"; done
+        while IFS= read -r -d '' p; do p=${p%/}; [ -e "$wt/$p" ] && continue  # git lists dirs and their children
+        mkdir -p "$wt/$(dirname "$p")"; cp -c -R "$base/$p" "$wt/$p"; done
       log "$name: wt$i ignored paths cloned in $((SECONDS - t0))s"
     fi
     if ! git -C "$wt" log -1 --format=%s | grep -q '^strata: agent diff'; then
