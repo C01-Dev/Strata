@@ -1,0 +1,10 @@
+[package]
+name = "strata-core"
+description = "Config, shared types, errors and the state store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true

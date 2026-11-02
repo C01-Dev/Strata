@@ -100,3 +100,19 @@ Not in PLAN; the owner chose option 3 ("measure agent workload"). Committed as `
 - Parity: 0 mismatches at every agent count on both fixtures.
 - Per-file timing: 0.02–0.3 s per agent at 1 agent; calcom at 8 agents 1.0 s shared vs 0.56 s separate.
 - Reading: the shared parsed/bound program dominates when agents check only what they edit; checker state dominates only when every agent checks the whole project at once. Per-file meets PLAN's success metric (≤50% of separate processes at 5 agents: calcom 39%, excalidraw 35%); the Gate 0 protocol does not.
+
+## Owner decision after Gate 0 (2026-11-02): go to Phase 1
+
+The owner chose "Go to Phase 1" after the task 0.8 follow-up, i.e. REPORT option 2: proceed on the per-file workload result (≈60% saved at 5 agents, 75% at 8) with the narrower claim, accepting that Gate 0's whole-project protocol measured 21–30%. Governor features that only one process allows (limit concurrent whole-project checks, dispose idle checkers) stay in scope for Phase 2.
+
+## Phase 1 — before task 1.1
+
+- **Name check (PLAN: "before Phase 1").** "strata" is taken on crates.io (dormant search-engine crate, 2019), npm (HTTP server, 0.20.1), as a GitHub organization, and as strata.sh. No Homebrew formula or cask. Kept as the working name; every crate is `publish = false` until the owner picks the release name (needed by Phase 5 packaging).
+- Rust toolchain installed with Homebrew `rustup` (keg-only; commands use `/opt/homebrew/opt/rustup/bin`), toolchain pinned in `rust-toolchain.toml`.
+
+## Phase 1 — task 1.1 skeleton
+
+- Workspace with only the crates Phase 1 needs: `strata` (binary), `strata-core`, `strata-git`. Deviation from PLAN's layout: the other crates (`strata-seed`, `-overlay`, `-checker`, `-proc`, `-proxy`, `-mcp`) are created in the phase that fills them, not as empty shells. End-to-end tests live in `crates/strata/tests/` (Cargo runs them against the built binary) instead of a top-level `tests/e2e/`.
+- Toolchain pinned to 1.99.1, edition 2024. Crate versions pinned in `[workspace.dependencies]`, exact versions in the committed `Cargo.lock`.
+- `cargo deny check`: advisories, bans, licenses, sources all ok. Our own crates' license is left open (PLAN open question) with `private.ignore`.
+- CI (`.github/workflows/ci.yml`, macOS + Ubuntu) is written but has never run: the repo has no remote yet.
