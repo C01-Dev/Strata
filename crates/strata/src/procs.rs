@@ -437,18 +437,9 @@ pub async fn request(d: &Arc<Daemon>, name: String, req: ProcRequest) -> Result<
                     json!({ "process": p, "already_running": true, "port": port, "url": url, "direct_url": format!("http://localhost:{port}") }),
                 );
             }
-            let cmd = req
-                .cmd
-                .or(cfg.dev.command.clone())
-                .or_else(|| strata_core::detect::detect(&agent.path).dev_command)
-                .ok_or_else(|| {
-                    Error::Refused(
-                        "no dev command: set dev.command in strata.toml or add a `dev` script"
-                            .into(),
-                    )
-                })?;
             crate::ports::ensure_proxy(d, cfg.dev.proxy_port).await?;
             let port = crate::ports::ensure(d, &agent, &cfg)?;
+            let cmd = dev_command(&agent.path, req.cmd, cfg.dev.command.clone(), port)?;
             let url = crate::ports::url(&agent.name, &repo, &cfg);
             env.push(("PORT".into(), port.to_string()));
             env.push(("STRATA_URL".into(), url.clone()));
@@ -488,6 +479,34 @@ pub async fn request(d: &Arc<Daemon>, name: String, req: ProcRequest) -> Result<
             "unknown process kind {other:?} (dev or run)"
         ))),
     }
+}
+
+/// PLAN 3.6 presets. An explicit command runs as given (with `PORT` set). Otherwise the
+/// configured or detected dev command; when that is the project's own `dev` script, the
+/// framework's port flags are added (Vite and Astro ignore `PORT`).
+fn dev_command(
+    worktree: &Path,
+    explicit: Option<String>,
+    configured: Option<String>,
+    port: u16,
+) -> Result<String> {
+    use strata_core::detect;
+    if let Some(cmd) = explicit {
+        return Ok(cmd);
+    }
+    let found = detect::detect(worktree);
+    let script = found.package_manager.zip(found.dev_command.clone());
+    let cmd = configured.or(found.dev_command).ok_or_else(|| {
+        Error::Refused(
+            "no dev command: set dev.command in strata.toml or add a `dev` script".into(),
+        )
+    })?;
+    Ok(match script {
+        Some((pm, script_cmd)) if cmd == script_cmd => {
+            detect::dev_command(pm, detect::framework(worktree), port)
+        }
+        _ => cmd,
+    })
 }
 
 /// The process, if `agent` (when given) owns it.

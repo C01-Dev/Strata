@@ -159,8 +159,13 @@ pub fn node_server(text: &str, port: Option<u16>) -> String {
 }
 
 /// Polls `check` every 100 ms for up to 10 s.
-pub fn wait_until(what: &str, mut check: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
+pub fn wait_until(what: &str, check: impl FnMut() -> bool) {
+    wait_secs(what, 10, check);
+}
+
+/// Polls `check` every 100 ms for up to `secs`.
+pub fn wait_secs(what: &str, secs: u64, mut check: impl FnMut() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(secs);
     while !check() {
         assert!(Instant::now() < deadline, "timed out waiting for: {what}");
         std::thread::sleep(Duration::from_millis(100));

@@ -51,6 +51,57 @@ impl PackageManager {
     }
 }
 
+/// Dev-server frameworks that need help with the port (PLAN 3.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Framework {
+    /// `next dev` reads `PORT`.
+    Next,
+    /// Ignores `PORT`; needs `--port` (and `--strictPort`, so a taken port fails instead of moving).
+    Vite,
+    /// Ignores `PORT`; needs `--port`.
+    Astro,
+    /// Assumed to read `PORT`.
+    Generic,
+}
+
+/// From the dependencies in `<root>/package.json`.
+pub fn framework(root: &Path) -> Framework {
+    let pkg: serde_json::Value = fs::read_to_string(root.join("package.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    let has = |name: &str| {
+        ["dependencies", "devDependencies"]
+            .iter()
+            .any(|k| pkg[k].get(name).is_some())
+    };
+    if has("next") {
+        Framework::Next
+    } else if has("astro") {
+        Framework::Astro
+    } else if has("vite") || has("@sveltejs/kit") {
+        Framework::Vite
+    } else {
+        Framework::Generic
+    }
+}
+
+/// The dev script's command with the framework's port flags. npm and bun need `--` before
+/// arguments for the script; pnpm and yarn pass them through.
+pub fn dev_command(pm: PackageManager, framework: Framework, port: u16) -> String {
+    let base = pm.run("dev");
+    let sep = if matches!(pm, PackageManager::Npm | PackageManager::Bun) {
+        " --"
+    } else {
+        ""
+    };
+    match framework {
+        Framework::Vite => format!("{base}{sep} --port {port} --strictPort"),
+        Framework::Astro => format!("{base}{sep} --port {port}"),
+        Framework::Next | Framework::Generic => base,
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Detected {
     pub package_manager: Option<PackageManager>,
@@ -204,6 +255,48 @@ mod tests {
         assert_eq!(
             PackageManager::Pnpm.install(r.path()),
             ["pnpm", "install", "--frozen-lockfile"]
+        );
+    }
+
+    #[test]
+    fn presets() {
+        let r = |deps: &str| repo(&[("package.json", deps)]);
+        assert_eq!(
+            framework(r(r#"{"dependencies":{"next":"16.4.4"}}"#).path()),
+            Framework::Next
+        );
+        assert_eq!(
+            framework(r(r#"{"devDependencies":{"vite":"7"}}"#).path()),
+            Framework::Vite
+        );
+        assert_eq!(
+            framework(r(r#"{"devDependencies":{"@sveltejs/kit":"2"}}"#).path()),
+            Framework::Vite
+        );
+        assert_eq!(
+            framework(r(r#"{"dependencies":{"astro":"5","vite":"7"}}"#).path()),
+            Framework::Astro
+        );
+        assert_eq!(framework(r("{}").path()), Framework::Generic);
+        assert_eq!(
+            dev_command(PackageManager::Npm, Framework::Next, 4100),
+            "npm run dev"
+        );
+        assert_eq!(
+            dev_command(PackageManager::Npm, Framework::Vite, 4100),
+            "npm run dev -- --port 4100 --strictPort"
+        );
+        assert_eq!(
+            dev_command(PackageManager::Pnpm, Framework::Vite, 4100),
+            "pnpm dev --port 4100 --strictPort"
+        );
+        assert_eq!(
+            dev_command(PackageManager::Bun, Framework::Astro, 4100),
+            "bun run dev -- --port 4100"
+        );
+        assert_eq!(
+            dev_command(PackageManager::Yarn, Framework::Astro, 4100),
+            "yarn dev --port 4100"
         );
     }
 

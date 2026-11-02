@@ -1289,6 +1289,7 @@ dependencies = [
  "strata-proxy",
  "tempfile",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
 ]

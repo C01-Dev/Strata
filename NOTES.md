@@ -353,3 +353,37 @@ Gate 2: "parity passes on all three fixtures, and `strata bench` reproduces the 
 - CLI: `strata dev <name> [--cmd]` prints the proxy URL, the direct `http://localhost:<port>` URL and the process (or says it is already running); `strata run` and `strata logs` came with task 3.1.
 - MCP (`strata-mcp`, now 10 tools): `strata_start_dev_server {command?}` returns the URL, the direct URL and the process id at once; `strata_run {command, timeout_s?}` returns the exit code (or the timeout) and the last 200 lines; `strata_stop {process_id}`; `strata_logs {process_id, lines?}`. Stop and logs pass the caller's agent name, and the daemon answers "no process" for another agent's process, so an agent can only act on its own. `strata_status` now shows the port, memory and budget level, and running processes. Every answer carries the budget warning when there is one.
 - Tests: `strata dev` output and proxying, already-running; an MCP client starts a dev server reachable through the proxy, runs a command (exit code, output), hits a timeout, sees the process in status; another agent's MCP server is refused `strata_stop` and `strata_logs` on it; the owner stops it.
+
+## Phase 3 — task 3.6 presets
+
+- When the dev command is the project's own `dev` script (configured or detected) Strata adds the framework's port flags; an explicit `--cmd` / `command` runs as given with `PORT` set. Next.js reads `PORT` (no flag). Vite gets `--port N --strictPort` (so it fails instead of drifting to another port), Astro `--port N`; npm and bun need `--` before script arguments. Anything else is the generic preset: `PORT` only, and the listener check routes to wherever it really listens. Framework = `next` / `vite` / `astro` in the project's dependencies, in that order.
+- Next.js cross-origin check (PLAN asked): Next 16.4 blocks cross-origin requests to `/_next/*` and the HMR socket unless the Origin matches `allowedDevOrigins`, but `**.localhost` and `localhost` are always allowed (`blockCrossSiteDEV` in `next/dist/server/lib/router-utils/block-cross-site-dev.js`). Proxy URLs are `*.localhost`, so nothing needs setting and the proxy does not rewrite Origin.
+- Next 16 HMR is `/_next/hmr` (no longer `/_next/webpack-hmr`): JSON messages, `turbopack-connected` on connect, `serverComponentChanges` after a server component edit.
+- Next 16 writes `AGENTS.md` into the project on `next dev` (`agentRules`, on by default). In an agent's worktree that is an untracked file, so `strata rm` would refuse without `--force`. The test fixture sets `agentRules: false`; for user repos this is left to them (Strata does not edit their config).
+- Fixture `tests/fixtures/nextjs`: Next 16.4.4, React 19.3.1, app router, one page, lockfile committed, `node_modules` ignored.
+- The detected-script check compares the command text: a `dev.command` that differs from the script (e.g. `next dev --turbo`) runs as configured, with `PORT` only.
+
+## Gate 3 result (2026-11-02): PASSED — stopped, waiting for the owner
+
+Gate 3: "5 Next.js dev servers run behind the proxy with working hot reload (checked by an end-to-end WebSocket test), and after `strata rm` no process or port is left behind."
+
+Test: `crates/strata/tests/nextjs.rs` (`#[ignore]`d; run with `cargo test -p strata --test nextjs -- --ignored --nocapture`). A temp repo with the `tests/fixtures/nextjs` files; `strata init`; `strata new a1..a5` (each runs `npm ci`); `strata dev` on all five (Next preset, `PORT`). Per agent, through the proxy (`Host: aN.app.localhost:47150`): GET the page (version 1), open `/_next/hmr` with the page's Origin, wait for `turbopack-connected`, edit the worktree's `app/page.js`, wait for `serverComponentChanges`, GET again and see the edit. Then every agent still serves its own edit (routes do not cross). Before `rm` it records each server's process group plus whatever listens on its port; after `strata rm --force` (the edit makes the worktree dirty) each of those pids must be gone and the port must bind on 127.0.0.1 and ::1. Finally no routes and no agents.
+
+Two runs on macOS (M-series, warm npm cache), both passed:
+
+| Measure | Run 1 | Run 2 |
+| --- | --- | --- |
+| Whole test | 19.7 s | 18.6 s |
+| `strata new` (incl. `npm ci` of Next 16.4.4) | 2.0–2.2 s each | similar (not printed) |
+| Five `strata dev` → five routes confirmed | 1.1 s | — |
+| First page through the proxy (includes first compile) | 0.52–1.03 s | 0.50–1.42 s |
+| Edit → `serverComponentChanges` over the proxied socket | 0.04–0.06 s | 0.06 s |
+| Memory per dev server (meter, sampled once) | 235–544 MB | 421–559 MB |
+| Processes per server (group + listener) | 3 | 3 |
+| `strata rm --force` per agent | 0.64–0.70 s | — |
+| Processes or dev ports left after `rm` | 0 | 0 |
+
+- No stray process after either run (`pgrep` for `next dev` / `next-server` / `strata daemon` showed only an unrelated Next 16.3.5 project of the owner's, outside any test dir).
+- Not covered: Linux (cgroup path still unrun), a cold npm cache (install time is then network-bound), Vite and Astro end to end (presets are unit-tested only).
+- The proxy port itself stays held by the daemon after the last agent goes (lazy start, no lazy stop); it is the daemon's port, not an agent's, and is freed by `daemon stop`.
+- Five `npm ci` copies of Next are ~5 × 350 MB of disk in worktrees; Phase 4 seeding is what addresses that.
