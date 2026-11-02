@@ -554,3 +554,33 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
 
   `--json` is the full `/v1/status`, unchanged.
 - Tests: `rm` leaves no worktree and the trash empties; `gc` removes an orphan with its logs and clears a seeding leftover in another worktree, which is clean again; the status table has every column and the agent's row.
+
+## Phase 5 — task 5.3 releases (local only, owner's choice)
+
+- **Owner decisions (2026-11-02):** build and test the release machinery locally, publish nothing, and leave the names as placeholders; real Tart VMs for Gate 5 (the ~25 GB macOS image is fine). Still needed before a first release:
+  - the GitHub repo, `OWNER/strata` in `Cargo.toml`'s `repository` and `homepage`;
+  - the Homebrew tap, `OWNER/homebrew-tap` in `dist-workspace.toml`;
+  - the npm scope, `@owner` in `npm/build.mjs`;
+  - a license (PLAN names none, so none is set);
+  - the secrets `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN`.
+- **cargo-dist 0.34.0** (`dist-workspace.toml`, `[profile.dist]` with thin LTO, `dist = true` on the `strata` crate because dist skips `publish = false` packages). It generates `.github/workflows/release.yml`, which on a `v*` tag builds:
+  - `aarch64-apple-darwin`;
+  - `x86_64-unknown-linux-gnu` (ubuntu-22.04 runner, so glibc 2.35+);
+  - `aarch64-unknown-linux-gnu` (GitHub's `ubuntu-24.04-arm` runner rather than cross-compiling);
+
+  then makes the GitHub release with checksums, a shell installer and a Homebrew formula pushed to the tap, then the npm job.
+- **dist bug:** dist 0.34.0's template writes a user publish job as `uses: $/.github/workflows/<job>.yml`, which GitHub rejects. `release.yml` is fixed by hand to `./` and `allow-dirty = ["ci"]` keeps dist's up-to-date check from fighting it. Re-apply after any `dist generate`.
+- **npm, PLAN's design rather than dist's npm installer** (which downloads in a postinstall):
+  - **Platform packages:** `npm/build.mjs` makes one per platform (`@owner/strata-darwin-arm64`, `-linux-x64`, `-linux-arm64`), selected by npm's `os` and `cpu` fields, each holding only the binary.
+  - **Launcher:** `@owner/strata` lists them as `optionalDependencies`, and its `bin/strata.js` (`npm/launcher.js`) carries every binary's SHA-256. It checks the installed binary before every run (hashing 11 MB takes milliseconds), runs it with the same arguments, and passes the exit code and signals through.
+  - **Publishing:** `.github/workflows/publish-npm.yml` builds them from the release's own tarballs and publishes the platform packages before the launcher.
+- **Local checks:**
+  - `dist plan` lists every artifact.
+  - `dist build --artifacts=local --target aarch64-apple-darwin` gives a tarball (11 MB binary, `strata 0.1.0`) that matches its `.sha256`; `--artifacts=global` gives `strata-installer.sh`, `strata.rb` and `sha256.sum`.
+  - The Linux builds need CI or `cargo-zigbuild`; the Linux arm64 build was already shown in the Gate 4 container.
+  - The workflows parse as YAML.
+  - `tests/npm.rs` (CI has npm) builds the packages from the test binary, `npm pack`s them, installs them offline into a temp prefix, then checks `strata --version`, that exit code 2 passes through, and that a binary with one byte appended is refused.
+- **Not done:**
+  - The Homebrew formula has no `depends_on "node"`: dist writes only build dependencies, and PLAN makes Node a documented requirement.
+  - Nothing has run on GitHub.
+  - The shell installer and formula point at `github.com/OWNER/strata` release URLs, so they cannot be installed until a real release exists.

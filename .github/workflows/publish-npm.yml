@@ -1,0 +1,41 @@
+# npm packages for a release (PLAN 5.3): called by release.yml (dist's `publish-jobs`) with the
+# dist plan once the GitHub release exists. Builds the per-platform packages and the launcher
+# (checksums inside) from the release's own tarballs, then publishes the platforms first.
+name: publish-npm
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      TAG: ${{ fromJson(inputs.plan).announcement_tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Download the release's binaries
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'strata-*.tar.xz' --dir dist
+          for t in dist/*.tar.xz; do tar -xJf "$t" -C dist; done
+      - name: Build the packages
+        run: |
+          node npm/build.mjs "${TAG#v}" npm/out \
+            darwin-arm64=dist/strata-aarch64-apple-darwin/strata \
+            linux-x64=dist/strata-x86_64-unknown-linux-gnu/strata \
+            linux-arm64=dist/strata-aarch64-unknown-linux-gnu/strata
+      - name: Publish (platforms first, so the launcher's optional dependencies exist)
+        run: |
+          for p in npm/out/strata-*/ npm/out/strata/; do npm publish --access public --provenance "$p"; done
+    permissions:
+      contents: read
+      id-token: write

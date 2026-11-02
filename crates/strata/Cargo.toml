@@ -5,6 +5,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+# Not published to crates.io, but released as binaries (dist skips publish = false otherwise).
+[package.metadata.dist]
+dist = true
 
 [dependencies]
 strata-core.workspace = true

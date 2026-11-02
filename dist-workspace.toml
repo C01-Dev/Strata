@@ -1,0 +1,23 @@
+# Release builds (PLAN 5.3), driven by cargo-dist: `dist plan` to check, `dist generate` after
+# edits (it rewrites .github/workflows/release.yml), a `v*` tag to release.
+# ponytail: OWNER is a placeholder until the owner picks the GitHub repo and tap.
+[workspace]
+members = ["cargo:."]
+
+[dist]
+cargo-dist-version = "0.34.0"
+ci = "github"
+installers = ["shell", "homebrew"]
+tap = "OWNER/homebrew-tap"
+publish-jobs = ["homebrew", "./publish-npm"]
+formula = "strata"
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+install-path = "CARGO_HOME"
+install-updater = false
+# release.yml is generated, then one line fixed by hand: dist 0.34.0 writes a user publish job
+# as `uses: $/.github/workflows/<job>.yml`, which GitHub rejects; it must be `./`. Re-apply
+# after `dist generate`.
+allow-dirty = ["ci"]
+
+[dist.github-custom-runners]
+aarch64-unknown-linux-gnu = "ubuntu-24.04-arm"
