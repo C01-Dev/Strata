@@ -511,3 +511,25 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
 - cal.com's own tests on Linux: main checkout 364 files passed, 49 failed, 3 skipped (3642 tests passed); seeded worktree `g1` exactly the same, with identical failing-file lists (checked after stripping ANSI colour codes, which the script's own comparison had not done) and the same `.prisma/client/default` error. The Linux failing list is identical to macOS's too.
 
 **Gate 4: PASSED.** cal.com `strata new` with a matching donor: 7.6–8.0 s on APFS and 4.7–5.9 s on XFS with reflink (warm pool: 0.87 s and 0.93 s); in the seeded worktree the fixture's own tests give exactly the main checkout's results on both systems. The 49 files that fail everywhere fail because of the fixture's Prisma client path, not seeding. Not covered: Linux x86_64, ext4 (the fallback tiers are covered by the `no-clone` fault test), btrfs and OpenZFS, real cgroup delegation (the container's cgroup cannot delegate, so the daemon correctly fell back to process trees).
+
+## Phase 5 — task 5.1 doctor
+
+- `strata doctor` prints one line per check, `ok` / `warn` / `FAIL`, with a fix under each that needs one, and exits 1 when anything fails.
+  - **Everywhere:**
+    - **Daemon:** running, and the same version as the CLI.
+    - **git:** 2.36 or later (the existing `check_version`).
+    - **Node:** present and at least 20; `STRATA_NODE` is honoured.
+    - **Socket:** the socket path fits the 103-byte limit that `daemon start` enforces.
+  - **Inside a repo:**
+    - **TypeScript:** whether the shared checker is on, with Yarn PnP and missing or old TypeScript explained through `detect`'s existing reason.
+    - **Config:** a missing `strata.toml` is a warning ("not set up yet; `strata init`"); a broken one fails.
+    - **Clones:** a real clone of a small file inside `repo.worktree_dir`, through the same `strata_seed::clone_tree` seeding uses, so the answer is about that folder's filesystem. If it fails, doctor says which `seed.fallback` applies. It also warns when the folder is on another volume than the repo.
+    - **Proxy port:** free, served by this daemon, or held by someone else, named via `strata_proxy::holder`, now shared with the proxy's own bind error.
+    - **`.localhost`:** whether `doctor.<app>.localhost` resolves to loopback here. Browsers resolve it regardless; curl and Node need the system resolver. It resolves on macOS 27.
+  - **Linux only:**
+    - **Kernel:** 5.14 or later, for `cgroup.kill`.
+    - **cgroups:** whether the daemon has per-agent cgroups; `strata status` now carries `cgroup`.
+    - **inotify:** this user's instances and watches, from `/proc/*/fd` and `fdinfo`, against `max_user_instances` and `max_user_watches`, with a warning at 80%. Dev servers' watchers run out of these before memory.
+- `--report` prints a Markdown table under a header line (Strata version, OS, arch, `uname -sr`). The repo path becomes `<repo>`, its parent `<repo-parent>`, `$HOME` becomes `~` and the user name `<user>`; pipes are escaped.
+- Tests: a set-up repo passes (clone ok on macOS); a proxy port held by the test process fails and names its pid; a `STRATA_HOME` over the socket limit fails; the report has no repo or home path.
+- Found on the way: with an over-long `STRATA_HOME`, every client command failed with std's raw "path must be shorter than SUN_LEN". The client now says the socket path is too long and to set a shorter `STRATA_HOME`.

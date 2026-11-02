@@ -15,7 +15,7 @@ use strata_core::{Error, Result, strata_home};
 use tokio::signal::unix::{SignalKind, signal};
 
 /// `sun_path` holds 104 bytes on macOS (108 on Linux), including the trailing NUL.
-const MAX_SOCKET_PATH: usize = 103;
+pub const MAX_SOCKET_PATH: usize = 103;
 const WAIT: Duration = Duration::from_secs(10);
 
 pub fn start(foreground: bool) -> Result<()> {

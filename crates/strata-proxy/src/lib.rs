@@ -27,13 +27,18 @@ type Body = BoxBody<Bytes, hyper::Error>;
 const HOP: &str = "x-strata-proxy";
 
 /// Binds `port` on both loopback addresses. If another program holds it, the error names it.
+/// Who listens on a TCP port: `name (pid N)`, or "another program" when it cannot be told.
+pub fn holder(port: u16) -> String {
+    listeners::get_process_by_port(port, listeners::Protocol::TCP)
+        .map(|p| format!("{} (pid {})", p.name, p.pid))
+        .unwrap_or_else(|_| "another program".into())
+}
+
 pub async fn bind(port: u16) -> Result<Vec<TcpListener>, String> {
     let held = |e: std::io::Error| {
-        let holder = listeners::get_process_by_port(port, listeners::Protocol::TCP)
-            .map(|p| format!("{} (pid {})", p.name, p.pid))
-            .unwrap_or_else(|_| "another program".into());
         format!(
-            "proxy port {port} is held by {holder} ({e}); stop it or set dev.proxy_port in strata.toml"
+            "proxy port {port} is held by {} ({e}); stop it or set dev.proxy_port in strata.toml",
+            holder(port)
         )
     };
     let mut out = vec![TcpListener::bind(("127.0.0.1", port)).await.map_err(held)?];

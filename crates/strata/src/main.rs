@@ -1,6 +1,7 @@
 mod api;
 mod bench;
 mod daemon;
+mod doctor;
 mod init;
 mod logging;
 mod ops;
@@ -119,6 +120,12 @@ enum Command {
         #[arg(long, default_value_t = 200)]
         lines: usize,
     },
+    /// Check what Strata depends on (git, Node, clones, ports, .localhost, cgroups) and how to fix it
+    Doctor {
+        /// Print a redacted Markdown summary to paste into an issue
+        #[arg(long)]
+        report: bool,
+    },
     /// Show repos and agents
     Status {
         #[arg(long)]
@@ -197,6 +204,7 @@ fn main() {
             process,
             lines,
         } => logs(name, process, lines),
+        Command::Doctor { report } => doctor::run(report),
         Command::Status { json } => status(json),
     };
     if let Err(e) = result {

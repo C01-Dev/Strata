@@ -24,6 +24,13 @@ pub fn request(method: &str, path: &str, body: Option<Value>) -> Result<Value> {
                 "the daemon is not running; start it with `strata daemon start`".into(),
             ));
         }
+        // std refuses socket paths longer than sun_path ("path must be shorter than SUN_LEN").
+        Err(e) if e.kind() == ErrorKind::InvalidInput => {
+            return Err(Error::Refused(format!(
+                "the socket path {} is too long for a Unix socket; set STRATA_HOME to a shorter folder",
+                strata_home().join(SOCKET).display()
+            )));
+        }
         Err(e) => return Err(e.into()),
     };
     let body = body.map(|b| b.to_string()).unwrap_or_default();

@@ -197,6 +197,7 @@ async fn status(State(d): State<Shared>) -> ApiResult {
         "checker": d.checker.status().await,
         "events": d.store().events(20).map_err(ApiError)?,
         "unmanaged": unmanaged,
+        "cgroup": d.cgroup,
         "routes": d.routes.read().unwrap().iter().map(|(h, a)| (h.clone(), json!(a.to_string()))).collect::<serde_json::Map<_, _>>(),
     })))
 }
