@@ -1,6 +1,11 @@
 //! Process trees and their memory. macOS: `phys_footprint` (Activity Monitor's "Memory"), summed
 //! over the process and its descendants; Linux: PSS from `/proc/<pid>/smaps_rollup`.
 
+/// Bytes used by `pid` alone (0 if it is gone).
+pub fn process_memory(pid: u32) -> u64 {
+    platform::memory(pid)
+}
+
 /// Bytes used by `pid` and all its descendants (0 if it is gone).
 pub fn tree_memory(pid: u32) -> u64 {
     let mut total = 0;

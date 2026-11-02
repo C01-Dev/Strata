@@ -1,4 +1,5 @@
 mod api;
+mod bench;
 mod daemon;
 mod init;
 mod logging;
@@ -70,6 +71,27 @@ enum Command {
         #[arg(long)]
         agent: Option<String>,
     },
+    /// Memory benchmark (Phase 0 protocol): a separate tsgo per worktree vs the shared checker
+    Bench {
+        /// Fixture folder with base/ and wt1..wtN/ (bench/setup.sh)
+        fixture: PathBuf,
+        /// Project to check, relative to the checkout
+        #[arg(long, default_value = "tsconfig.json")]
+        tsconfig: String,
+        #[arg(long, default_value_t = 5)]
+        agents: usize,
+        /// whole: every agent checks the whole project at once; files: each checks its edited files
+        #[arg(long, default_value = "whole", value_parser = ["whole", "files"])]
+        workload: String,
+        #[arg(long, value_delimiter = ',', default_value = "baseline,shared")]
+        modes: Vec<String>,
+        /// Extra readings this many seconds after the last query, e.g. 60,900
+        #[arg(long, value_delimiter = ',')]
+        idle: Vec<u64>,
+        /// Append results to this CSV (same columns as bench/results/phase0.csv)
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     /// Show repos and agents
     Status {
         #[arg(long)]
@@ -119,6 +141,28 @@ fn main() {
         Command::Mcp { agent } => tokio::runtime::Runtime::new()
             .map_err(Into::into)
             .and_then(|rt| rt.block_on(strata_mcp::serve(agent))),
+        Command::Bench {
+            fixture,
+            tsconfig,
+            agents,
+            workload,
+            modes,
+            idle,
+            out,
+        } => {
+            let args = bench::Args {
+                fixture,
+                tsconfig,
+                agents,
+                workload,
+                modes,
+                idle,
+                out,
+            };
+            tokio::runtime::Runtime::new()
+                .map_err(Into::into)
+                .and_then(|rt| rt.block_on(bench::run(args)))
+        }
         Command::Status { json } => status(json),
     };
     if let Err(e) = result {

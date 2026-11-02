@@ -283,3 +283,27 @@ Not covered: Linux x86_64 (CI's `ubuntu-latest` is x86_64; it would need an emul
 
   The 45 excalidraw errors are "not in any configured project" for sampled files under `dev-docs/` (outside the root tsconfig), identical on both sides with worktree paths. Empty = no symbol at a position (keywords, punctuation) or no declarations.
 - `monorepo` runs in `cargo test` (and CI); `excalidraw` and `calcom` are `#[ignore]` (they need `bench/setup.sh` fixtures and ~3 min): `cargo test --release -p strata-checker --test parity -- --ignored --nocapture`.
+
+## Phase 2 — task 2.8 `strata bench`
+
+- `strata bench <fixture> [--tsconfig] [--agents 5] [--workload whole|files] [--modes baseline,shared] [--idle 60,900] [--out csv]`: Phase 0's protocol on the broker code the daemon runs, in-process (no HTTP hop). baseline = one broker per worktree (own bridge and tsgo, a snapshot at its own paths, i.e. a separate tsgo per worktree); shared = one broker on the base with every worktree layered. Same steps as Phase 0: load (an outline of each agent's first edited file creates its snapshot), whole-project or per-edited-file diagnostics for all agents at once, then 20 hovers per agent (2 identifiers in each of 10 files no agent edited), warm reading 10 s later, optional idle readings. Memory = this process's tree footprint every 250 ms (`strata-proc`), this process counted on both sides as Phase 0 counted its Node client; the baseline leaves out its bridges' Node processes (a separate tsgo per agent has none), the shared side keeps its one bridge. CSV columns match `bench/results/phase0.csv`.
+- Hovers in files outside the project (excalidraw's `dev-docs/`, 2 of the 20 targets) are skipped and counted, as Phase 0's harness caught them.
+- `bench/strata-bench.sh` runs the Gate 2 set into `bench/results/strata.csv`.
+
+## Gate 2 result (2026-11-02): PASSED — stopped, waiting for the owner
+
+Gate 2: "parity passes on all three fixtures, and `strata bench` reproduces the Phase 0 saving within 10 percentage points."
+
+- Parity (task 2.7): 0 mismatches on monorepo (111 answers), excalidraw (500) and cal.com (500).
+- `strata bench` at 5 agents vs Phase 0 (S = 1 − shared ÷ baseline):
+
+| Fixture | Workload | Phase 0 S peak / warm | `strata bench` S peak / warm | Baseline peak (Phase 0 → bench) | Shared peak (Phase 0 → bench) |
+| --- | --- | --- | --- | --- | --- |
+| excalidraw | whole | 21% / 22% | 20% / 21% | 3.61 → 3.64 GiB | 2.83 → 2.91 GiB |
+| excalidraw | files | 65% / 65% | 60% / 61% | 1.41 → 1.41 GiB | 0.50 → 0.56 GiB |
+| cal.com | whole | 30% / 30% | 29% / 29% | 10.24 → 10.19 GiB | 7.18 → 7.28 GiB |
+| cal.com | files | 61% / 61% | 62% / 62% | 5.22 → 5.25 GiB | 2.05 → 2.01 GiB |
+
+  Largest difference 5 points (excalidraw per-file), mostly the shared side's Node bridge (~50 MB on ~0.5 GiB). One run per configuration; Phase 0 saw run-to-run GC noise of a few hundred MB on whole-project peaks.
+- Timing seen in passing (not a gate item, not investigated): cal.com whole-project diagnostics for 5 agents took 5.8 s shared vs 8.2 s baseline in `strata bench`, where Phase 0's Node harness measured 18 s vs 10.6 s.
+- Not covered: Linux (Phase 2 code ran on macOS only; the `strata-proc` Linux path and the bridge on Linux have not run), CI (no remote), and the daemon's `.base` uses `node_modules` symlinks until Phase 4.

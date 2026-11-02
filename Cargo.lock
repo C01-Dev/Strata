@@ -1203,6 +1203,7 @@ dependencies = [
  "strata-core",
  "strata-git",
  "strata-mcp",
+ "strata-proc",
  "tempfile",
  "tokio",
  "tracing",

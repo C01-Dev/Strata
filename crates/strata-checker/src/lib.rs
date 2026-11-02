@@ -2,4 +2,5 @@
 
 pub mod bridge;
 pub mod broker;
+pub mod sample;
 pub mod translate;

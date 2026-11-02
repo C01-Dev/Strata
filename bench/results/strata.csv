@@ -1,0 +1,9 @@
+fixture,workload,mode,agents,harness_mb,peak_mb,warm_mb,idle_60_mb,idle_900_mb,loaded_s,diagnostics_done_s,hover_done_s,typescript,cpu,ram_gb,os,fs
+excalidraw,whole,baseline,5,5,3724,3724,,,1.144,2.927,3.198,7.1.0-beta,"Apple M5 Pro",24,"Darwin 27.0.0",apfs
+excalidraw,whole,shared,5,11,2975,2954,,,0.965,4.020,4.280,7.1.0-beta,"Apple M5 Pro",24,"Darwin 27.0.0",apfs
+excalidraw,files,baseline,5,23,1440,1440,,,1.104,1.191,1.454,7.1.0-beta,"Apple M5 Pro",24,"Darwin 27.0.0",apfs
+excalidraw,files,shared,5,12,576,557,,,0.943,1.019,1.269,7.1.0-beta,"Apple M5 Pro",24,"Darwin 27.0.0",apfs
+calcom,whole,baseline,5,12,10434,10433,,,4.745,12.921,16.175,7.1.0-beta,"Apple M5 Pro",24,"Darwin 27.0.0",apfs
+calcom,whole,shared,5,36,7456,7418,,,3.670,9.435,12.327,7.1.0-beta,"Apple M5 Pro",24,"Darwin 27.0.0",apfs
+calcom,files,baseline,5,8,5374,5374,,,4.588,5.700,8.559,7.1.0-beta,"Apple M5 Pro",24,"Darwin 27.0.0",apfs
+calcom,files,shared,5,22,2057,2038,,,2.685,3.827,6.696,7.1.0-beta,"Apple M5 Pro",24,"Darwin 27.0.0",apfs

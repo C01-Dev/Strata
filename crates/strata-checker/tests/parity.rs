@@ -10,10 +10,11 @@
 mod common;
 
 use serde_json::Value;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use strata_checker::broker::{Broker, Op, Request, Settings};
-use strata_overlay::{Tree, layer};
+use strata_checker::sample;
 
 fn settings(tsconfigs: &[&str]) -> Settings {
     Settings {
@@ -26,88 +27,11 @@ fn settings(tsconfigs: &[&str]) -> Settings {
     }
 }
 
-/// 1-based line and UTF-16 column of a byte offset.
-fn line_col(text: &str, offset: usize) -> (u32, u32) {
-    let before = &text[..offset];
-    let line_start = before.rfind('\n').map_or(0, |i| i + 1);
-    (
-        before.matches('\n').count() as u32 + 1,
-        before[line_start..].encode_utf16().count() as u32 + 1,
-    )
-}
-
-/// Up to `n` identifier positions after the first 30% of the file.
-fn identifiers(text: &str, n: usize) -> Vec<(u32, u32)> {
-    let mut out = vec![];
-    let mut start = text.len() * 3 / 10;
-    while !text.is_char_boundary(start) {
-        start += 1;
-    }
-    let bytes = text.as_bytes();
-    let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
-    let mut i = start;
-    while i < bytes.len() && out.len() < n {
-        if (bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') && (i == 0 || !word(bytes[i - 1])) {
-            let end = (i..bytes.len())
-                .find(|&j| !word(bytes[j]))
-                .unwrap_or(bytes.len());
-            if end - i >= 4 {
-                out.push(line_col(text, i));
-            }
-            i = end;
-        } else {
-            i += 1;
-        }
-    }
-    out
-}
-
-fn is_source(rel: &str) -> bool {
-    (rel.ends_with(".ts") || rel.ends_with(".tsx")) && !rel.ends_with(".d.ts")
-}
-
-/// The agent's changed source files plus `untouched` evenly spread unchanged ones under `scope`.
+/// The agent's changed source files plus `untouched` evenly spread unchanged ones.
 fn sample_files(base: &Path, wt: &Path, scopes: &[String], untouched: usize) -> Vec<String> {
-    let (mut b, mut w) = (Tree::new(base, &[]), Tree::new(wt, &[]));
-    b.scan().unwrap();
-    w.scan().unwrap();
-    let diff = layer(&b, &w);
-    let mut files: Vec<String> = diff
-        .changed
-        .iter()
-        .filter(|f| is_source(f))
-        .cloned()
-        .collect();
-    let in_scope = |f: &str| {
-        scopes
-            .iter()
-            .any(|s| s.is_empty() || f.starts_with(&format!("{s}/")))
-    };
-    let skip = [
-        "test",
-        "tests",
-        "__tests__",
-        "examples",
-        "scripts",
-        "playwright",
-    ];
-    let mut rest: Vec<&str> = w
-        .files()
-        .filter(|f| {
-            is_source(f)
-                && in_scope(f)
-                && !diff.changed.iter().any(|c| c == f)
-                && !f.split('/').any(|part| skip.contains(&part))
-        })
-        .collect();
-    rest.sort();
-    let step = (rest.len() / untouched.max(1)).max(1);
-    files.extend(
-        rest.iter()
-            .step_by(step)
-            .take(untouched)
-            .map(|f| f.to_string()),
-    );
+    let mut files = sample::changed_sources(base, wt).unwrap();
+    let changed: HashSet<String> = files.iter().cloned().collect();
+    files.extend(sample::spread(wt, scopes, &changed, untouched).unwrap());
     files
 }
 
@@ -150,7 +74,7 @@ fn ops(wt: &Path, files: &[String]) -> Vec<(String, Op)> {
             },
         ));
         out.push((format!("symbols {f}"), Op::Symbols { file: f.clone() }));
-        for (i, (line, column)) in identifiers(&text, 3).into_iter().enumerate() {
+        for (i, (line, column)) in sample::identifiers(&text, 3).into_iter().enumerate() {
             let at = |kind: &str| format!("{kind} {f}:{line}:{column}");
             out.push((
                 at("hover"),

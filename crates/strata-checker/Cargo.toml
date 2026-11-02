@@ -17,7 +17,6 @@ tracing.workspace = true
 xxhash-rust.workspace = true
 
 [dev-dependencies]
-strata-overlay.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -1,0 +1,16 @@
+  10 hovers skipped: file not in the project
+excalidraw whole baseline x5: peak 3.64 GiB, warm 3.64 GiB
+  10 hovers skipped: file not in the project
+excalidraw whole shared x5: peak 2.91 GiB, warm 2.88 GiB
+S peak 20%, S warm 21%
+  10 hovers skipped: file not in the project
+excalidraw files baseline x5: peak 1.41 GiB, warm 1.41 GiB
+  10 hovers skipped: file not in the project
+excalidraw files shared x5: peak 0.56 GiB, warm 0.54 GiB
+S peak 60%, S warm 61%
+calcom whole baseline x5: peak 10.19 GiB, warm 10.19 GiB
+calcom whole shared x5: peak 7.28 GiB, warm 7.24 GiB
+S peak 29%, S warm 29%
+calcom files baseline x5: peak 5.25 GiB, warm 5.25 GiB
+calcom files shared x5: peak 2.01 GiB, warm 1.99 GiB
+S peak 62%, S warm 62%

@@ -66,6 +66,19 @@ This is the measurement the owner asked for after Gate 0.
 - Gate 0's protocol is the worst case for sharing: all 5 agents run whole-project diagnostics at the same moment.
 - At rest, after tsgo's idle checker cleanup and Go's periodic GC and scavenger (about 6 min in), memory drops to the shareable part: **63–68% saved**. That reading is not part of Gate 0.
 
+## Phase 2 check: `strata bench` (Gate 2)
+
+The same protocol, run on Strata's own checker (`strata bench`, `bench/strata-bench.sh`, results in `results/strata.csv`), reproduces the Phase 0 savings within 5 points at 5 agents:
+
+| Fixture | Workload | Phase 0 S peak / warm | `strata bench` S peak / warm |
+| --- | --- | --- | --- |
+| excalidraw | whole | 21% / 22% | 20% / 21% |
+| excalidraw | files | 65% / 65% | 60% / 61% |
+| cal.com | whole | 30% / 30% | 29% / 29% |
+| cal.com | files | 61% / 61% | 62% / 62% |
+
+Baselines match Phase 0's absolute numbers within ~1% (cal.com whole: 10.19 vs 10.24 GiB). The shared side now carries the Node bridge (~50 MB), which is most of the excalidraw per-file gap.
+
 ## Correctness and features (tasks 0.5, 0.6)
 
 Layered snapshot (base paths, translated back) vs a dedicated snapshot at the worktree's own paths, agent 1, 5 positions:
@@ -102,6 +115,7 @@ Timing at 5 agents: concurrent whole-project diagnostics took 2.2 s with separat
 ## Data
 
 - `results/phase0.csv`: every run summary in MiB, with a `workload` column (`whole` = Gate 0 protocol, `files` = per-file follow-up).
+- `results/strata.csv`, `results/strata-bench.log`: `strata bench` (Phase 2), same columns.
 - `results/raw/<fixture>-<mode>-<agents>[-files].json`: summary plus per-agent diagnostics and hovers. `*-mem.csv`: 250 ms memory samples. `*-parity*.json`, `*-features.json`. `results/agents.log`: the follow-up run log.
 - Rerun:
   - Fixtures: `AGENTS=8 bench/setup.sh`
