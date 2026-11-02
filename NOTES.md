@@ -415,3 +415,10 @@ Two runs on macOS (M-series, warm npm cache), both passed:
 | `rm -rf` of one clone | 13.6–15.5 s |
 
   `clonefile` times drift upward across back-to-back runs; Spotlight indexing the fresh trees is a suspect, not confirmed. APFS hardlinks are slower than a parallel copy here. Free space did not move for clones and dropped by about the tree's size for the copy.
+
+## Phase 4 — task 4.3 fallback tiers
+
+- When cloning from the donor fails, `seed.fallback` decides: `install` (default; the warning names the reason and suggests `seed.fallback = "copy"`), `copy` or `hardlink` (the walker from the same donor). `hardlink` always warns that the files are shared, so a write in one worktree changes the donor's and every other hardlinked worktree's. If the fallback fails too, it installs. Without a donor for the key there is nothing to copy, so it installs whatever the setting. The tier is printed by `strata new`, stored on the agent and shown in `strata status`: `clone`, `copy`, `hardlink`, `install`, `install-failed`, `clone-failed` (disk full) or `none`.
+- `strata init` warns when `repo.worktree_dir` is on another volume than the repo (different `st_dev`): the base then cannot clone the main checkout and installs; agents still clone from the base, which shares their volume. (`doctor` is Phase 5.)
+- Measured cost of the opt-ins on cal.com (APFS, 4.2): copy 20 s, hardlink 56 s. APFS hardlinks are slower than a parallel copy, so on macOS `hardlink` buys nothing; it is for filesystems where links are cheap and copies are not.
+- Test hook: `STRATA_FAULT=no-clone` (debug builds only) makes every clone fail like ext4. Test: with it, `copy` gives the worktree its own files (different inode), `hardlink` the donor's (same inode) plus the warning, `install` installs with the warning. The fixture ships `fallback = "copy"` so its base has files to give on Linux too.

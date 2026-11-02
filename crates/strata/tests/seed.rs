@@ -159,3 +159,65 @@ fn repos_without_package_json_skip_the_install() {
     let (_, _, agent) = new(&e, &["a"]);
     assert_eq!(agent["seed_tier"], "none");
 }
+
+#[test]
+fn without_clones_the_configured_fallback_runs() {
+    let e = common::env(&[
+        (".gitignore", "node_modules\n"),
+        ("package.json", r#"{"name":"app","private":true}"#),
+        ("strata.toml", "[seed]\nfallback = \"copy\"\n"),
+    ]);
+    std::fs::create_dir_all(e.root.join("node_modules/pkg")).unwrap();
+    std::fs::write(e.root.join("node_modules/pkg/index.js"), "main's").unwrap();
+    e.strata(&["init", "--no-service"]);
+    let base = e.root.parent().unwrap().join(".strata/app/.base");
+    let file = |p: &Path| p.join("node_modules/pkg/index.js");
+    assert!(file(&base).exists(), "cloned, or copied where clones fail");
+    // From here every clone fails, as on ext4.
+    e.strata(&["daemon", "stop"]);
+    let out = e.strata_with(
+        &e.root,
+        &["daemon", "start"],
+        &[("STRATA_FAULT", "no-clone")],
+    );
+    assert!(out.status.success());
+    let ino = |p: &Path| std::os::unix::fs::MetadataExt::ino(&std::fs::metadata(p).unwrap());
+    let set_fallback = |tier: &str| {
+        let toml = std::fs::read_to_string(e.root.join("strata.toml")).unwrap();
+        let toml: String = toml
+            .lines()
+            .map(|l| match l.starts_with("fallback") {
+                true => format!("fallback = \"{tier}\"\n"),
+                false => format!("{l}\n"),
+            })
+            .collect();
+        std::fs::write(e.root.join("strata.toml"), toml).unwrap();
+    };
+
+    let (a, stderr, agent) = new(&e, &["a"]);
+    assert!(
+        stderr.contains(&format!("dependencies: copy from {}", base.display())),
+        "{stderr}"
+    );
+    assert_eq!(agent["seed_tier"], "copy");
+    assert_eq!(std::fs::read_to_string(file(&a)).unwrap(), "main's");
+    assert_ne!(ino(&file(&a)), ino(&file(&base)), "a copy is its own file");
+
+    set_fallback("hardlink");
+    let (b, stderr, _) = new(&e, &["b"]);
+    assert!(stderr.contains("dependencies: hardlink from"), "{stderr}");
+    assert!(stderr.contains("the files are shared"), "{stderr}");
+    assert_eq!(
+        ino(&file(&b)),
+        ino(&file(&base)),
+        "a hardlink is the same file"
+    );
+
+    set_fallback("install");
+    let (_, stderr, agent) = new(&e, &["c"]);
+    assert!(
+        stderr.contains("cannot clone dependencies from") && stderr.contains("installing instead"),
+        "{stderr}"
+    );
+    assert_eq!(agent["seed_tier"], "install");
+}

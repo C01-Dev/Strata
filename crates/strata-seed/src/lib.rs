@@ -33,11 +33,34 @@ pub fn folders(ignored: &[String], patterns: &[String]) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Clones each folder from `donor` into `target`, where the donor has it as a real folder (a
-/// symlink would share, not isolate) and `target` has its parent but not the folder. Each one
-/// is cloned under a temporary name and renamed into place, so a failure leaves no half-seeded
-/// folder. Returns the folders cloned.
-pub fn clone_folders(donor: &Path, target: &Path, folders: &[PathBuf]) -> io::Result<Vec<PathBuf>> {
+/// How a folder gets from the donor into a worktree (PLAN's tiers, install aside).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Way {
+    Clone,
+    Copy,
+    Hardlink,
+}
+
+impl Way {
+    pub fn name(self) -> &'static str {
+        match self {
+            Way::Clone => "clone",
+            Way::Copy => "copy",
+            Way::Hardlink => "hardlink",
+        }
+    }
+}
+
+/// Seeds each folder from `donor` into `target` the given way, where the donor has it as a real
+/// folder (a symlink would share, not isolate) and `target` has its parent but not the folder.
+/// Each one is made under a temporary name and renamed into place, so a failure leaves no
+/// half-seeded folder. Returns the folders seeded.
+pub fn seed_folders(
+    donor: &Path,
+    target: &Path,
+    folders: &[PathBuf],
+    way: Way,
+) -> io::Result<Vec<PathBuf>> {
     let mut done = vec![];
     for rel in folders {
         let (src, dst) = (donor.join(rel), target.join(rel));
@@ -50,7 +73,12 @@ pub fn clone_folders(donor: &Path, target: &Path, folders: &[PathBuf]) -> io::Re
         let name = dst.file_name().unwrap_or_default().to_string_lossy();
         let tmp = dst.with_file_name(format!(".strata-seed-{name}"));
         remove(&tmp)?; // left by a crash
-        if let Err(e) = clone_tree(&src, &tmp).and_then(|()| fs::rename(&tmp, &dst)) {
+        let made = match way {
+            Way::Clone => clone_tree(&src, &tmp),
+            Way::Copy => walk(&src, &tmp, Op::Copy),
+            Way::Hardlink => walk(&src, &tmp, Op::Hardlink),
+        };
+        if let Err(e) = made.and_then(|()| fs::rename(&tmp, &dst)) {
             let _ = remove(&tmp);
             return Err(e);
         }
@@ -312,7 +340,7 @@ mod tests {
         ]
         .map(PathBuf::from)
         .to_vec();
-        let done = clone_folders(&donor, &target, &all).unwrap();
+        let done = seed_folders(&donor, &target, &all, Way::Clone).unwrap();
         assert_eq!(done, all[..2]);
         assert_eq!(
             fs::read_to_string(target.join("node_modules/pkg/index.js")).unwrap(),
@@ -323,7 +351,7 @@ mod tests {
             "symlinked source skipped"
         );
         assert_eq!(
-            clone_folders(&donor, &target, &all).unwrap(),
+            seed_folders(&donor, &target, &all, Way::Clone).unwrap(),
             Vec::<PathBuf>::new(),
             "already there"
         );

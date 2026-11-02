@@ -10,17 +10,23 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use strata_checker::broker::{Op, Request, Settings};
-use strata_core::config::{Config, is_dns_label, to_dns_label};
+use strata_core::config::{Config, Fallback, is_dns_label, to_dns_label};
 use strata_core::store::{Agent, AgentState, Repo};
 use strata_core::{Error, Result, detect};
 use strata_git as git;
+use strata_seed::Way;
 
 const DETACHED: &str = "(detached)";
 
-/// Test hook for task 1.7, debug builds only: with `STRATA_FAULT=<point>` the daemon stalls
-/// at that point so a test can SIGKILL it mid-operation.
+/// Test hooks, debug builds only: with `STRATA_FAULT=<point>` the daemon stalls at that point
+/// so a test can SIGKILL it mid-operation (task 1.7); `no-clone` makes every clone fail as on a
+/// filesystem without clones (task 4.3).
+fn faulty(point: &str) -> bool {
+    cfg!(debug_assertions) && std::env::var("STRATA_FAULT").is_ok_and(|p| p == point)
+}
+
 fn fault(point: &str) {
-    if cfg!(debug_assertions) && std::env::var("STRATA_FAULT").is_ok_and(|p| p == point) {
+    if faulty(point) {
         tracing::warn!("fault point {point}: stalling");
         std::thread::sleep(Duration::from_secs(600));
     }
@@ -100,7 +106,14 @@ pub fn register_repo(d: &Daemon, req: RegisterRepo) -> Result<Value> {
     let (base, _) = ensure_base(&root, &cfg)?;
     d.store()
         .event(None, "repo.registered", &root.to_string_lossy())?;
-    let seeded = seed_base(d, &repo)?;
+    let mut seeded = seed_base(d, &repo)?;
+    let dev = |p: &Path| fs::metadata(p).map(|m| std::os::unix::fs::MetadataExt::dev(&m));
+    if dev(&root)? != dev(&cfg.worktree_dir(&root))? {
+        seeded.warnings.push(format!(
+            "{} is on another volume than the repo, so the base worktree cannot clone the main checkout's dependencies and installs them (agents still clone from the base)",
+            cfg.worktree_dir(&root).display()
+        ));
+    }
     Ok(
         json!({ "repo": repo, "base_worktree": base, "seed": seeded.describe(), "warnings": seeded.warnings }),
     )
@@ -199,7 +212,8 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
 /// What seeding did for one checkout.
 #[derive(Default)]
 pub struct Seeded {
-    /// clone, clone-failed (disk full), install, install-failed, or none (no package.json)
+    /// clone, copy, hardlink, clone-failed (disk full), install, install-failed, or none (no
+    /// package.json)
     pub tier: &'static str,
     pub dep_key: Option<String>,
     pub donor: Option<PathBuf>,
@@ -233,10 +247,13 @@ fn donor(d: &Daemon, repo: &Repo, cfg: &Config, key: &str) -> Option<PathBuf> {
     None
 }
 
-/// Clones `from`'s `seed.paths` folders into `path`; false if `from` has none to give.
-fn clone_from(from: &Path, path: &Path, cfg: &Config) -> Result<bool> {
+/// Seeds `from`'s `seed.paths` folders into `path` the given way; false if `from` has none.
+fn seed_from(from: &Path, path: &Path, cfg: &Config, way: Way) -> Result<bool> {
+    if way == Way::Clone && faulty("no-clone") {
+        return Err(std::io::Error::from(std::io::ErrorKind::Unsupported).into());
+    }
     let folders = strata_seed::folders(&git::ignored(from)?, &cfg.seed.paths);
-    Ok(!strata_seed::clone_folders(from, path, &folders)?.is_empty())
+    Ok(!strata_seed::seed_folders(from, path, &folders, way)?.is_empty())
 }
 
 /// Seeds a checkout's dependencies (PLAN Phase 4): clones the `seed.paths` folders from the
@@ -266,7 +283,7 @@ fn seed(
     if let Some(key) = s.dep_key.clone() {
         let also = || also.filter(|a| dep_key(a, cfg).is_ok_and(|k| k == key));
         if let Some(from) = donor(d, repo, cfg, &key).or_else(|| also().map(Path::to_path_buf)) {
-            match clone_from(&from, path, cfg) {
+            match seed_from(&from, path, cfg, Way::Clone) {
                 Ok(true) => {
                     s.tier = "clone";
                     s.donor = Some(from);
@@ -290,10 +307,34 @@ fn seed(
                     ));
                     return s;
                 }
-                Err(e) => s.warnings.push(format!(
-                    "cloning dependencies from {} failed ({e}); installing instead",
-                    from.display()
-                )),
+                Err(e) => {
+                    let why = format!("cannot clone dependencies from {} ({e})", from.display());
+                    let way = match cfg.seed.fallback {
+                        Fallback::Install => None,
+                        Fallback::Copy => Some(Way::Copy),
+                        Fallback::Hardlink => Some(Way::Hardlink),
+                    };
+                    match way.map(|w| (w, seed_from(&from, path, cfg, w))) {
+                        Some((way, Ok(_))) => {
+                            if way == Way::Hardlink {
+                                s.warnings.push(format!(
+                                    "dependencies are hardlinked from {}: the files are shared, so a write to one in this worktree changes it there too",
+                                    from.display()
+                                ));
+                            }
+                            s.tier = way.name();
+                            s.donor = Some(from);
+                            return s;
+                        }
+                        Some((way, Err(e))) => s.warnings.push(format!(
+                            "{why}, and {} failed too ({e}); installing instead",
+                            way.name()
+                        )),
+                        None => s.warnings.push(format!(
+                            "{why}; installing instead (set seed.fallback = \"copy\" to copy from it)"
+                        )),
+                    }
+                }
             }
         }
     }
