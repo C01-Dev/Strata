@@ -452,3 +452,17 @@ Two runs on macOS (M-series, warm npm cache), both passed:
 - A shared-store donor is never cloned: the worktree installs, which for this layout only creates links, and the tier is `shared-store`, printed as **shared store, not isolated**. The checkout still donates its key, so the base is not reinstalled at every daemon start. The warm pool is off for such repos.
 - What reality showed: pnpm 12's global-virtual-store links are *relative* (`is-number -> ../../../../../../../../Users/…/store/v11/links/@/is-number/7.0.0/<hash>/node_modules/is-number`). So beyond PLAN's "copies the links, not the files", a clone at another folder depth (main checkout → `.base`, or `.pool/<n>` → `<name>`) would break every link. One more reason never to clone it.
 - Tests: unit (JSON global store → shared; YAML `.pnpm` → not; no file → not); e2e with pnpm, offline (`offline=true` in `.npmrc`, so it runs only where `is-number@7.0.0` is already in the pnpm store, and is skipped otherwise): base and agent are both `shared store, not isolated`, and the agent's package resolves.
+
+## Phase 4 — task 4.7 page cache
+
+- Answer on macOS (APFS): **cloned files do not share page cache.** Direct test with `mincore(2)`, which reports a mapped file's resident pages without reading it: write a 64 MiB file, `clonefile` it, read only the original. The original was 4096/4096 pages resident and the untouched clone 0/4096; reading the clone then brought in its own 4096. The unified buffer cache is per file (vnode), and a clone is another file that happens to share disk blocks. So the memory claim stays where PLAN put it: seeding saves disk and setup time, not RAM. Linux keeps its page cache per inode too, so reflinks are expected to behave the same; not measured there.
+- PLAN's comparison (`tests/nextjs.rs`, `memory_of_five_servers_cloned_vs_installed`, ignored): five Next 16 dev servers, each having served its page, 15 s settle, two rounds alternating:
+
+| Round | Seeding | Metered footprint, 5 servers | System page cache change |
+| --- | --- | --- | --- |
+| 1 | clone | 2102 MB | −1028 MB |
+| 1 | own `npm ci` each | 2096 MB | −1436 MB |
+| 2 | clone | 2078 MB | −385 MB |
+| 2 | own `npm ci` each | 2094 MB | −1034 MB |
+
+  Footprint (macOS `phys_footprint`, which excludes clean file pages) is the same within 1%, as expected: the servers' own memory does not depend on how their files got there. The page-cache column is not usable. The machine (24 GB) had about 130 MB free and the system evicted file cache while the servers allocated, so every delta is negative. The `mincore` test above is the evidence for the page-cache answer, not this column.

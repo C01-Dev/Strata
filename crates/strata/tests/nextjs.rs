@@ -209,3 +209,83 @@ fn five_next_servers_hot_reload_behind_the_proxy_and_rm_leaves_nothing() {
         "{s}"
     );
 }
+
+/// System-wide file-backed (page cache) bytes, from `vm_stat`. macOS only.
+fn file_backed() -> i64 {
+    let out = Command::new("vm_stat").output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    let page: i64 = text
+        .split("page size of ")
+        .nth(1)
+        .and_then(|s| s.split_whitespace().next())
+        .and_then(|s| s.parse().ok())
+        .unwrap();
+    let pages: i64 = text
+        .lines()
+        .find_map(|l| l.strip_prefix("File-backed pages:"))
+        .map(|s| s.trim().trim_end_matches('.').parse().unwrap())
+        .unwrap();
+    pages * page
+}
+
+/// Five Next servers, each worktree seeded by `clone` or by its own `install`: their metered
+/// footprint and the growth of the system's page cache while they start and serve a page.
+fn five_servers(install: bool) -> (u64, i64) {
+    let e = common::env(&fixture!(
+        ".gitignore",
+        "package.json",
+        "package-lock.json",
+        "next.config.mjs",
+        "app/layout.js",
+        "app/page.js"
+    ));
+    let mut envs = vec![("NEXT_TELEMETRY_DISABLED", "1")];
+    if install {
+        envs.push(("STRATA_FAULT", "no-clone"));
+    }
+    let init = e.strata_with(&e.root, &["init", "--no-service"], &envs);
+    assert!(init.status.success(), "{init:?}");
+    set_ports(&e, 47100, 47149, PROXY);
+    common::no_pool(&e);
+    for agent in AGENTS {
+        e.strata(&["new", agent]);
+        let tier = e.agent(agent).unwrap()["seed_tier"].clone();
+        assert_eq!(tier, if install { "install" } else { "clone" });
+    }
+    let before = file_backed();
+    for agent in AGENTS {
+        e.strata(&["dev", agent]);
+    }
+    wait_secs("five routes", 30, || {
+        e.status()["routes"]
+            .as_object()
+            .is_some_and(|r| r.len() == 5)
+    });
+    for agent in AGENTS {
+        assert!(page(agent).contains("Hello from version 1"));
+    }
+    std::thread::sleep(Duration::from_secs(15));
+    let grown = file_backed() - before;
+    let footprint = AGENTS
+        .iter()
+        .map(|a| e.agent(a).unwrap()["memory_bytes"].as_u64().unwrap_or(0))
+        .sum();
+    (footprint, grown)
+}
+
+/// PLAN 4.7: do cloned `node_modules` share page cache? Ignored like Gate 3; prints numbers.
+#[test]
+#[ignore = "five Next servers twice; prints memory numbers"]
+fn memory_of_five_servers_cloned_vs_installed() {
+    for round in 1..=2 {
+        for install in [false, true] {
+            let (footprint, grown) = five_servers(install);
+            println!(
+                "round {round}, {}: footprint {} MB, page cache {:+} MB",
+                if install { "installed" } else { "cloned" },
+                footprint / 1_000_000,
+                grown / 1_000_000
+            );
+        }
+    }
+}
