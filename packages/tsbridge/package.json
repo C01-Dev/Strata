@@ -1,0 +1,8 @@
+{
+  "name": "@strata/tsbridge",
+  "private": true,
+  "description": "Node sidecar between the Strata daemon and tsgo's typescript/async API. Embedded in the strata binary.",
+  "type": "module",
+  "scripts": { "test": "node --test" },
+  "devDependencies": { "typescript": "7.1.0-beta" }
+}

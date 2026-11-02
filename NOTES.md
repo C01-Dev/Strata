@@ -194,3 +194,18 @@ Also passing: daemon rows (second daemon refused, socket 0600, socket path lengt
 **Linux (owner OK'd Docker):** official `rust:1.99.1-bookworm` image (2.08 GB on disk), Debian bookworm, kernel 7.0.14-linuxkit, aarch64, git 2.39.5, source mounted read-only. `cargo fmt --check` ok, `cargo clippy --locked --all-targets -- -D warnings` clean (first Linux build of the systemd code path), `cargo test --locked`: all 55 pass, first try. The 27 end-to-end tests also pass as an unprivileged user (uid 1000), since the container otherwise runs them as root.
 
 Not covered: Linux x86_64 (CI's `ubuntu-latest` is x86_64; it would need an emulated image here), the real service install on either OS (`STRATA_SYSTEM_TESTS=1`, CI only), and GitHub CI itself (no remote yet).
+
+## Phase 2 — design decisions before task 2.1
+
+- One Node bridge, and so one tsgo process, per checker group. The protocol's `group` field is kept, so one bridge could serve several groups later.
+- Layer detection: a stat walk with a cached xxh3 per file, run before each query, instead of a `notify` watcher. It cannot miss events and needs no inotify watches; its cost is measured on cal.com in task 2.3. A watcher can replace it if the walk is too slow.
+- A minimal process-tree memory meter (`phys_footprint` on macOS, PSS on Linux) is pulled forward from Phase 3, because the broker's `group_memory_mb` limit and `strata bench` both need it.
+
+## Phase 2 — task 2.1 tsbridge
+
+- `packages/tsbridge/bridge.mjs`, one file, no dependencies. `typescript/async`, `typescript/fs` and `typescript/ast` are loaded from the repo's own `node_modules` with `createRequire` (then `import()` of the resolved file, since they are ESM). `package.json` pins `typescript` 7.1.0-beta as a dev dependency, for tests only.
+- Protocol as in PLAN, plus: `hello` returns the bridge pid; `openUnshared({agent, root, tsconfigs})` opens a snapshot at the worktree's own paths (dependencies differ, huge diff, parity reference); `diagnostics` takes an optional `limit` and always returns the full `total`.
+- API facts verified on 7.1.0-beta: positions are UTF-16 code units (checked after an emoji); source files have `getLineAndCharacterOfPosition` / `getPositionOfLineAndCharacter`; resolved nodes have `getStart()` (skips trivia) and `getSourceFile().fileName` in real case (only `NodeHandle.path` is lowercased); `SymbolFlags` comes from `typescript/async`.
+- Built from checker calls, since the 7.1 language service has no quick-info or go-to-definition: hover = keyword from symbol flags + name + `typeToString` (declared type for type aliases) + documentation; definition = aliased symbol's declarations, located at their name; references = `getReferencedSymbolsForNode` on the deepest real node; symbols = top-level declarations, with members of classes, interfaces, enums and namespaces.
+- Base replacement (`openBase` on an existing group) keeps the old base alive, reference-counted, until every agent derived from it has moved to the new base; then it is disposed. That is PLAN's "re-create agent snapshots before disposing the old base".
+- `node --test` suite (4 tests): layered snapshot vs an unshared snapshot of the same worktree agree on diagnostics, hover, definition, references and symbols after path translation; error codes; base retirement. CI runs it.

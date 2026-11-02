@@ -11,6 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: rustup show # installs the toolchain pinned in rust-toolchain.toml
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci --prefix packages/tsbridge
+      - run: npm test --prefix packages/tsbridge
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
