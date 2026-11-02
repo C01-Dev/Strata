@@ -4,27 +4,28 @@
   "mode": "shared",
   "fixture": "calcom",
   "agents": 5,
+  "workload": "whole",
   "typescript": "7.1.0-beta",
   "gogc": "default",
   "gomemlimit": "default",
   "mb": {
-   "harness": 32.894447326660156,
-   "peak": 7805.546424865723,
-   "warm": 7770.10636138916,
-   "idle_60": 7409.559326171875,
-   "idle_900": 2078.324996948242
+   "harness": 31.31634521484375,
+   "peak": 7349.496276855469,
+   "warm": 7342.215026855469,
+   "idle_60": 7342.230651855469,
+   "idle_900": 2129.2284088134766
   },
   "seconds": {
    "start": 0,
-   "base_loaded": 1.031,
-   "layers_computed": 6.406,
-   "loaded": 7.292,
-   "diagnostics_start": 7.292,
-   "diagnostics_done": 25.268,
-   "hover_done": 25.726,
-   "warm": 35.729,
-   "idle_60": 85.729,
-   "idle_900": 925.731
+   "base_loaded": 1.123,
+   "layers_computed": 1.766,
+   "loaded": 2.696,
+   "diagnostics_start": 2.696,
+   "diagnostics_done": 20.596,
+   "hover_done": 21.013,
+   "warm": 31.015,
+   "idle_60": 81.015,
+   "idle_900": 921.015
   },
   "maxProcs": 3,
   "machine": {

@@ -4,27 +4,28 @@
   "mode": "shared",
   "fixture": "excalidraw",
   "agents": 5,
+  "workload": "whole",
   "typescript": "7.1.0-beta",
   "gogc": "default",
   "gomemlimit": "default",
   "mb": {
-   "harness": 34.613311767578125,
-   "peak": 3025.9613189697266,
-   "warm": 3015.6164932250977,
-   "idle_60": 2971.6633682250977,
-   "idle_900": 711.11669921875
+   "harness": 33.691322326660156,
+   "peak": 2900.1631393432617,
+   "warm": 2892.396987915039,
+   "idle_60": 2881.803237915039,
+   "idle_900": 533.5846481323242
   },
   "seconds": {
    "start": 0,
-   "base_loaded": 0.651,
-   "layers_computed": 1.677,
-   "loaded": 1.864,
-   "diagnostics_start": 1.864,
-   "diagnostics_done": 8.69,
-   "hover_done": 8.82,
-   "warm": 18.821,
-   "idle_60": 68.822,
-   "idle_900": 908.826
+   "base_loaded": 0.626,
+   "layers_computed": 0.737,
+   "loaded": 0.91,
+   "diagnostics_start": 0.91,
+   "diagnostics_done": 7.251,
+   "hover_done": 7.353,
+   "warm": 17.354,
+   "idle_60": 67.355,
+   "idle_900": 907.356
   },
   "maxProcs": 2,
   "machine": {

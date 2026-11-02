@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { API } from "typescript/async";
 import { createFileSystemLayer } from "typescript/fs";
-import { BENCH, fixtureInfo, footprintNow, hoverTargets, layerFor, walk } from "./lib.mjs";
+import { BENCH, fixtureInfo, footprintNow, hoverTargets, layerFor } from "./lib.mjs";
 
 const [fixture, ...rest] = process.argv.slice(2);
 const opt = (name, def) => { const k = rest.indexOf(`--${name}`); return k >= 0 ? rest[k + 1] : def; };
@@ -41,8 +41,7 @@ async function features(snap, cfg, root, t) {
 const api = new API({ cwd: BASE });
 const cfg = join(BASE, tsconfigRel);
 const base = await api.createSnapshot({ openProjects: [cfg] });
-const baseFiles = walk(BASE);
-const layers = WTS.map((wt) => layerFor(BASE, wt, baseFiles));
+const layers = WTS.map((wt) => layerFor(BASE, wt));
 const targets = hoverTargets(BASE, WTS, tsconfigRel, 5);
 const layered = (l) => base.update({ fileSystem: createFileSystemLayer(l.files, { removedPaths: l.removed }), ensurePrograms: true });
 

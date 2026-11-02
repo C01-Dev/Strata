@@ -1,0 +1,54 @@
+{
+ "summary": {
+  "tag": "excalidraw-lsp-1-files",
+  "mode": "lsp",
+  "fixture": "excalidraw",
+  "agents": 1,
+  "workload": "files",
+  "typescript": "7.1.0-beta",
+  "gogc": "default",
+  "gomemlimit": "default",
+  "mb": {
+   "harness": 30.910072326660156,
+   "peak": 372.4267044067383,
+   "warm": 365.97303009033203
+  },
+  "seconds": {
+   "start": 0,
+   "loaded": 0.609,
+   "hover_done": 0.78,
+   "warm": 10.781
+  },
+  "maxProcs": 2,
+  "machine": {
+   "cpu": "Apple M5 Pro",
+   "ramGb": 24,
+   "os": "Darwin 27.0.0",
+   "fs": "apfs"
+  }
+ },
+ "hovers": [
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 hover",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 hover",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 hover",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 hover",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 hover",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 hover",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 hover",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 hover",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 hover",
+   "packages/element/src/renderElement.ts:13678 hover"
+  ]
+ ]
+}

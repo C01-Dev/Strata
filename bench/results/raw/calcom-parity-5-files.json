@@ -1,0 +1,88 @@
+{
+ "fixture": "calcom",
+ "agents": 5,
+ "workload": "files",
+ "perAgent": [
+  {
+   "agent": 1,
+   "diags": {
+    "baseline": 4,
+    "shared": 4,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "hovers": {
+    "baseline": 20,
+    "shared": 20,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "distinctFromAgent1": false
+  },
+  {
+   "agent": 2,
+   "diags": {
+    "baseline": 2,
+    "shared": 2,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "hovers": {
+    "baseline": 20,
+    "shared": 20,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "distinctFromAgent1": true
+  },
+  {
+   "agent": 3,
+   "diags": {
+    "baseline": 10,
+    "shared": 10,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "hovers": {
+    "baseline": 20,
+    "shared": 20,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "distinctFromAgent1": true
+  },
+  {
+   "agent": 4,
+   "diags": {
+    "baseline": 1,
+    "shared": 1,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "hovers": {
+    "baseline": 20,
+    "shared": 20,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "distinctFromAgent1": true
+  },
+  {
+   "agent": 5,
+   "diags": {
+    "baseline": 6,
+    "shared": 6,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "hovers": {
+    "baseline": 20,
+    "shared": 20,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "distinctFromAgent1": true
+  }
+ ],
+ "mismatches": 0
+}

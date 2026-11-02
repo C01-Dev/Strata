@@ -1,6 +1,6 @@
 // Shared Phase 0 helpers: fixture paths, worktree layers, fixed hover targets.
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const BENCH = import.meta.dirname;
@@ -10,32 +10,20 @@ export function fixtureInfo(fixture, agents) {
   // tsconfig per fixture comes from setup.sh's FIXTURES table (single source of truth).
   const tsconfigRel = readFileSync(join(BENCH, "setup.sh"), "utf8").match(new RegExp(`"${fixture} \\S+ \\S+ (\\S+)"`))[1];
   const BASE = join(BENCH, "fixtures", fixture, "base");
-  const WTS = Array.from({ length: agents }, (_, i) => join(BENCH, "fixtures", fixture, `wt${(i % 5) + 1}`));
+  const WTS = Array.from({ length: agents }, (_, i) => join(BENCH, "fixtures", fixture, `wt${i + 1}`));
   return { tsconfigRel, BASE, WTS };
 }
 
-// Every file under dir except node_modules and .git, as a set of relative paths.
-export function walk(dir, rel = "", out = new Set()) {
-  for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
-    if (e.name === "node_modules" || e.name === ".git") continue;
-    const r = rel ? `${rel}/${e.name}` : e.name;
-    if (e.isDirectory()) walk(dir, r, out);
-    else if (e.isFile()) out.add(r);
-  }
-  return out;
-}
-
-// Layer = files that differ from base or exist only in the worktree, re-rooted at base paths,
-// plus base files missing from the worktree. Content comparison, not git, so untracked files count.
-export function layerFor(base, wt, baseFiles) {
-  const wtFiles = walk(wt);
-  const files = [];
-  for (const r of wtFiles) {
-    const w = readFileSync(join(wt, r));
-    if (!baseFiles.has(r) || !w.equals(readFileSync(join(base, r)))) files.push([join(base, r), w.toString("utf8")]);
-  }
-  const removed = [...baseFiles].filter((r) => !wtFiles.has(r)).map((r) => join(base, r));
-  return { files, removed };
+// Layer = the worktree's changes against strata-base (committed, uncommitted, untracked), re-rooted at base paths,
+// plus deleted paths. Read from git, as the overlay tracker will, so only changed files are read: a content walk of
+// the whole repo cost the harness ~590 MiB on calcom, which the footprint counted against the shared side.
+// Ignored paths (node_modules, generated clients) are not in the layer; the fixtures never change them.
+export function layerFor(base, wt) {
+  const git = (...a) => execFileSync("git", ["-C", wt, ...a], { encoding: "utf8" }).split("\0").filter(Boolean);
+  const status = git("diff", "-z", "--name-status", "--no-renames", "strata-base");
+  const changed = git("ls-files", "-z", "--others", "--exclude-standard"), removed = [];
+  for (let k = 0; k < status.length; k += 2) (status[k] === "D" ? removed : changed).push(status[k + 1]);
+  return { files: changed.map((r) => [join(base, r), readFileSync(join(wt, r), "utf8")]), removed: removed.map((r) => join(base, r)) };
 }
 
 // 20 identifier positions in files that no agent touched, so offsets are valid in every worktree.

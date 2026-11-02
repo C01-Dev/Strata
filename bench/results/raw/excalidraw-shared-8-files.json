@@ -1,0 +1,354 @@
+{
+ "summary": {
+  "tag": "excalidraw-shared-8-files",
+  "mode": "shared",
+  "fixture": "excalidraw",
+  "agents": 8,
+  "workload": "files",
+  "typescript": "7.1.0-beta",
+  "gogc": "default",
+  "gomemlimit": "default",
+  "mb": {
+   "harness": 35.17567443847656,
+   "peak": 580.1004104614258,
+   "warm": 573.0680160522461
+  },
+  "seconds": {
+   "start": 0,
+   "base_loaded": 0.614,
+   "layers_computed": 0.805,
+   "loaded": 1.106,
+   "diagnostics_start": 1.106,
+   "diagnostics_done": 1.307,
+   "hover_done": 1.453,
+   "warm": 11.454
+  },
+  "maxProcs": 3,
+  "machine": {
+   "cpu": "Apple M5 Pro",
+   "ramGb": 24,
+   "os": "Darwin 27.0.0",
+   "fs": "apfs"
+  }
+ },
+ "diags": [
+  [
+   "packages/excalidraw/components/LaserPointerButton.tsx|808-826|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "packages/excalidraw/components/CursorHint.tsx|6292-6310|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "packages/excalidraw/actions/manager.tsx|6903-6921|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "packages/excalidraw/components/ColorPicker/colorTopPicksDnD.ts|2307-2325|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "excalidraw-app/CustomStats.tsx|2585-2603|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "packages/element/src/groups.ts|9473-9491|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "packages/excalidraw/components/dropdownMenu/DropdownMenuItemCheckbox.tsx|529-547|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "packages/excalidraw/components/OverwriteConfirm/OverwriteConfirmState.ts|1106-1124|TS2322|Type 'string' is not assignable to type 'number'."
+  ]
+ ],
+ "hovers": [
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 \"<root>/packages/excalidraw/components/TTDDialog/types\": typeof import(\"<root>/packages/excalidraw/components/TTDDialog/types\")",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 RefObject: any",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 UnsubscribeCallback: any",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 canvas: HTMLCanvasElement",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 height: number",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 useExcalidrawSetAppState: () => <K extends keyof AppState>(state: AppState | Pick<AppState, K> | ((prevState: Readonly<AppState>, props: Readonly<any>) => AppState | Pick<...> | null) | null, callback?: ... | undefined) => void",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 context: CanvasRenderingContext2D",
+   "packages/element/src/renderElement.ts:13678 CanvasRenderingContext2D: { new (): CanvasRenderingContext2D; prototype: CanvasRenderingContext2D; }"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 \"<root>/packages/excalidraw/components/TTDDialog/types\": typeof import(\"<root>/packages/excalidraw/components/TTDDialog/types\")",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 RefObject: any",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 UnsubscribeCallback: any",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 canvas: HTMLCanvasElement",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 height: number",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 useExcalidrawSetAppState: () => <K extends keyof AppState>(state: AppState | Pick<AppState, K> | ((prevState: Readonly<AppState>, props: Readonly<any>) => AppState | Pick<...> | null) | null, callback?: ... | undefined) => void",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 context: CanvasRenderingContext2D",
+   "packages/element/src/renderElement.ts:13678 CanvasRenderingContext2D: { new (): CanvasRenderingContext2D; prototype: CanvasRenderingContext2D; }"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 \"<root>/packages/excalidraw/components/TTDDialog/types\": typeof import(\"<root>/packages/excalidraw/components/TTDDialog/types\")",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 RefObject: any",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 UnsubscribeCallback: any",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 canvas: HTMLCanvasElement",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 height: number",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 useExcalidrawSetAppState: () => <K extends keyof AppState>(state: AppState | Pick<AppState, K> | ((prevState: Readonly<AppState>, props: Readonly<any>) => AppState | Pick<...> | null) | null, callback?: ... | undefined) => void",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 context: CanvasRenderingContext2D",
+   "packages/element/src/renderElement.ts:13678 CanvasRenderingContext2D: { new (): CanvasRenderingContext2D; prototype: CanvasRenderingContext2D; }"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 \"<root>/packages/excalidraw/components/TTDDialog/types\": typeof import(\"<root>/packages/excalidraw/components/TTDDialog/types\")",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 RefObject: any",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 UnsubscribeCallback: any",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 canvas: HTMLCanvasElement",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 height: number",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 useExcalidrawSetAppState: () => <K extends keyof AppState>(state: AppState | Pick<AppState, K> | ((prevState: Readonly<AppState>, props: Readonly<any>) => AppState | Pick<...> | null) | null, callback?: ... | undefined) => void",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 context: CanvasRenderingContext2D",
+   "packages/element/src/renderElement.ts:13678 CanvasRenderingContext2D: { new (): CanvasRenderingContext2D; prototype: CanvasRenderingContext2D; }"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 \"<root>/packages/excalidraw/components/TTDDialog/types\": typeof import(\"<root>/packages/excalidraw/components/TTDDialog/types\")",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 RefObject: any",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 UnsubscribeCallback: any",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 canvas: HTMLCanvasElement",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 height: number",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 useExcalidrawSetAppState: () => <K extends keyof AppState>(state: AppState | Pick<AppState, K> | ((prevState: Readonly<AppState>, props: Readonly<any>) => AppState | Pick<...> | null) | null, callback?: ... | undefined) => void",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 context: CanvasRenderingContext2D",
+   "packages/element/src/renderElement.ts:13678 CanvasRenderingContext2D: { new (): CanvasRenderingContext2D; prototype: CanvasRenderingContext2D; }"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 \"<root>/packages/excalidraw/components/TTDDialog/types\": typeof import(\"<root>/packages/excalidraw/components/TTDDialog/types\")",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 RefObject: any",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 UnsubscribeCallback: any",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 canvas: HTMLCanvasElement",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 height: number",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 useExcalidrawSetAppState: () => <K extends keyof AppState>(state: AppState | Pick<AppState, K> | ((prevState: Readonly<AppState>, props: Readonly<any>) => AppState | Pick<...> | null) | null, callback?: ... | undefined) => void",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 context: CanvasRenderingContext2D",
+   "packages/element/src/renderElement.ts:13678 CanvasRenderingContext2D: { new (): CanvasRenderingContext2D; prototype: CanvasRenderingContext2D; }"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 \"<root>/packages/excalidraw/components/TTDDialog/types\": typeof import(\"<root>/packages/excalidraw/components/TTDDialog/types\")",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 RefObject: any",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 UnsubscribeCallback: any",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 canvas: HTMLCanvasElement",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 height: number",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 useExcalidrawSetAppState: () => <K extends keyof AppState>(state: AppState | Pick<AppState, K> | ((prevState: Readonly<AppState>, props: Readonly<any>) => AppState | Pick<...> | null) | null, callback?: ... | undefined) => void",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 context: CanvasRenderingContext2D",
+   "packages/element/src/renderElement.ts:13678 CanvasRenderingContext2D: { new (): CanvasRenderingContext2D; prototype: CanvasRenderingContext2D; }"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:134 \"<root>/packages/excalidraw/components/TTDDialog/types\": typeof import(\"<root>/packages/excalidraw/components/TTDDialog/types\")",
+   "packages/excalidraw/components/TTDDialog/TTDContext.tsx:143 -",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useScrollPosition.ts:249 RefObject: any",
+   "packages/excalidraw/hooks/useScrollPosition.ts:263 -",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/emitter.ts:367 UnsubscribeCallback: any",
+   "packages/common/src/emitter.ts:384 -",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1300 canvas: HTMLCanvasElement",
+   "packages/excalidraw/components/canvases/StaticCanvas.tsx:1307 height: number",
+   "packages/excalidraw/components/App.arrowText.ts:2081 -",
+   "packages/excalidraw/components/App.arrowText.ts:2091 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:395 useExcalidrawSetAppState: () => <K extends keyof AppState>(state: AppState | Pick<AppState, K> | ((prevState: Readonly<AppState>, props: Readonly<any>) => AppState | Pick<...> | null) | null, callback?: ... | undefined) => void",
+   "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx:416 -",
+   "packages/element/src/renderElement.ts:13672 context: CanvasRenderingContext2D",
+   "packages/element/src/renderElement.ts:13678 CanvasRenderingContext2D: { new (): CanvasRenderingContext2D; prototype: CanvasRenderingContext2D; }"
+  ]
+ ],
+ "targets": [
+  {
+   "file": "packages/excalidraw/components/TTDDialog/TTDContext.tsx",
+   "pos": 134
+  },
+  {
+   "file": "packages/excalidraw/components/TTDDialog/TTDContext.tsx",
+   "pos": 143
+  },
+  {
+   "file": "packages/excalidraw/actions/actionDeleteSelected.tsx",
+   "pos": 2992
+  },
+  {
+   "file": "packages/excalidraw/actions/actionDeleteSelected.tsx",
+   "pos": 3016
+  },
+  {
+   "file": "packages/excalidraw/hooks/useScrollPosition.ts",
+   "pos": 249
+  },
+  {
+   "file": "packages/excalidraw/hooks/useScrollPosition.ts",
+   "pos": 263
+  },
+  {
+   "file": "packages/excalidraw/components/IconPicker.tsx",
+   "pos": 2992
+  },
+  {
+   "file": "packages/excalidraw/components/IconPicker.tsx",
+   "pos": 2998
+  },
+  {
+   "file": "packages/common/src/emitter.ts",
+   "pos": 367
+  },
+  {
+   "file": "packages/common/src/emitter.ts",
+   "pos": 384
+  },
+  {
+   "file": "packages/excalidraw/components/canvases/StaticCanvas.tsx",
+   "pos": 1300
+  },
+  {
+   "file": "packages/excalidraw/components/canvases/StaticCanvas.tsx",
+   "pos": 1307
+  },
+  {
+   "file": "packages/excalidraw/components/App.arrowText.ts",
+   "pos": 2081
+  },
+  {
+   "file": "packages/excalidraw/components/App.arrowText.ts",
+   "pos": 2091
+  },
+  {
+   "file": "packages/excalidraw/workers.ts",
+   "pos": 1254
+  },
+  {
+   "file": "packages/excalidraw/workers.ts",
+   "pos": 1268
+  },
+  {
+   "file": "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx",
+   "pos": 395
+  },
+  {
+   "file": "packages/excalidraw/components/Sidebar/SidebarTrigger.tsx",
+   "pos": 416
+  },
+  {
+   "file": "packages/element/src/renderElement.ts",
+   "pos": 13672
+  },
+  {
+   "file": "packages/element/src/renderElement.ts",
+   "pos": 13678
+  }
+ ],
+ "layers": [
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  }
+ ]
+}

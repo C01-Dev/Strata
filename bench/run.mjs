@@ -1,8 +1,10 @@
 // Phase 0 harness. One mode per process so the footprint sampler sees only that mode's tree.
 //   baseline: one tsgo API process per worktree, each holding a snapshot of its own worktree
 //   shared:   one tsgo API process, a base snapshot plus one layered snapshot per worktree (base paths)
-//   lsp:      one `tsc --lsp --stdio` per worktree (launch comparison; opens the hover files only)
-// Usage: node run.mjs <mode> <fixture> [--agents 5] [--idle 60,900] [--tag name]
+//   lsp:      one `tsc --lsp --stdio` per worktree (opens the hover files; in the files workload also the edited files)
+// Workload: "whole" = whole-project diagnostics for every agent at once (Gate 0 protocol);
+//           "files" = each agent checks only the .ts/.tsx files its diff added or modified, one at a time.
+// Usage: node run.mjs <mode> <fixture> [--agents 5] [--workload whole|files] [--idle 60,900] [--tag name]
 import { execSync, spawn } from "node:child_process";
 import os from "node:os";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
@@ -10,13 +12,14 @@ import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { API } from "typescript/async";
 import { createFileSystemLayer } from "typescript/fs";
-import { BENCH, TSC, fixtureInfo, hoverTargets as targetsFor, layerFor as layerAt, walk } from "./lib.mjs";
+import { BENCH, TSC, fixtureInfo, hoverTargets as targetsFor, layerFor } from "./lib.mjs";
 
 const [mode, fixture, ...rest] = process.argv.slice(2);
 const opt = (name, def) => { const k = rest.indexOf(`--${name}`); return k >= 0 ? rest[k + 1] : def; };
 const AGENTS = Number(opt("agents", 5));
-const IDLE = opt("idle", "60").split(",").map(Number);
-const TAG = opt("tag", `${fixture}-${mode}-${AGENTS}`);
+const IDLE = opt("idle", "60").split(",").filter(Boolean).map(Number);
+const WORKLOAD = opt("workload", "whole");
+const TAG = opt("tag", `${fixture}-${mode}-${AGENTS}${WORKLOAD === "files" ? "-files" : ""}`);
 const { tsconfigRel, BASE, WTS } = fixtureInfo(fixture, AGENTS);
 const OUT = join(BENCH, "results", "raw");
 mkdirSync(OUT, { recursive: true });
@@ -38,8 +41,10 @@ const marks = {};
 const mark = (name) => { marks[name] = Date.now(); console.error(`[${TAG}] ${name} +${((marks[name] - marks.start) / 1000 || 0).toFixed(1)}s`); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const hoverTargets = () => targetsFor(BASE, WTS, tsconfigRel);
-const layerFor = (wt, baseFiles) => layerAt(BASE, wt, baseFiles);
+// Files workload: fix hover targets across agent counts by excluding every worktree's diff (8 exist).
+const hoverTargets = () => targetsFor(BASE, WORKLOAD === "files" ? fixtureInfo(fixture, 8).WTS : WTS, tsconfigRel);
+const edited = (wt) => execSync(`git -C "${wt}" diff --name-only --diff-filter=AM strata-base HEAD`, { encoding: "utf8" })
+  .split("\n").filter((f) => /\.tsx?$/.test(f));
 
 // ---- normalizers (paths relative to the agent's own root, so modes compare) ----
 const norm = (root, s) => (s ?? "").split(root + sep).join("<root>/");
@@ -51,6 +56,11 @@ async function queries(agents) {
   mark("diagnostics_start");
   const diags = await Promise.all(agents.map(async (a) => {
     const p = a.project.program;
+    if (WORKLOAD === "files") {
+      const all = [];
+      for (const f of edited(a.wt)) all.push(...(await p.getSyntacticDiagnostics(join(a.root, f))), ...(await p.getSemanticDiagnostics(join(a.root, f))));
+      return all.map((d) => diagKey(a.root, d)).sort();
+    }
     const all = [
       ...(await p.getConfigFileParsingDiagnostics()),
       ...(await p.getGlobalDiagnostics()),
@@ -88,7 +98,7 @@ if (mode === "baseline") {
     const api = new API({ cwd: root });
     const cfg = join(root, tsconfigRel);
     const snap = await api.createSnapshot({ openProjects: [cfg] });
-    return { root, api, snap, project: snap.getConfiguredProject(cfg) };
+    return { root, wt: root, api, snap, project: snap.getConfiguredProject(cfg) };
   }));
   mark("loaded");
   result = await queries(agents);
@@ -98,8 +108,7 @@ if (mode === "baseline") {
   const cfg = join(BASE, tsconfigRel);
   const base = await api.createSnapshot({ openProjects: [cfg] });
   mark("base_loaded");
-  const baseFiles = walk(BASE);
-  const layers = WTS.map((wt) => layerFor(wt, baseFiles));
+  const layers = WTS.map((wt) => layerFor(BASE, wt));
   mark("layers_computed");
   // Paths stay at base paths inside tsgo; results are reported relative to BASE, i.e. re-rooted per agent.
   const agents = await Promise.all(layers.map(async (l, i) => {
@@ -112,7 +121,8 @@ if (mode === "baseline") {
   cleanup = async () => { for (const a of agents) await a.snap.dispose(); await base.dispose(); await api.close(); };
 } else if (mode === "lsp") {
   const targets = hoverTargets();
-  const servers = await Promise.all(WTS.map((root) => lspSession(root, targets)));
+  const diagFiles = (root) => (WORKLOAD === "files" ? edited(root) : [...new Set(targets.map((t) => t.file))]);
+  const servers = await Promise.all(WTS.map((root) => lspSession(root, targets, diagFiles(root))));
   mark("loaded");
   result = { hovers: await Promise.all(servers.map((s) => s.run())) };
   mark("hover_done");
@@ -129,7 +139,7 @@ sampler.kill();
 const at = (t) => samples.reduce((best, s) => (Math.abs(s.t - t) < Math.abs(best.t - t) ? s : best), samples[0]).bytes;
 const peak = Math.max(...samples.filter((s) => s.t <= done + 10_000).map((s) => s.bytes));
 const summary = {
-  tag: TAG, mode, fixture, agents: AGENTS, typescript: JSON.parse(readFileSync(join(BENCH, "node_modules/typescript/package.json"))).version,
+  tag: TAG, mode, fixture, agents: AGENTS, workload: WORKLOAD, typescript: JSON.parse(readFileSync(join(BENCH, "node_modules/typescript/package.json"))).version,
   gogc: process.env.GOGC ?? "default", gomemlimit: process.env.GOMEMLIMIT ?? "default",
   mb: { harness: at(marks.start + 400) / 2 ** 20, peak: peak / 2 ** 20, warm: at(marks.warm) / 2 ** 20, ...Object.fromEntries(IDLE.map((s) => [`idle_${s}`, at(marks[`idle_${s}`]) / 2 ** 20])) },
   seconds: Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, (v - marks.start) / 1000])),
@@ -145,7 +155,7 @@ console.log(JSON.stringify(summary));
 process.exit(0);
 
 // ---- minimal LSP client ----
-function lspSession(root, targets) {
+function lspSession(root, targets, diagFiles) {
   const p = spawn(TSC, ["--lsp", "--stdio"], { cwd: root, stdio: ["pipe", "pipe", "ignore"] });
   let id = 0, data = Buffer.alloc(0);
   const pending = new Map();
@@ -168,13 +178,13 @@ function lspSession(root, targets) {
     await request("initialize", { processId: process.pid, rootUri: pathToFileURL(root).href, workspaceFolders: [{ uri: pathToFileURL(root).href, name: "wt" }], capabilities: { textDocument: { hover: { contentFormat: ["plaintext"] }, diagnostic: {} } } });
     send({ method: "initialized", params: {} });
     const texts = new Map();
-    for (const t of targets) if (!texts.has(t.file)) {
-      texts.set(t.file, readFileSync(join(root, t.file), "utf8"));
-      send({ method: "textDocument/didOpen", params: { textDocument: { uri: uri(t.file), languageId: t.file.endsWith("x") ? "typescriptreact" : "typescript", version: 1, text: texts.get(t.file) } } });
+    for (const f of new Set([...diagFiles, ...targets.map((t) => t.file)])) {
+      texts.set(f, readFileSync(join(root, f), "utf8"));
+      send({ method: "textDocument/didOpen", params: { textDocument: { uri: uri(f), languageId: f.endsWith("x") ? "typescriptreact" : "typescript", version: 1, text: texts.get(f) } } });
     }
     return {
       run: async () => {
-        for (const f of texts.keys()) await request("textDocument/diagnostic", { textDocument: { uri: uri(f) } });
+        for (const f of diagFiles) await request("textDocument/diagnostic", { textDocument: { uri: uri(f) } });
         const out = [];
         for (const t of targets) { const h = await request("textDocument/hover", { textDocument: { uri: uri(t.file) }, position: lc(texts.get(t.file), t.pos) }); out.push(`${t.file}:${t.pos} ${h ? "hover" : "-"}`); }
         return out;

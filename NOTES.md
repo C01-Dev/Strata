@@ -71,9 +71,32 @@ Worktrees: `git worktree add -b agent-N`, then every git-ignored path in base (n
 
 ## Gate 0 result (2026-11-02): NOT PASSED — stopped, waiting for the owner
 
+As first reported (shared side inflated by the layer harness, see below): calcom 26% / 26% / 64% (peak / warm / idle 15 min), excalidraw 18% / 18% / 57%. Corrected:
+
 | Fixture | S peak | S warm | S idle 15 min | Parity |
 | --- | --- | --- | --- | --- |
-| calcom | 26% | 26% | 64% | 0 mismatches |
-| excalidraw | 18% | 18% | 57% | 0 mismatches |
+| calcom | 30% | 30% | 63% | 0 mismatches |
+| excalidraw | 21% | 22% | 68% | 0 mismatches |
 
-calcom falls in the 20–40% band (owner decides); excalidraw is under 20%, which PLAN lists as a kill-or-rethink criterion. Correctness and per-snapshot diagnostics pass. Cause: checker state (~60–70% of a dedicated process's peak) is per snapshot; only parsed and bound files are shared. Full write-up and options in `bench/REPORT.md`. Phase 1 not started.
+Both fixtures fall in the 20–40% band (owner decides); excalidraw is within run-to-run GC noise of the 20% line. Correctness and per-snapshot diagnostics pass. Cause: checker state (~60–70% of a dedicated process's peak) is per snapshot; only parsed and bound files are shared. Full write-up and options in `bench/REPORT.md`. Phase 1 not started.
+
+## Task 0.8 (owner follow-up after Gate 0): per-file agent workload
+
+Not in PLAN; the owner chose option 3 ("measure agent workload"). Committed as `phase-0/task-8`.
+
+- Worktrees 6–8 added with `AGENTS=8 bench/setup.sh` (calcom: 51 s seeding each). `fixtureInfo` no longer cycles 5 worktrees.
+- Workload (`run.mjs --workload files`, driver `bench/agents.sh`): each agent requests syntactic + semantic diagnostics for the 6 .ts/.tsx files its diff added or modified (`git diff --diff-filter=AM strata-base`), one file at a time, agents concurrent; then the same 20 hovers. Hover targets exclude all 8 diffs so they are identical at every agent count. LSP mode opens the edited files and requests `textDocument/diagnostic` on each (like-for-like with the API modes). No idle readings.
+- **Harness bug found:** `layerFor` read every file in the repo in Node to diff contents. The calcom 1-agent trace showed 899 MiB after the base load and 1,492 MiB after layer computation with tsgo idle (~590 MiB of Node heap), counted against the shared side. That also biased the Gate 0 shared runs. `layerFor` now reads `git diff --name-status strata-base` plus untracked files: only changed files are read, as the overlay tracker will do. Same layers (6 files + 1 deletion per agent). Reran the per-file matrix and both whole-project shared runs; old ones kept as `results/raw/*-shared-5-walklayer*`. Baseline and LSP runs compute no layers and are unaffected. The task 0.6 scaling runs carried the overhead as a constant Node offset; the per-snapshot marginal costs stand.
+- Results (S peak vs separate API processes; vs separate `tsc --lsp` within 1–3 points):
+
+| Agents | calcom | excalidraw |
+| --- | --- | --- |
+| 1 | −28% | −16% |
+| 3 | 42% | 49% |
+| 5 | 61% | 65% |
+| 8 | 74% | 75% |
+
+- Marginal cost per extra agent (5 → 8): shared ~55 MiB calcom / ~24 MiB excalidraw; separate processes ~1.05 GiB / ~290 MiB. Fixed cost of sharing at 1 agent: +0.31 GiB calcom, +0.05 GiB excalidraw.
+- Parity: 0 mismatches at every agent count on both fixtures.
+- Per-file timing: 0.02–0.3 s per agent at 1 agent; calcom at 8 agents 1.0 s shared vs 0.56 s separate.
+- Reading: the shared parsed/bound program dominates when agents check only what they edit; checker state dominates only when every agent checks the whole project at once. Per-file meets PLAN's success metric (≤50% of separate processes at 5 agents: calcom 39%, excalidraw 35%); the Gate 0 protocol does not.

@@ -1,0 +1,301 @@
+{
+ "summary": {
+  "tag": "excalidraw-shared-5",
+  "mode": "shared",
+  "fixture": "excalidraw",
+  "agents": 5,
+  "typescript": "7.1.0-beta",
+  "gogc": "default",
+  "gomemlimit": "default",
+  "mb": {
+   "harness": 34.613311767578125,
+   "peak": 3025.9613189697266,
+   "warm": 3015.6164932250977,
+   "idle_60": 2971.6633682250977,
+   "idle_900": 711.11669921875
+  },
+  "seconds": {
+   "start": 0,
+   "base_loaded": 0.651,
+   "layers_computed": 1.677,
+   "loaded": 1.864,
+   "diagnostics_start": 1.864,
+   "diagnostics_done": 8.69,
+   "hover_done": 8.82,
+   "warm": 18.821,
+   "idle_60": 68.822,
+   "idle_900": 908.826
+  },
+  "maxProcs": 2,
+  "machine": {
+   "cpu": "Apple M5 Pro",
+   "ramGb": 24,
+   "os": "Darwin 27.0.0",
+   "fs": "apfs"
+  }
+ },
+ "diags": [
+  [
+   "excalidraw-app/data/fileStatusStore.ts|615-619|TS7006|Parameter 'prev' implicitly has an 'any' type.",
+   "excalidraw-app/data/fileStatusStore.ts|9-31|TS2305|Module '\"@excalidraw/common\"' has no exported member 'VersionedSnapshotStore'.",
+   "packages/common/src/index.ts|433-459|TS2307|Cannot find module './versionedSnapshotStore' or its corresponding type declarations.",
+   "packages/excalidraw/components/LaserPointerButton.tsx|808-826|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "packages/excalidraw/components/ConfirmDialog.tsx|244-259|TS2307|Cannot find module './LibraryMenu' or its corresponding type declarations.",
+   "packages/excalidraw/components/CursorHint.tsx|6292-6310|TS2322|Type 'string' is not assignable to type 'number'.",
+   "packages/excalidraw/components/DefaultSidebar.tsx|470-485|TS2307|Cannot find module './LibraryMenu' or its corresponding type declarations.",
+   "packages/excalidraw/components/Dialog.tsx|464-479|TS2307|Cannot find module './LibraryMenu' or its corresponding type declarations.",
+   "packages/excalidraw/components/LibraryMenuHeaderContent.tsx|645-660|TS2307|Cannot find module './LibraryMenu' or its corresponding type declarations."
+  ],
+  [
+   "excalidraw-app/App.tsx|3623-3644|TS2307|Cannot find module './data/localStorage' or its corresponding type declarations.",
+   "excalidraw-app/CustomStats.tsx|526-547|TS2307|Cannot find module './data/localStorage' or its corresponding type declarations.",
+   "excalidraw-app/collab/Collab.tsx|2493-2515|TS2307|Cannot find module '../data/localStorage' or its corresponding type declarations.",
+   "packages/excalidraw/actions/manager.tsx|6903-6921|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "packages/excalidraw/actions/index.ts|1704-1724|TS2307|Cannot find module './actionDistribute' or its corresponding type declarations.",
+   "packages/excalidraw/components/ColorPicker/colorTopPicksDnD.ts|2307-2325|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "excalidraw-app/App.tsx|242-276|TS2307|Cannot find module '@excalidraw/excalidraw/analytics' or its corresponding type declarations.",
+   "excalidraw-app/CustomStats.tsx|2585-2603|TS2322|Type 'string' is not assignable to type 'number'.",
+   "excalidraw-app/collab/Portal.tsx|89-123|TS2307|Cannot find module '@excalidraw/excalidraw/analytics' or its corresponding type declarations.",
+   "excalidraw-app/components/ExportToExcalidrawPlus.tsx|88-122|TS2307|Cannot find module '@excalidraw/excalidraw/analytics' or its corresponding type declarations.",
+   "excalidraw-app/share/ShareDialog.tsx|27-61|TS2307|Cannot find module '@excalidraw/excalidraw/analytics' or its corresponding type declarations.",
+   "packages/excalidraw/actions/actionProperties.tsx|2212-2226|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/actions/manager.tsx|208-222|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/App.toolDrag.ts|360-374|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/App.tsx|7094-7108|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/CommandPalette/CommandPalette.tsx|739-756|TS2307|Cannot find module '../../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/ConvertElementTypePopup.tsx|1859-1873|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/JSONExportDialog.tsx|247-261|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/LayerUI.tsx|527-541|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/LibraryMenu.tsx|396-410|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/PasteChartDialog.tsx|210-224|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/TTDDialog/TTDDialogTrigger.tsx|27-44|TS2307|Cannot find module '../../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/TTDDialog/hooks/useTextGeneration.ts|182-202|TS2307|Cannot find module '../../../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/ToolPopover.tsx|198-212|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/Tools.tsx|223-237|TS2307|Cannot find module '../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/hyperlink/Hyperlink.tsx|956-973|TS2307|Cannot find module '../../analytics' or its corresponding type declarations.",
+   "packages/excalidraw/components/main-menu/DefaultItems.tsx|704-721|TS2307|Cannot find module '../../analytics' or its corresponding type declarations."
+  ]
+ ],
+ "hovers": [
+  [
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2747 -",
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2753 data: RefObject<{ elements: readonly NonDeletedExcalidrawElement[]; files: BinaryFiles | null; }>",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useOutsideClick.ts:975 refOwnerDocument: Document | undefined",
+   "packages/excalidraw/hooks/useOutsideClick.ts:996 onOutsideClick: (event: Event) => void",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/constants.ts:5641 -",
+   "packages/common/src/constants.ts:5648 -",
+   "packages/excalidraw/components/canvases/index.tsx:42 \"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\": typeof import(\"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\")",
+   "packages/excalidraw/components/canvases/index.tsx:53 -",
+   "packages/excalidraw/charts/index.ts:364 -",
+   "packages/excalidraw/charts/index.ts:371 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:261 RefAttributes: any",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:273 HTMLDivElement: { new (): HTMLDivElement; prototype: HTMLDivElement; }",
+   "packages/element/src/newElement.ts:5703 -",
+   "packages/element/src/newElement.ts:5713 -"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2747 -",
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2753 data: RefObject<{ elements: readonly NonDeletedExcalidrawElement[]; files: BinaryFiles | null; }>",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useOutsideClick.ts:975 refOwnerDocument: Document | undefined",
+   "packages/excalidraw/hooks/useOutsideClick.ts:996 onOutsideClick: (event: Event) => void",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/constants.ts:5641 -",
+   "packages/common/src/constants.ts:5648 -",
+   "packages/excalidraw/components/canvases/index.tsx:42 \"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\": typeof import(\"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\")",
+   "packages/excalidraw/components/canvases/index.tsx:53 -",
+   "packages/excalidraw/charts/index.ts:364 -",
+   "packages/excalidraw/charts/index.ts:371 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:261 RefAttributes: any",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:273 HTMLDivElement: { new (): HTMLDivElement; prototype: HTMLDivElement; }",
+   "packages/element/src/newElement.ts:5703 -",
+   "packages/element/src/newElement.ts:5713 -"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2747 -",
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2753 data: RefObject<{ elements: readonly NonDeletedExcalidrawElement[]; files: BinaryFiles | null; }>",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useOutsideClick.ts:975 refOwnerDocument: Document | undefined",
+   "packages/excalidraw/hooks/useOutsideClick.ts:996 onOutsideClick: (event: Event) => void",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/constants.ts:5641 -",
+   "packages/common/src/constants.ts:5648 -",
+   "packages/excalidraw/components/canvases/index.tsx:42 \"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\": typeof import(\"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\")",
+   "packages/excalidraw/components/canvases/index.tsx:53 -",
+   "packages/excalidraw/charts/index.ts:364 -",
+   "packages/excalidraw/charts/index.ts:371 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:261 RefAttributes: any",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:273 HTMLDivElement: { new (): HTMLDivElement; prototype: HTMLDivElement; }",
+   "packages/element/src/newElement.ts:5703 -",
+   "packages/element/src/newElement.ts:5713 -"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2747 -",
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2753 data: RefObject<{ elements: readonly NonDeletedExcalidrawElement[]; files: BinaryFiles | null; }>",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useOutsideClick.ts:975 refOwnerDocument: Document | undefined",
+   "packages/excalidraw/hooks/useOutsideClick.ts:996 onOutsideClick: (event: Event) => void",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/constants.ts:5641 -",
+   "packages/common/src/constants.ts:5648 -",
+   "packages/excalidraw/components/canvases/index.tsx:42 \"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\": typeof import(\"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\")",
+   "packages/excalidraw/components/canvases/index.tsx:53 -",
+   "packages/excalidraw/charts/index.ts:364 -",
+   "packages/excalidraw/charts/index.ts:371 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:261 RefAttributes: any",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:273 HTMLDivElement: { new (): HTMLDivElement; prototype: HTMLDivElement; }",
+   "packages/element/src/newElement.ts:5703 -",
+   "packages/element/src/newElement.ts:5713 -"
+  ],
+  [
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2747 -",
+   "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx:2753 data: RefObject<{ elements: readonly NonDeletedExcalidrawElement[]; files: BinaryFiles | null; }>",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:2992 boundElement: ExcalidrawTextContainer | null",
+   "packages/excalidraw/actions/actionDeleteSelected.tsx:3016 isChildOfDeletedFrame: (el: ExcalidrawElement) => boolean",
+   "packages/excalidraw/hooks/useOutsideClick.ts:975 refOwnerDocument: Document | undefined",
+   "packages/excalidraw/hooks/useOutsideClick.ts:996 onOutsideClick: (event: Event) => void",
+   "packages/excalidraw/components/IconPicker.tsx:2992 -",
+   "packages/excalidraw/components/IconPicker.tsx:2998 -",
+   "packages/common/src/constants.ts:5641 -",
+   "packages/common/src/constants.ts:5648 -",
+   "packages/excalidraw/components/canvases/index.tsx:42 \"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\": typeof import(\"<root>/packages/excalidraw/components/canvases/InteractiveCanvas\")",
+   "packages/excalidraw/components/canvases/index.tsx:53 -",
+   "packages/excalidraw/charts/index.ts:364 -",
+   "packages/excalidraw/charts/index.ts:371 -",
+   "packages/excalidraw/workers.ts:1254 -",
+   "packages/excalidraw/workers.ts:1268 -",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:261 RefAttributes: any",
+   "packages/excalidraw/components/Sidebar/SidebarTabs.tsx:273 HTMLDivElement: { new (): HTMLDivElement; prototype: HTMLDivElement; }",
+   "packages/element/src/newElement.ts:5703 -",
+   "packages/element/src/newElement.ts:5713 -"
+  ]
+ ],
+ "targets": [
+  {
+   "file": "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx",
+   "pos": 2747
+  },
+  {
+   "file": "packages/excalidraw/components/TTDDialog/MermaidToExcalidraw.tsx",
+   "pos": 2753
+  },
+  {
+   "file": "packages/excalidraw/actions/actionDeleteSelected.tsx",
+   "pos": 2992
+  },
+  {
+   "file": "packages/excalidraw/actions/actionDeleteSelected.tsx",
+   "pos": 3016
+  },
+  {
+   "file": "packages/excalidraw/hooks/useOutsideClick.ts",
+   "pos": 975
+  },
+  {
+   "file": "packages/excalidraw/hooks/useOutsideClick.ts",
+   "pos": 996
+  },
+  {
+   "file": "packages/excalidraw/components/IconPicker.tsx",
+   "pos": 2992
+  },
+  {
+   "file": "packages/excalidraw/components/IconPicker.tsx",
+   "pos": 2998
+  },
+  {
+   "file": "packages/common/src/constants.ts",
+   "pos": 5641
+  },
+  {
+   "file": "packages/common/src/constants.ts",
+   "pos": 5648
+  },
+  {
+   "file": "packages/excalidraw/components/canvases/index.tsx",
+   "pos": 42
+  },
+  {
+   "file": "packages/excalidraw/components/canvases/index.tsx",
+   "pos": 53
+  },
+  {
+   "file": "packages/excalidraw/charts/index.ts",
+   "pos": 364
+  },
+  {
+   "file": "packages/excalidraw/charts/index.ts",
+   "pos": 371
+  },
+  {
+   "file": "packages/excalidraw/workers.ts",
+   "pos": 1254
+  },
+  {
+   "file": "packages/excalidraw/workers.ts",
+   "pos": 1268
+  },
+  {
+   "file": "packages/excalidraw/components/Sidebar/SidebarTabs.tsx",
+   "pos": 261
+  },
+  {
+   "file": "packages/excalidraw/components/Sidebar/SidebarTabs.tsx",
+   "pos": 273
+  },
+  {
+   "file": "packages/element/src/newElement.ts",
+   "pos": 5703
+  },
+  {
+   "file": "packages/element/src/newElement.ts",
+   "pos": 5713
+  }
+ ],
+ "layers": [
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  },
+  {
+   "layered": 6,
+   "removed": 1
+  }
+ ]
+}

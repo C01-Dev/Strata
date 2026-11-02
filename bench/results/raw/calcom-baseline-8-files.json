@@ -1,0 +1,344 @@
+{
+ "summary": {
+  "tag": "calcom-baseline-8-files",
+  "mode": "baseline",
+  "fixture": "calcom",
+  "agents": 8,
+  "workload": "files",
+  "typescript": "7.1.0-beta",
+  "gogc": "default",
+  "gomemlimit": "default",
+  "mb": {
+   "harness": 34.58226776123047,
+   "peak": 8576.219924926758,
+   "warm": 8564.906234741211
+  },
+  "seconds": {
+   "start": 0,
+   "loaded": 4.611,
+   "diagnostics_start": 4.612,
+   "diagnostics_done": 5.175,
+   "hover_done": 5.297,
+   "warm": 15.298
+  },
+  "maxProcs": 9,
+  "machine": {
+   "cpu": "Apple M5 Pro",
+   "ramGb": 24,
+   "os": "Darwin 27.0.0",
+   "fs": "apfs"
+  }
+ },
+ "diags": [
+  [
+   "apps/web/modules/bookings/components/BookEventForm/index.ts|157-175|TS2322|Type 'string' is not assignable to type 'number'.",
+   "apps/web/modules/event-types/components/tabs/availability/EventAvailabilityTab.tsx|24252-24260|TS7006|Parameter 'schedule' implicitly has an 'any' type.",
+   "apps/web/modules/event-types/components/tabs/availability/EventAvailabilityTab.tsx|24546-24552|TS7006|Parameter 'option' implicitly has an 'any' type.",
+   "apps/web/modules/event-types/components/tabs/availability/EventAvailabilityTab.tsx|24650-24658|TS7006|Parameter 'schedule' implicitly has an 'any' type."
+  ],
+  [
+   "apps/web/modules/apps/components/AppCard.tsx|10764-10782|TS2322|Type 'string' is not assignable to type 'number'.",
+   "apps/web/modules/bookings/components/BookingListContainer.tsx|8618-8624|TS2339|Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'."
+  ],
+  [
+   "apps/web/components/error/BookingPageErrorBoundary.tsx|750-768|TS2322|Type 'string' is not assignable to type 'number'.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|1043-1051|TS2339|Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|1255-1261|TS2339|Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|1483-1491|TS7006|Parameter 'lastPage' implicitly has an 'any' type.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|1570-1574|TS7006|Parameter 'page' implicitly has an 'any' type.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|1712-1718|TS2339|Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|1949-1952|TS7006|Parameter 'err' implicitly has an 'any' type.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|2044-2050|TS2339|Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|2287-2290|TS7006|Parameter 'err' implicitly has an 'any' type.",
+   "apps/web/modules/feature-flags/components/AssignFeatureSheet.tsx|3690-3694|TS7006|Parameter 'team' implicitly has an 'any' type."
+  ],
+  [
+   "apps/web/lib/video/meeting-ended/[uid]/getServerSideProps.ts|1225-1243|TS2322|Type 'string' is not assignable to type 'number'."
+  ],
+  [
+   "apps/web/app/(booking-page-wrapper)/booking/[uid]/page.tsx|2265-2283|TS2322|Type 'string' is not assignable to type 'number'.",
+   "apps/web/components/dialog/AddGuestsDialog.tsx|1099-1107|TS2339|Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/components/dialog/AddGuestsDialog.tsx|1282-1288|TS2339|Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/components/dialog/AddGuestsDialog.tsx|1523-1526|TS7006|Parameter 'err' implicitly has an 'any' type.",
+   "apps/web/modules/settings/developer/api-keys-view.tsx|2270-2276|TS7006|Parameter 'apiKey' implicitly has an 'any' type.",
+   "apps/web/modules/settings/developer/api-keys-view.tsx|2278-2283|TS7006|Parameter 'index' implicitly has an 'any' type."
+  ],
+  [
+   "apps/web/app/api/auth/setup/route.ts|2499-2517|TS2322|Type 'string' is not assignable to type 'number'.",
+   "apps/web/components/dialog/ReassignDialog.tsx|2095-2103|TS2339|Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/components/dialog/ReassignDialog.tsx|90-115|TS7016|Could not find a declaration file for module '@hookform/resolvers/zod'. '<root>/node_modules/@hookform/resolvers/zod/dist/zod.mjs' implicitly has an 'any' type. / There are types at '<root>/node_modules/@hookform/resolvers/zod/dist/index.d.ts', but this result could not be resolved when respecting package.json \"exports\". The '@hookform/resolvers' library may need to update its package.json or typings."
+  ],
+  [
+   "apps/web/components/dialog/ChargeCardDialog.tsx|845-853|TS2339|Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/modules/event-types/components/tabs/limits/EventLimitsTabWebWrapper.tsx|471-489|TS2322|Type 'string' is not assignable to type 'number'.",
+   "apps/web/modules/timezone/components/TimezoneSelect.tsx|1988-1994|TS2339|Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'viewer' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'.",
+   "apps/web/modules/timezone/components/TimezoneSelect.tsx|2207-2211|TS7031|Binding element 'city' implicitly has an 'any' type.",
+   "apps/web/modules/timezone/components/TimezoneSelect.tsx|2213-2221|TS7031|Binding element 'timezone' implicitly has an 'any' type.",
+   "apps/web/modules/timezone/components/TimezoneSelect.tsx|348-371|TS7016|Could not find a declaration file for module 'react-timezone-select'. '<root>/node_modules/react-timezone-select/dist/esm/index.js' implicitly has an 'any' type. / There are types at '<root>/node_modules/react-timezone-select/dist/esm/dist/index.d.ts', but this result could not be resolved when respecting package.json \"exports\". The 'react-timezone-select' library may need to update its package.json or typings.",
+   "apps/web/modules/users/components/UserTable/UserListTable.tsx|20631-20639|TS2339|Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useQueries' in your router collides with a built-in method, rename this router or procedure on your backend.\" | \"The property 'useSuspenseQueries' in your router collides with...'. / Property 'useUtils' does not exist on type '\"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend.\"'."
+  ],
+  [
+   "apps/web/modules/bookings/components/__mocks__/AvailableTimeSlots.tsx|323-341|TS2322|Type 'string' is not assignable to type 'number'."
+  ]
+ ],
+ "hovers": [
+  [
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:259 -",
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:283 className: string | undefined",
+   "apps/web/components/PageWrapperAppDir.tsx:356 -",
+   "apps/web/components/PageWrapperAppDir.tsx:362 -",
+   "apps/web/modules/test-setup.ts:1388 getSuccessPageLocationMessage: Mock<Procedure>",
+   "apps/web/modules/test-setup.ts:1429 mock: { (path: string, factory?: ModuleMockFactoryWithHelper | ModuleMockOptions | undefined): void; <T>(module: Promise<T>, factory?: ModuleMockFactoryWithHelper<...> | ... 1 more ... | undefined): void; }",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:115 count: number | undefined",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:122 -",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:197 \"<root>/apps/web/modules/settings/admin/locked-sms-view\": typeof import(\"<root>/apps/web/modules/settings/admin/locked-sms-view\")",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:205 -",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:105 className: string",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:123 -",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1443 DisableTwoFactorValues: any",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1465 -",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:99 bodyParser: boolean",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:111 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:645 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:660 -",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1428 user: { id: number; defaultScheduleId: number | null; }",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1456 data: { defaultScheduleId: number; }"
+  ],
+  [
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:259 -",
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:283 className: string | undefined",
+   "apps/web/components/PageWrapperAppDir.tsx:356 -",
+   "apps/web/components/PageWrapperAppDir.tsx:362 -",
+   "apps/web/modules/test-setup.ts:1388 getSuccessPageLocationMessage: Mock<Procedure>",
+   "apps/web/modules/test-setup.ts:1429 mock: { (path: string, factory?: ModuleMockFactoryWithHelper | ModuleMockOptions | undefined): void; <T>(module: Promise<T>, factory?: ModuleMockFactoryWithHelper<...> | ... 1 more ... | undefined): void; }",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:115 count: number | undefined",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:122 -",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:197 \"<root>/apps/web/modules/settings/admin/locked-sms-view\": typeof import(\"<root>/apps/web/modules/settings/admin/locked-sms-view\")",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:205 -",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:105 className: string",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:123 -",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1443 DisableTwoFactorValues: any",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1465 -",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:99 bodyParser: boolean",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:111 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:645 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:660 -",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1428 user: { id: number; defaultScheduleId: number | null; }",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1456 data: { defaultScheduleId: number; }"
+  ],
+  [
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:259 -",
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:283 className: string | undefined",
+   "apps/web/components/PageWrapperAppDir.tsx:356 -",
+   "apps/web/components/PageWrapperAppDir.tsx:362 -",
+   "apps/web/modules/test-setup.ts:1388 getSuccessPageLocationMessage: Mock<Procedure>",
+   "apps/web/modules/test-setup.ts:1429 mock: { (path: string, factory?: ModuleMockFactoryWithHelper | ModuleMockOptions | undefined): void; <T>(module: Promise<T>, factory?: ModuleMockFactoryWithHelper<...> | ... 1 more ... | undefined): void; }",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:115 count: number | undefined",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:122 -",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:197 \"<root>/apps/web/modules/settings/admin/locked-sms-view\": typeof import(\"<root>/apps/web/modules/settings/admin/locked-sms-view\")",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:205 -",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:105 className: string",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:123 -",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1443 DisableTwoFactorValues: any",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1465 -",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:99 bodyParser: boolean",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:111 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:645 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:660 -",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1428 user: { id: number; defaultScheduleId: number | null; }",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1456 data: { defaultScheduleId: number; }"
+  ],
+  [
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:259 -",
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:283 className: string | undefined",
+   "apps/web/components/PageWrapperAppDir.tsx:356 -",
+   "apps/web/components/PageWrapperAppDir.tsx:362 -",
+   "apps/web/modules/test-setup.ts:1388 getSuccessPageLocationMessage: Mock<Procedure>",
+   "apps/web/modules/test-setup.ts:1429 mock: { (path: string, factory?: ModuleMockFactoryWithHelper | ModuleMockOptions | undefined): void; <T>(module: Promise<T>, factory?: ModuleMockFactoryWithHelper<...> | ... 1 more ... | undefined): void; }",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:115 count: number | undefined",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:122 -",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:197 \"<root>/apps/web/modules/settings/admin/locked-sms-view\": typeof import(\"<root>/apps/web/modules/settings/admin/locked-sms-view\")",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:205 -",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:105 className: string",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:123 -",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1443 DisableTwoFactorValues: any",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1465 -",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:99 bodyParser: boolean",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:111 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:645 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:660 -",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1428 user: { id: number; defaultScheduleId: number | null; }",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1456 data: { defaultScheduleId: number; }"
+  ],
+  [
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:259 -",
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:283 className: string | undefined",
+   "apps/web/components/PageWrapperAppDir.tsx:356 -",
+   "apps/web/components/PageWrapperAppDir.tsx:362 -",
+   "apps/web/modules/test-setup.ts:1388 getSuccessPageLocationMessage: Mock<Procedure>",
+   "apps/web/modules/test-setup.ts:1429 mock: { (path: string, factory?: ModuleMockFactoryWithHelper | ModuleMockOptions | undefined): void; <T>(module: Promise<T>, factory?: ModuleMockFactoryWithHelper<...> | ... 1 more ... | undefined): void; }",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:115 count: number | undefined",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:122 -",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:197 \"<root>/apps/web/modules/settings/admin/locked-sms-view\": typeof import(\"<root>/apps/web/modules/settings/admin/locked-sms-view\")",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:205 -",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:105 className: string",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:123 -",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1443 DisableTwoFactorValues: any",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1465 -",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:99 bodyParser: boolean",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:111 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:645 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:660 -",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1428 user: { id: number; defaultScheduleId: number | null; }",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1456 data: { defaultScheduleId: number; }"
+  ],
+  [
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:259 -",
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:283 className: string | undefined",
+   "apps/web/components/PageWrapperAppDir.tsx:356 -",
+   "apps/web/components/PageWrapperAppDir.tsx:362 -",
+   "apps/web/modules/test-setup.ts:1388 getSuccessPageLocationMessage: Mock<Procedure>",
+   "apps/web/modules/test-setup.ts:1429 mock: { (path: string, factory?: ModuleMockFactoryWithHelper | ModuleMockOptions | undefined): void; <T>(module: Promise<T>, factory?: ModuleMockFactoryWithHelper<...> | ... 1 more ... | undefined): void; }",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:115 count: number | undefined",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:122 -",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:197 \"<root>/apps/web/modules/settings/admin/locked-sms-view\": typeof import(\"<root>/apps/web/modules/settings/admin/locked-sms-view\")",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:205 -",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:105 className: string",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:123 -",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1443 DisableTwoFactorValues: any",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1465 -",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:99 bodyParser: boolean",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:111 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:645 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:660 -",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1428 user: { id: number; defaultScheduleId: number | null; }",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1456 data: { defaultScheduleId: number; }"
+  ],
+  [
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:259 -",
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:283 className: string | undefined",
+   "apps/web/components/PageWrapperAppDir.tsx:356 -",
+   "apps/web/components/PageWrapperAppDir.tsx:362 -",
+   "apps/web/modules/test-setup.ts:1388 getSuccessPageLocationMessage: Mock<Procedure>",
+   "apps/web/modules/test-setup.ts:1429 mock: { (path: string, factory?: ModuleMockFactoryWithHelper | ModuleMockOptions | undefined): void; <T>(module: Promise<T>, factory?: ModuleMockFactoryWithHelper<...> | ... 1 more ... | undefined): void; }",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:115 count: number | undefined",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:122 -",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:197 \"<root>/apps/web/modules/settings/admin/locked-sms-view\": typeof import(\"<root>/apps/web/modules/settings/admin/locked-sms-view\")",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:205 -",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:105 className: string",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:123 -",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1443 DisableTwoFactorValues: any",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1465 -",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:99 bodyParser: boolean",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:111 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:645 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:660 -",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1428 user: { id: number; defaultScheduleId: number | null; }",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1456 data: { defaultScheduleId: number; }"
+  ],
+  [
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:259 -",
+   "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx:283 className: string | undefined",
+   "apps/web/components/PageWrapperAppDir.tsx:356 -",
+   "apps/web/components/PageWrapperAppDir.tsx:362 -",
+   "apps/web/modules/test-setup.ts:1388 getSuccessPageLocationMessage: Mock<Procedure>",
+   "apps/web/modules/test-setup.ts:1429 mock: { (path: string, factory?: ModuleMockFactoryWithHelper | ModuleMockOptions | undefined): void; <T>(module: Promise<T>, factory?: ModuleMockFactoryWithHelper<...> | ... 1 more ... | undefined): void; }",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:115 count: number | undefined",
+   "apps/web/modules/blocklist/components/PendingReportsBadge.tsx:122 -",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:197 \"<root>/apps/web/modules/settings/admin/locked-sms-view\": typeof import(\"<root>/apps/web/modules/settings/admin/locked-sms-view\")",
+   "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx:205 -",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:105 className: string",
+   "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx:123 -",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1443 DisableTwoFactorValues: any",
+   "apps/web/components/settings/DisableTwoFactorModal.tsx:1465 -",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:99 bodyParser: boolean",
+   "apps/web/pages/api/integrations/stripepayment/webhook.ts:111 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:645 -",
+   "apps/web/modules/bookings/hooks/useEventTypes.ts:660 -",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1428 user: { id: number; defaultScheduleId: number | null; }",
+   "apps/web/app/api/cron/changeTimeZone/route.ts:1456 data: { defaultScheduleId: number; }"
+  ]
+ ],
+ "targets": [
+  {
+   "file": "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx",
+   "pos": 259
+  },
+  {
+   "file": "apps/web/modules/calendars/weeklyview/components/spinner/Spinner.tsx",
+   "pos": 283
+  },
+  {
+   "file": "apps/web/components/PageWrapperAppDir.tsx",
+   "pos": 356
+  },
+  {
+   "file": "apps/web/components/PageWrapperAppDir.tsx",
+   "pos": 362
+  },
+  {
+   "file": "apps/web/modules/test-setup.ts",
+   "pos": 1388
+  },
+  {
+   "file": "apps/web/modules/test-setup.ts",
+   "pos": 1429
+  },
+  {
+   "file": "apps/web/modules/blocklist/components/PendingReportsBadge.tsx",
+   "pos": 115
+  },
+  {
+   "file": "apps/web/modules/blocklist/components/PendingReportsBadge.tsx",
+   "pos": 122
+  },
+  {
+   "file": "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx",
+   "pos": 197
+  },
+  {
+   "file": "apps/web/app/(use-page-wrapper)/settings/(admin-layout)/admin/lockedSMS/page.tsx",
+   "pos": 205
+  },
+  {
+   "file": "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx",
+   "pos": 105
+  },
+  {
+   "file": "apps/web/modules/event-types/components/locations/LocationSettingsContainer.tsx",
+   "pos": 123
+  },
+  {
+   "file": "apps/web/components/settings/DisableTwoFactorModal.tsx",
+   "pos": 1443
+  },
+  {
+   "file": "apps/web/components/settings/DisableTwoFactorModal.tsx",
+   "pos": 1465
+  },
+  {
+   "file": "apps/web/pages/api/integrations/stripepayment/webhook.ts",
+   "pos": 99
+  },
+  {
+   "file": "apps/web/pages/api/integrations/stripepayment/webhook.ts",
+   "pos": 111
+  },
+  {
+   "file": "apps/web/modules/bookings/hooks/useEventTypes.ts",
+   "pos": 645
+  },
+  {
+   "file": "apps/web/modules/bookings/hooks/useEventTypes.ts",
+   "pos": 660
+  },
+  {
+   "file": "apps/web/app/api/cron/changeTimeZone/route.ts",
+   "pos": 1428
+  },
+  {
+   "file": "apps/web/app/api/cron/changeTimeZone/route.ts",
+   "pos": 1456
+  }
+ ]
+}

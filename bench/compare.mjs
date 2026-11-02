@@ -1,13 +1,13 @@
 // Task 0.5: shared-checker answers must equal dedicated-per-worktree answers, as sets, after path translation.
-// Usage: node compare.mjs <fixture> [agents]
+// Usage: node compare.mjs <fixture> [agents] [workload suffix, e.g. files]
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const [fixture, agents = "5"] = process.argv.slice(2);
-const load = (mode) => JSON.parse(readFileSync(join(import.meta.dirname, "results/raw", `${fixture}-${mode}-${agents}.json`), "utf8"));
+const [fixture, agents = "5", suffix] = process.argv.slice(2);
+const load = (mode) => JSON.parse(readFileSync(join(import.meta.dirname, "results/raw", `${fixture}-${mode}-${agents}${suffix ? `-${suffix}` : ""}.json`), "utf8"));
 const base = load("baseline"), shared = load("shared");
 
-const report = { fixture, agents: Number(agents), perAgent: [], mismatches: 0 };
+const report = { fixture, agents: Number(agents), workload: suffix ?? "whole", perAgent: [], mismatches: 0 };
 for (let i = 0; i < base.diags.length; i++) {
   const row = { agent: i + 1 };
   for (const kind of ["diags", "hovers"]) {

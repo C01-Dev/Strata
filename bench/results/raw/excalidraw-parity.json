@@ -1,6 +1,7 @@
 {
  "fixture": "excalidraw",
  "agents": 5,
+ "workload": "whole",
  "perAgent": [
   {
    "agent": 1,

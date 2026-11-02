@@ -1,0 +1,213 @@
+[excalidraw-baseline-1-files] start +0.0s
+[excalidraw-baseline-1-files] loaded +0.6s
+[excalidraw-baseline-1-files] diagnostics_start +0.6s
+[excalidraw-baseline-1-files] diagnostics_done +0.7s
+[excalidraw-baseline-1-files] hover_done +0.8s
+[excalidraw-baseline-1-files] warm +10.8s
+{"tag":"excalidraw-baseline-1-files","mode":"baseline","fixture":"excalidraw","agents":1,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.23815155029297,"peak":320.5829086303711,"warm":314.4106216430664},"seconds":{"start":0,"loaded":0.633,"diagnostics_start":0.633,"diagnostics_done":0.66,"hover_done":0.762,"warm":10.764},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-shared-1-files] start +0.0s
+[excalidraw-shared-1-files] base_loaded +0.6s
+[excalidraw-shared-1-files] layers_computed +0.6s
+[excalidraw-shared-1-files] loaded +0.7s
+[excalidraw-shared-1-files] diagnostics_start +0.7s
+[excalidraw-shared-1-files] diagnostics_done +0.7s
+[excalidraw-shared-1-files] hover_done +0.8s
+[excalidraw-shared-1-files] warm +10.8s
+{"tag":"excalidraw-shared-1-files","mode":"shared","fixture":"excalidraw","agents":1,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":30.988265991210938,"peak":370.8172836303711,"warm":364.69178009033203},"seconds":{"start":0,"base_loaded":0.623,"layers_computed":0.644,"loaded":0.678,"diagnostics_start":0.678,"diagnostics_done":0.703,"hover_done":0.791,"warm":10.793},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-lsp-1-files] start +0.0s
+[excalidraw-lsp-1-files] loaded +0.6s
+[excalidraw-lsp-1-files] hover_done +0.8s
+[excalidraw-lsp-1-files] warm +10.8s
+{"tag":"excalidraw-lsp-1-files","mode":"lsp","fixture":"excalidraw","agents":1,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":30.910072326660156,"peak":372.4267044067383,"warm":365.97303009033203},"seconds":{"start":0,"loaded":0.609,"hover_done":0.78,"warm":10.781},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-baseline-3-files] start +0.0s
+[excalidraw-baseline-3-files] loaded +0.7s
+[excalidraw-baseline-3-files] diagnostics_start +0.7s
+[excalidraw-baseline-3-files] diagnostics_done +0.8s
+[excalidraw-baseline-3-files] hover_done +0.9s
+[excalidraw-baseline-3-files] warm +10.9s
+{"tag":"excalidraw-baseline-3-files","mode":"baseline","fixture":"excalidraw","agents":3,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":30.613037109375,"peak":878.147102355957,"warm":870.943473815918},"seconds":{"start":0,"loaded":0.747,"diagnostics_start":0.747,"diagnostics_done":0.798,"hover_done":0.89,"warm":10.891},"maxProcs":4,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-shared-3-files] start +0.0s
+[excalidraw-shared-3-files] base_loaded +0.6s
+[excalidraw-shared-3-files] layers_computed +0.7s
+[excalidraw-shared-3-files] loaded +0.8s
+[excalidraw-shared-3-files] diagnostics_start +0.8s
+[excalidraw-shared-3-files] diagnostics_done +0.9s
+[excalidraw-shared-3-files] hover_done +1.0s
+[excalidraw-shared-3-files] warm +11.0s
+{"tag":"excalidraw-shared-3-files","mode":"shared","fixture":"excalidraw","agents":3,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.160118103027344,"peak":443.8644790649414,"warm":443.8644790649414},"seconds":{"start":0,"base_loaded":0.615,"layers_computed":0.684,"loaded":0.79,"diagnostics_start":0.79,"diagnostics_done":0.858,"hover_done":0.96,"warm":10.962},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-lsp-3-files] start +0.0s
+[excalidraw-lsp-3-files] loaded +0.6s
+[excalidraw-lsp-3-files] hover_done +0.9s
+[excalidraw-lsp-3-files] warm +10.9s
+{"tag":"excalidraw-lsp-3-files","mode":"lsp","fixture":"excalidraw","agents":3,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.8165283203125,"peak":893.1474456787109,"warm":885.5065002441406},"seconds":{"start":0,"loaded":0.628,"hover_done":0.927,"warm":10.928},"maxProcs":4,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-baseline-5-files] start +0.0s
+[excalidraw-baseline-5-files] loaded +0.9s
+[excalidraw-baseline-5-files] diagnostics_start +0.9s
+[excalidraw-baseline-5-files] diagnostics_done +1.0s
+[excalidraw-baseline-5-files] hover_done +1.0s
+[excalidraw-baseline-5-files] warm +11.1s
+{"tag":"excalidraw-baseline-5-files","mode":"baseline","fixture":"excalidraw","agents":5,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":33.67594909667969,"peak":1446.273910522461,"warm":1437.9608154296875},"seconds":{"start":0,"loaded":0.881,"diagnostics_start":0.881,"diagnostics_done":0.951,"hover_done":1.049,"warm":11.051},"maxProcs":6,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-shared-5-files] start +0.0s
+[excalidraw-shared-5-files] base_loaded +0.6s
+[excalidraw-shared-5-files] layers_computed +0.7s
+[excalidraw-shared-5-files] loaded +0.9s
+[excalidraw-shared-5-files] diagnostics_start +0.9s
+[excalidraw-shared-5-files] diagnostics_done +1.0s
+[excalidraw-shared-5-files] hover_done +1.1s
+[excalidraw-shared-5-files] warm +11.1s
+{"tag":"excalidraw-shared-5-files","mode":"shared","fixture":"excalidraw","agents":5,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.691368103027344,"peak":508.9441146850586,"warm":499.59910583496094},"seconds":{"start":0,"base_loaded":0.616,"layers_computed":0.714,"loaded":0.891,"diagnostics_start":0.891,"diagnostics_done":1.001,"hover_done":1.113,"warm":11.115},"maxProcs":3,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-lsp-5-files] start +0.0s
+[excalidraw-lsp-5-files] loaded +0.6s
+[excalidraw-lsp-5-files] hover_done +1.1s
+[excalidraw-lsp-5-files] warm +11.1s
+{"tag":"excalidraw-lsp-5-files","mode":"lsp","fixture":"excalidraw","agents":5,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":32.30104064941406,"peak":1459.6649475097656,"warm":1459.3368225097656},"seconds":{"start":0,"loaded":0.649,"hover_done":1.097,"warm":11.099},"maxProcs":6,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-baseline-8-files] start +0.0s
+[excalidraw-baseline-8-files] loaded +1.1s
+[excalidraw-baseline-8-files] diagnostics_start +1.1s
+[excalidraw-baseline-8-files] diagnostics_done +1.2s
+[excalidraw-baseline-8-files] hover_done +1.3s
+[excalidraw-baseline-8-files] warm +11.3s
+{"tag":"excalidraw-baseline-8-files","mode":"baseline","fixture":"excalidraw","agents":8,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.160118103027344,"peak":2327.1685180664062,"warm":2318.386032104492},"seconds":{"start":0,"loaded":1.089,"diagnostics_start":1.089,"diagnostics_done":1.203,"hover_done":1.305,"warm":11.306},"maxProcs":9,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-shared-8-files] start +0.0s
+[excalidraw-shared-8-files] base_loaded +0.6s
+[excalidraw-shared-8-files] layers_computed +0.8s
+[excalidraw-shared-8-files] loaded +1.1s
+[excalidraw-shared-8-files] diagnostics_start +1.1s
+[excalidraw-shared-8-files] diagnostics_done +1.3s
+[excalidraw-shared-8-files] hover_done +1.5s
+[excalidraw-shared-8-files] warm +11.5s
+{"tag":"excalidraw-shared-8-files","mode":"shared","fixture":"excalidraw","agents":8,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":35.17567443847656,"peak":580.1004104614258,"warm":573.0680160522461},"seconds":{"start":0,"base_loaded":0.614,"layers_computed":0.805,"loaded":1.106,"diagnostics_start":1.106,"diagnostics_done":1.307,"hover_done":1.453,"warm":11.454},"maxProcs":3,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-lsp-8-files] start +0.0s
+[excalidraw-lsp-8-files] loaded +0.7s
+[excalidraw-lsp-8-files] hover_done +1.4s
+[excalidraw-lsp-8-files] warm +11.4s
+{"tag":"excalidraw-lsp-8-files","mode":"lsp","fixture":"excalidraw","agents":8,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":30.76940155029297,"peak":2346.575340270996,"warm":2336.0116958618164},"seconds":{"start":0,"loaded":0.688,"hover_done":1.386,"warm":11.388},"maxProcs":9,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-baseline-1-files] start +0.0s
+[calcom-baseline-1-files] loaded +1.0s
+[calcom-baseline-1-files] diagnostics_start +1.0s
+[calcom-baseline-1-files] diagnostics_done +1.3s
+[calcom-baseline-1-files] hover_done +1.4s
+[calcom-baseline-1-files] warm +11.4s
+{"tag":"calcom-baseline-1-files","mode":"baseline","fixture":"calcom","agents":1,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":34.22254943847656,"peak":1121.5052871704102,"warm":1115.8329315185547},"seconds":{"start":0,"loaded":1.043,"diagnostics_start":1.043,"diagnostics_done":1.332,"hover_done":1.415,"warm":11.415},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-shared-1-files] start +0.0s
+[calcom-shared-1-files] base_loaded +1.0s
+[calcom-shared-1-files] layers_computed +1.1s
+[calcom-shared-1-files] loaded +1.3s
+[calcom-shared-1-files] diagnostics_start +1.3s
+[calcom-shared-1-files] diagnostics_done +1.6s
+[calcom-shared-1-files] hover_done +1.7s
+[calcom-shared-1-files] warm +11.7s
+{"tag":"calcom-shared-1-files","mode":"shared","fixture":"calcom","agents":1,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.332015991210938,"peak":1434.1775970458984,"warm":1427.0988311767578},"seconds":{"start":0,"base_loaded":1.035,"layers_computed":1.112,"loaded":1.293,"diagnostics_start":1.293,"diagnostics_done":1.581,"hover_done":1.665,"warm":11.666},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-lsp-1-files] start +0.0s
+[calcom-lsp-1-files] loaded +0.6s
+[calcom-lsp-1-files] hover_done +1.5s
+[calcom-lsp-1-files] warm +11.5s
+{"tag":"calcom-lsp-1-files","mode":"lsp","fixture":"calcom","agents":1,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.8946533203125,"peak":1182.5209579467773,"warm":1176.7237396240234},"seconds":{"start":0,"loaded":0.607,"hover_done":1.46,"warm":11.461},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-baseline-3-files] start +0.0s
+[calcom-baseline-3-files] loaded +2.0s
+[calcom-baseline-3-files] diagnostics_start +2.0s
+[calcom-baseline-3-files] diagnostics_done +2.4s
+[calcom-baseline-3-files] hover_done +2.5s
+[calcom-baseline-3-files] warm +12.5s
+{"tag":"calcom-baseline-3-files","mode":"baseline","fixture":"calcom","agents":3,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":32.72270965576172,"peak":3319.867706298828,"warm":3312.5704193115234},"seconds":{"start":0,"loaded":1.983,"diagnostics_start":1.983,"diagnostics_done":2.367,"hover_done":2.49,"warm":12.492},"maxProcs":5,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-shared-3-files] start +0.0s
+[calcom-shared-3-files] base_loaded +1.1s
+[calcom-shared-3-files] layers_computed +1.3s
+[calcom-shared-3-files] loaded +1.8s
+[calcom-shared-3-files] diagnostics_start +1.8s
+[calcom-shared-3-files] diagnostics_done +2.3s
+[calcom-shared-3-files] hover_done +2.4s
+[calcom-shared-3-files] warm +12.4s
+{"tag":"calcom-shared-3-files","mode":"shared","fixture":"calcom","agents":3,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":34.253936767578125,"peak":1941.9592819213867,"warm":1934.2711639404297},"seconds":{"start":0,"base_loaded":1.051,"layers_computed":1.288,"loaded":1.827,"diagnostics_start":1.827,"diagnostics_done":2.282,"hover_done":2.385,"warm":12.387},"maxProcs":3,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-lsp-3-files] start +0.0s
+[calcom-lsp-3-files] loaded +0.6s
+[calcom-lsp-3-files] hover_done +2.4s
+[calcom-lsp-3-files] warm +12.4s
+{"tag":"calcom-lsp-3-files","mode":"lsp","fixture":"calcom","agents":3,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.06634521484375,"peak":3226.0552291870117,"warm":3219.0547485351562},"seconds":{"start":0,"loaded":0.633,"hover_done":2.383,"warm":12.384},"maxProcs":4,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-baseline-5-files] start +0.0s
+[calcom-baseline-5-files] loaded +3.0s
+[calcom-baseline-5-files] diagnostics_start +3.0s
+[calcom-baseline-5-files] diagnostics_done +3.5s
+[calcom-baseline-5-files] hover_done +3.6s
+[calcom-baseline-5-files] warm +13.6s
+{"tag":"calcom-baseline-5-files","mode":"baseline","fixture":"calcom","agents":5,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":33.550811767578125,"peak":5343.87052154541,"warm":5343.87052154541},"seconds":{"start":0,"loaded":2.992,"diagnostics_start":2.992,"diagnostics_done":3.475,"hover_done":3.588,"warm":13.589},"maxProcs":6,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-shared-5-files] start +0.0s
+[calcom-shared-5-files] base_loaded +1.1s
+[calcom-shared-5-files] layers_computed +1.5s
+[calcom-shared-5-files] loaded +2.3s
+[calcom-shared-5-files] diagnostics_start +2.3s
+[calcom-shared-5-files] diagnostics_done +3.0s
+[calcom-shared-5-files] hover_done +3.1s
+[calcom-shared-5-files] warm +13.1s
+{"tag":"calcom-shared-5-files","mode":"shared","fixture":"calcom","agents":5,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.550765991210938,"peak":2102.2562942504883,"warm":2102.2562942504883},"seconds":{"start":0,"base_loaded":1.059,"layers_computed":1.474,"loaded":2.323,"diagnostics_start":2.323,"diagnostics_done":2.971,"hover_done":3.09,"warm":13.091},"maxProcs":3,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-lsp-5-files] start +0.0s
+[calcom-lsp-5-files] loaded +0.7s
+[calcom-lsp-5-files] hover_done +3.3s
+[calcom-lsp-5-files] warm +13.3s
+{"tag":"calcom-lsp-5-files","mode":"lsp","fixture":"calcom","agents":5,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":30.566207885742188,"peak":5490.698875427246,"warm":5481.448348999023},"seconds":{"start":0,"loaded":0.663,"hover_done":3.318,"warm":13.319},"maxProcs":6,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-baseline-8-files] start +0.0s
+[calcom-baseline-8-files] loaded +4.6s
+[calcom-baseline-8-files] diagnostics_start +4.6s
+[calcom-baseline-8-files] diagnostics_done +5.2s
+[calcom-baseline-8-files] hover_done +5.3s
+[calcom-baseline-8-files] warm +15.3s
+{"tag":"calcom-baseline-8-files","mode":"baseline","fixture":"calcom","agents":8,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":34.58226776123047,"peak":8576.219924926758,"warm":8564.906234741211},"seconds":{"start":0,"loaded":4.611,"diagnostics_start":4.612,"diagnostics_done":5.175,"hover_done":5.297,"warm":15.298},"maxProcs":9,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-shared-8-files] start +0.0s
+[calcom-shared-8-files] base_loaded +1.1s
+[calcom-shared-8-files] layers_computed +1.7s
+[calcom-shared-8-files] loaded +3.1s
+[calcom-shared-8-files] diagnostics_start +3.1s
+[calcom-shared-8-files] diagnostics_done +4.1s
+[calcom-shared-8-files] hover_done +4.2s
+[calcom-shared-8-files] warm +14.2s
+{"tag":"calcom-shared-8-files","mode":"shared","fixture":"calcom","agents":8,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.31634521484375,"peak":2265.61580657959,"warm":2256.177894592285},"seconds":{"start":0,"base_loaded":1.065,"layers_computed":1.721,"loaded":3.1,"diagnostics_start":3.1,"diagnostics_done":4.097,"hover_done":4.243,"warm":14.244},"maxProcs":3,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-lsp-8-files] start +0.0s
+[calcom-lsp-8-files] loaded +0.7s
+[calcom-lsp-8-files] hover_done +7.0s
+[calcom-lsp-8-files] warm +17.0s
+{"tag":"calcom-lsp-8-files","mode":"lsp","fixture":"calcom","agents":8,"workload":"files","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.394561767578125,"peak":8946.110023498535,"warm":8931.203132629395},"seconds":{"start":0,"loaded":0.689,"hover_done":7.008,"warm":17.013},"maxProcs":9,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+| Fixture | Workload | Agents | Baseline peak | Shared peak | S peak | Baseline warm | Shared warm | S warm | Baseline idle 15 min | Shared idle 15 min | LSP peak | S peak vs LSP |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| calcom | files | 1 | 1.10 GiB | 1.40 GiB | -28% | 1.09 GiB | 1.39 GiB | -28% | n/a | n/a | 1.15 GiB | -21% |
+| calcom | files | 3 | 3.24 GiB | 1.90 GiB | 42% | 3.23 GiB | 1.89 GiB | 42% | n/a | n/a | 3.15 GiB | 40% |
+| calcom | files | 5 | 5.22 GiB | 2.05 GiB | 61% | 5.22 GiB | 2.05 GiB | 61% | n/a | n/a | 5.36 GiB | 62% |
+| calcom | files | 8 | 8.38 GiB | 2.21 GiB | 74% | 8.36 GiB | 2.20 GiB | 74% | n/a | n/a | 8.74 GiB | 75% |
+| excalidraw | files | 1 | 0.31 GiB | 0.36 GiB | -16% | 0.31 GiB | 0.36 GiB | -16% | n/a | n/a | 0.36 GiB | 0% |
+| excalidraw | files | 3 | 0.86 GiB | 0.43 GiB | 49% | 0.85 GiB | 0.43 GiB | 49% | n/a | n/a | 0.87 GiB | 50% |
+| excalidraw | files | 5 | 1.41 GiB | 0.50 GiB | 65% | 1.40 GiB | 0.49 GiB | 65% | n/a | n/a | 1.43 GiB | 65% |
+| excalidraw | files | 8 | 2.27 GiB | 0.57 GiB | 75% | 2.26 GiB | 0.56 GiB | 75% | n/a | n/a | 2.29 GiB | 75% |
+[excalidraw-shared-5] start +0.0s
+[excalidraw-shared-5] base_loaded +0.6s
+[excalidraw-shared-5] layers_computed +0.7s
+[excalidraw-shared-5] loaded +0.9s
+[excalidraw-shared-5] diagnostics_start +0.9s
+[excalidraw-shared-5] diagnostics_done +7.3s
+[excalidraw-shared-5] hover_done +7.4s
+[excalidraw-shared-5] warm +17.4s
+[excalidraw-shared-5] idle_60 +67.4s
+[excalidraw-shared-5] idle_900 +907.4s
+{"tag":"excalidraw-shared-5","mode":"shared","fixture":"excalidraw","agents":5,"workload":"whole","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":33.691322326660156,"peak":2900.1631393432617,"warm":2892.396987915039,"idle_60":2881.803237915039,"idle_900":533.5846481323242},"seconds":{"start":0,"base_loaded":0.626,"layers_computed":0.737,"loaded":0.91,"diagnostics_start":0.91,"diagnostics_done":7.251,"hover_done":7.353,"warm":17.354,"idle_60":67.355,"idle_900":907.356},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-shared-5] start +0.0s
+[calcom-shared-5] base_loaded +1.1s
+[calcom-shared-5] layers_computed +1.8s
+[calcom-shared-5] loaded +2.7s
+[calcom-shared-5] diagnostics_start +2.7s
+[calcom-shared-5] diagnostics_done +20.6s
+[calcom-shared-5] hover_done +21.0s
+[calcom-shared-5] warm +31.0s
+[calcom-shared-5] idle_60 +81.0s
+[calcom-shared-5] idle_900 +921.0s
+{"tag":"calcom-shared-5","mode":"shared","fixture":"calcom","agents":5,"workload":"whole","typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.31634521484375,"peak":7349.496276855469,"warm":7342.215026855469,"idle_60":7342.230651855469,"idle_900":2129.2284088134766},"seconds":{"start":0,"base_loaded":1.123,"layers_computed":1.766,"loaded":2.696,"diagnostics_start":2.696,"diagnostics_done":20.596,"hover_done":21.013,"warm":31.015,"idle_60":81.015,"idle_900":921.015},"maxProcs":3,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+| Fixture | Workload | Agents | Baseline peak | Shared peak | S peak | Baseline warm | Shared warm | S warm | Baseline idle 15 min | Shared idle 15 min | LSP peak | S peak vs LSP |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| calcom | whole | 5 | 10.24 GiB | 7.18 GiB | 30% | 10.24 GiB | 7.17 GiB | 30% | 5.57 GiB | 2.08 GiB | 5.64 GiB | n/a |
+| calcom | files | 1 | 1.10 GiB | 1.40 GiB | -28% | 1.09 GiB | 1.39 GiB | -28% | n/a | n/a | 1.15 GiB | -21% |
+| calcom | files | 3 | 3.24 GiB | 1.90 GiB | 42% | 3.23 GiB | 1.89 GiB | 42% | n/a | n/a | 3.15 GiB | 40% |
+| calcom | files | 5 | 5.22 GiB | 2.05 GiB | 61% | 5.22 GiB | 2.05 GiB | 61% | n/a | n/a | 5.36 GiB | 62% |
+| calcom | files | 8 | 8.38 GiB | 2.21 GiB | 74% | 8.36 GiB | 2.20 GiB | 74% | n/a | n/a | 8.74 GiB | 75% |
+| excalidraw | whole | 5 | 3.61 GiB | 2.83 GiB | 21% | 3.60 GiB | 2.82 GiB | 22% | 1.61 GiB | 0.52 GiB | 1.06 GiB | n/a |
+| excalidraw | files | 1 | 0.31 GiB | 0.36 GiB | -16% | 0.31 GiB | 0.36 GiB | -16% | n/a | n/a | 0.36 GiB | 0% |
+| excalidraw | files | 3 | 0.86 GiB | 0.43 GiB | 49% | 0.85 GiB | 0.43 GiB | 49% | n/a | n/a | 0.87 GiB | 50% |
+| excalidraw | files | 5 | 1.41 GiB | 0.50 GiB | 65% | 1.40 GiB | 0.49 GiB | 65% | n/a | n/a | 1.43 GiB | 65% |
+| excalidraw | files | 8 | 2.27 GiB | 0.57 GiB | 75% | 2.26 GiB | 0.56 GiB | 75% | n/a | n/a | 2.29 GiB | 75% |
+ALL DONE

@@ -1,0 +1,24 @@
+{
+ "fixture": "calcom",
+ "agents": 1,
+ "workload": "files",
+ "perAgent": [
+  {
+   "agent": 1,
+   "diags": {
+    "baseline": 4,
+    "shared": 4,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "hovers": {
+    "baseline": 20,
+    "shared": 20,
+    "onlyBaseline": [],
+    "onlyShared": []
+   },
+   "distinctFromAgent1": false
+  }
+ ],
+ "mismatches": 0
+}
