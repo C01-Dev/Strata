@@ -467,7 +467,7 @@ Two runs on macOS (M-series, warm npm cache), both passed:
 
   Footprint (macOS `phys_footprint`, which excludes clean file pages) is the same within 1%, as expected: the servers' own memory does not depend on how their files got there. The page-cache column is not usable. The machine (24 GB) had about 130 MB free and the system evicted file cache while the servers allocated, so every delta is negative. The `mincore` test above is the evidence for the page-cache answer, not this column.
 
-## Gate 4 (2026-11-02): APFS half measured; XFS half not run yet
+## Gate 4 (2026-11-02): PASSED on APFS and XFS — stopped, waiting for the owner
 
 Gate 4: "on the cal.com fixture (200k+ files), `strata new` with a matching donor takes under 15 s on APFS and on XFS with reflink, and the fixture's own tests pass inside the seeded worktree."
 
@@ -486,4 +486,28 @@ Gate 4: "on the cal.com fixture (200k+ files), `strata new` with a matching dono
 - **Not run: XFS with reflink.** It needs Linux. Docker is not running here, and the run needs a privileged container with a loop-mounted `mkfs.xfs -m reflink=1` volume, a Linux build of Strata, and a Linux `yarn install` of cal.com (its darwin `node_modules` can be copied in to time the clone, but its tests need Linux binaries: esbuild, rollup and the like). The Linux walker has only been compiled and linted for `aarch64-unknown-linux-gnu`, never run.
 - Cleanup also measured `strata rm --force` on cal.com agents: 24.6, 31.7, 27.0, 28.9, 28.9 s each (release build). Almost all of it is `git worktree remove` deleting the 272k-entry seeded trees (`rm -rf` of one such tree was 13.6–15.5 s in 4.2). Not a gate item, but `rm` is now about 3–4× slower than `new` on large repos. Renaming the seeded folders aside and deleting them in the background after the git step would make `rm` return in about a second; noted for Phase 5. The fixture was left as Phase 0 made it: Strata's worktrees, `strata.toml` and `bench/fixtures/g4h` removed.
 
-**Gate 4 status: APFS half passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the main checkout). XFS-with-reflink half not run (needs Docker, a privileged loop-mounted XFS volume and a Linux install of cal.com). Stopped, waiting for the owner.**
+APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the main checkout). The XFS half follows below.
+
+## Gate 4, XFS half (2026-11-02, owner OK'd the full Docker run)
+
+- Container `strata-gate4` (`rust:1.99.1-bookworm`, privileged, Docker 29.8.1, kernel 7.0.14-linuxkit, aarch64, 15 CPUs, 8.3 GB VM). `/x` is a 40 GB sparse image formatted `mkfs.xfs -m reflink=1` and loop-mounted; `cp --reflink=always` confirmed it clones. Node 22.22.2 (the host's version), git 2.39.5. Strata cloned at `b0ef2e4` and built there (release 1 min 31 s). cal.com cloned from the fixture's `strata-base` branch, with the fixture's 820 MB Yarn zip cache copied in, then installed the way Phase 0 did (`YARN_ENABLE_SCRIPTS=0 … install --immutable`, then `prisma generate` and `@calcom/trpc build:server`); the install took 309 s.
+- Docker Desktop was open but its VM had not started (no VM process; backend dialing 192.168.65.7 "no route to host"); `docker desktop restart` brought the engine up, which also restarted the owner's other containers by their restart policies.
+- **Incident:** running Strata's test build alongside the cal.com install exhausted the VM's memory. The kernel OOM killer took the install's `node` and also `beam.smp` in the owner's `supabase_analytics_ruya-project-tracking`, which its restart policy brought back once (healthy since). The container is now capped at 6 GB (`docker update --memory 6g`), so further OOMs stay inside it, and heavy steps run one at a time.
+- **Bug found on Linux (tests, not Strata):** the first full Linux test run died silently in `tests/budget.rs`, and it took every other process in the container with it (only PID 1 survived). Cause: three tests killed a process group with `kill -9 -<pgid>`. Debian's procps-ng 4.0.2 `kill` reads `-19999` after a signal flag as pid `-1`, which means every process the caller may signal; macOS's BSD `kill` reads it as the group. Reproduced in a throwaway container (`kill -9 -19999` kills a bystander, `kill -9 -- -19999` does not). As root in the container it killed everything; on a Linux developer machine or CI runner it would kill all of that user's processes. Fixed with one helper, `common::kill_group`, which passes `--`; the test-env `Drop` used it at the end of every test. Strata's own code signals with `libc::killpg`, which was never affected.
+- `/proc/self/cgroup` in the container reads `0::/`, so `cgroup::setup` tries to delegate the container's own cgroup; enabling `+memory` there fails (the cgroup has other processes), so the daemon correctly logs "no delegated cgroup" and tracks process trees. It does leave an empty `daemon` leaf behind and has moved itself into it; harmless, but delegation has still never really been exercised.
+- Strata's own suite on Linux, in the container, `TMPDIR` on the XFS volume (so every seed, pool and walker test reflinks for real), under `tini -s` so killed processes are reaped as on a real system: **136 passed, 0 failed, 4 ignored**, after the two fixes above and two test fixes. The fixture fix-up test assumed two calls land in different milliseconds; the unmanaged-listener test now kills its server's whole process group, because Debian's dash forks `node` instead of exec'ing it and the old `pkill -f "listen(46488)"` was a regex that never matched. That leftover server held the port for the next run. macOS: 137 passed (one macOS-only `clonefile` test). The first Linux run of the seed walker: it works, modes, links and times kept, reflinks shared.
+- After the memory kill had cut it short, the cal.com install was repeated on its own (16 s; it finished the root workspace build it had lost), with `prisma generate` and the trpc build after it.
+- **XFS results** (release build, cal.com Linux install: 298,978 entries in its `node_modules` folders, the same `strata.toml` as on APFS):
+
+| Step | Result |
+| --- | --- |
+| `strata init` (base cloned from the main checkout) | clone from `/x/calcom`; disk +401 MB |
+| `strata new`, donor = base, clone tier | **5.86 s, 5.17 s, 5.03 s, 4.73 s** (four agents) |
+| Disk per cloned worktree | +326 to +551 MB (sources checked out plus metadata; a full copy of the dependencies would be about 3.5 GB) |
+| Warm pool | entry ready about 7 s after the previous `new`; taking it 0.93 s |
+| `strata rm --force` | 4.3 s (APFS: 24.6–31.7 s) |
+
+  The first timing pass lost its numbers: the gate script piped each command, "took" line included, through `grep`. The timings above are a second pass, measured outside any pipe.
+- cal.com's own tests on Linux: main checkout 364 files passed, 49 failed, 3 skipped (3642 tests passed); seeded worktree `g1` exactly the same, with identical failing-file lists (checked after stripping ANSI colour codes, which the script's own comparison had not done) and the same `.prisma/client/default` error. The Linux failing list is identical to macOS's too.
+
+**Gate 4: PASSED.** cal.com `strata new` with a matching donor: 7.6–8.0 s on APFS and 4.7–5.9 s on XFS with reflink (warm pool: 0.87 s and 0.93 s); in the seeded worktree the fixture's own tests give exactly the main checkout's results on both systems. The 49 files that fail everywhere fail because of the fixture's Prisma client path, not seeding. Not covered: Linux x86_64, ext4 (the fallback tiers are covered by the `no-clone` fault test), btrfs and OpenZFS, real cgroup delegation (the container's cgroup cannot delegate, so the daemon correctly fell back to process trees).
