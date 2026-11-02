@@ -52,7 +52,8 @@ fn ready(path: PathBuf, reason: &str) -> Option<Entry> {
 static FILLING: Mutex<BTreeSet<i64>> = Mutex::new(BTreeSet::new());
 
 /// Tops the pool up to `seed.warm_pool` entries, one at a time, off the critical path. Off for
-/// repos with submodules (PLAN) and for repos without a `package.json` (nothing to seed).
+/// repos with submodules (PLAN), for repos without a `package.json` (nothing to seed) and for
+/// pnpm's global virtual store.
 pub fn fill(d: &Daemon, repo: &Repo) -> Result<()> {
     if !FILLING.lock().unwrap().insert(repo.id) {
         return Ok(());
@@ -67,8 +68,10 @@ fn fill_now(d: &Daemon, repo: &Repo) -> Result<()> {
     loop {
         let cfg = Config::load(root)?;
         let base = ops::base_path(root, &cfg);
+        // A shared store's relative links break when an entry moves a folder level up.
         if !base.join("package.json").exists()
             || root.join(".gitmodules").exists()
+            || strata_seed::shared_store(&base)
             || listed(root, &cfg)?.len() >= cfg.seed.warm_pool as usize
         {
             return Ok(());

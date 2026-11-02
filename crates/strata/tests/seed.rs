@@ -310,3 +310,39 @@ fn addons_built_in_the_donor_are_rebuilt() {
     );
     assert!(e.home.join("logs/a/rebuild.log").exists());
 }
+
+#[test]
+fn a_global_virtual_store_is_installed_and_reported_as_shared() {
+    let files = [
+        (".gitignore", "node_modules\npnpm-lock.yaml\n"),
+        (
+            "package.json",
+            r#"{"name":"app","private":true,"dependencies":{"is-number":"7.0.0"}}"#,
+        ),
+        ("pnpm-workspace.yaml", "enableGlobalVirtualStore: true\n"),
+        (".npmrc", "offline=true\n"),
+    ];
+    let e = common::env(&files);
+    // Needs pnpm, and is-number in its store already (`offline=true`): skip otherwise.
+    let probe = std::process::Command::new("pnpm")
+        .arg("install")
+        .current_dir(&e.root)
+        .output();
+    if !probe.is_ok_and(|o| o.status.success()) {
+        eprintln!("skipped: needs pnpm with is-number@7.0.0 in its store");
+        return;
+    }
+    let init = e.strata(&["init", "--no-service"]);
+    common::no_pool(&e);
+    assert!(
+        init.contains("(dependencies: shared store, not isolated)"),
+        "{init}"
+    );
+    let (a, stderr, agent) = new(&e, &["a"]);
+    assert!(
+        stderr.contains("dependencies: shared store, not isolated"),
+        "{stderr}"
+    );
+    assert_eq!(agent["seed_tier"], "shared-store");
+    assert!(a.join("node_modules/is-number/package.json").exists());
+}

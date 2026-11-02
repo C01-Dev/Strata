@@ -214,6 +214,40 @@ fn addons(node_modules: &Path, donor: &str) -> Vec<String> {
         .collect()
 }
 
+/// Whether the checkout's `node_modules` keeps its packages in a store outside the checkout
+/// (pnpm's global virtual store, PLAN 4.6): its packages are links into a store every
+/// checkout shares, so a clone would not isolate anything (and pnpm's links are relative, so
+/// a clone at another folder depth would break them). Read from `.modules.yaml`, which pnpm
+/// writes as YAML or JSON.
+pub fn shared_store(checkout: &Path) -> bool {
+    let nm = checkout.join("node_modules");
+    let Ok(text) = fs::read_to_string(nm.join(".modules.yaml")) else {
+        return false;
+    };
+    let dir = text.lines().find_map(|l| {
+        let rest = l
+            .trim()
+            .trim_start_matches('"')
+            .strip_prefix("virtualStoreDir")?;
+        let value = rest
+            .trim_start_matches('"')
+            .trim_start()
+            .strip_prefix(':')?;
+        Some(
+            value
+                .trim()
+                .trim_end_matches(',')
+                .trim_matches(|c| c == '"' || c == '\''),
+        )
+    });
+    let (Some(dir), Ok(root)) = (dir, checkout.canonicalize()) else {
+        return false;
+    };
+    nm.join(dir)
+        .canonicalize()
+        .is_ok_and(|store| !store.starts_with(root))
+}
+
 /// Bytes free to an unprivileged user on the volume holding `path`.
 pub fn free_space(path: &Path) -> io::Result<u64> {
     use std::os::unix::ffi::OsStrExt;
@@ -503,6 +537,29 @@ mod tests {
             1,
             "only the timestamp, again"
         );
+    }
+
+    #[test]
+    fn a_virtual_store_outside_the_checkout_is_shared() {
+        let t = tempfile::tempdir().unwrap();
+        let store = t.path().join("store/links");
+        fs::create_dir_all(&store).unwrap();
+        for (name, yaml, shared) in [
+            (
+                "json-global",
+                "{\n  \"virtualStoreDir\": \"../../store/links\",\n}",
+                true,
+            ),
+            ("yaml-local", "virtualStoreDir: .pnpm\n", false),
+            ("npm", "", false),
+        ] {
+            let nm = t.path().join(name).join("node_modules");
+            fs::create_dir_all(nm.join(".pnpm")).unwrap();
+            if !yaml.is_empty() {
+                fs::write(nm.join(".modules.yaml"), yaml).unwrap();
+            }
+            assert_eq!(shared_store(&t.path().join(name)), shared, "{name}");
+        }
     }
 
     #[test]

@@ -225,8 +225,8 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
 /// What seeding did for one checkout.
 #[derive(Default)]
 pub struct Seeded {
-    /// clone, copy, hardlink, clone-failed (disk full), install, install-failed, or none (no
-    /// package.json)
+    /// clone, copy, hardlink, clone-failed (disk full), install, install-failed, shared-store
+    /// (pnpm's global virtual store: installed, not isolated), or none (no package.json)
     pub tier: &'static str,
     pub dep_key: Option<String>,
     pub donor: Option<PathBuf>,
@@ -239,6 +239,9 @@ pub struct Seeded {
 
 impl Seeded {
     pub fn describe(&self) -> String {
+        if self.tier == "shared-store" {
+            return "shared store, not isolated".into();
+        }
         let mut d = match &self.donor {
             Some(from) => format!("{} from {}", self.tier, from.display()),
             None => self.tier.to_string(),
@@ -404,7 +407,12 @@ fn seed(
     }
     if let Some(key) = s.dep_key.clone() {
         let also = || also.filter(|a| dep_key(a, cfg).is_ok_and(|k| k == key));
-        if let Some(from) = donor(d, repo, cfg, &key).or_else(|| also().map(Path::to_path_buf)) {
+        // A shared store is never cloned (PLAN 4.6): the copy would share it anyway, and its
+        // relative links break at another folder depth. Installing links it properly.
+        if let Some(from) = donor(d, repo, cfg, &key)
+            .or_else(|| also().map(Path::to_path_buf))
+            .filter(|from| !strata_seed::shared_store(from))
+        {
             match seed_from(&from, path, cfg, Way::Clone) {
                 Ok(folders) if !folders.is_empty() => {
                     seeded(&mut s, from, path, &folders, Way::Clone, log);
@@ -459,7 +467,10 @@ fn seed(
         }
     }
     let (tier, failed) = install_dependencies(path, log);
-    s.tier = tier;
+    s.tier = match tier {
+        "install" if strata_seed::shared_store(path) => "shared-store",
+        t => t,
+    };
     s.warnings.extend(failed);
     if tier == "install"
         && donate
