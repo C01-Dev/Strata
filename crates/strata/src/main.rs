@@ -94,6 +94,13 @@ enum Command {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Start the agent's dev server (dev.command or the `dev` script) and print its URL
+    Dev {
+        name: String,
+        /// Command instead of the configured one
+        #[arg(long)]
+        cmd: Option<String>,
+    },
     /// Run a command in an agent's worktree under supervision; prints its output, exits with its code
     Run {
         name: String,
@@ -182,6 +189,7 @@ fn main() {
                 .map_err(Into::into)
                 .and_then(|rt| rt.block_on(bench::run(args)))
         }
+        Command::Dev { name, cmd } => dev(name, cmd),
         Command::Run { name, timeout, cmd } => run(name, timeout, cmd),
         Command::Logs {
             name,
@@ -252,6 +260,26 @@ fn shell_join(args: &[String]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn dev(name: String, cmd: Option<String>) -> Result<()> {
+    let out = client::post(
+        &format!("/v1/agents/{name}/procs"),
+        json!({ "repo": repo()?, "kind": "dev", "cmd": cmd }),
+    )?;
+    let note = if out["already_running"] == true {
+        " (already running)"
+    } else {
+        ""
+    };
+    println!("{}{note}", out["url"].as_str().unwrap_or("?"));
+    println!("direct: {}", out["direct_url"].as_str().unwrap_or("?"));
+    println!(
+        "process {}: {}",
+        out["process"]["id"],
+        out["process"]["cmd"].as_str().unwrap_or("?")
+    );
+    Ok(())
 }
 
 fn run(name: String, timeout: u64, cmd: Vec<String>) -> Result<()> {

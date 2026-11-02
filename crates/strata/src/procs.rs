@@ -431,7 +431,11 @@ pub async fn request(d: &Arc<Daemon>, name: String, req: ProcRequest) -> Result<
                 .into_iter()
                 .find(|p| p.kind == "dev" && p.state == "running")
             {
-                return Ok(json!({ "process": p, "already_running": true }));
+                let port = p.port.unwrap_or_default();
+                let url = crate::ports::url(&agent.name, &repo, &cfg);
+                return Ok(
+                    json!({ "process": p, "already_running": true, "port": port, "url": url, "direct_url": format!("http://localhost:{port}") }),
+                );
             }
             let cmd = req
                 .cmd

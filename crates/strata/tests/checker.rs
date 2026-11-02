@@ -146,8 +146,12 @@ async fn mcp_tools_answer_for_the_worktree_they_run_in() {
             "strata_definition",
             "strata_diagnostics",
             "strata_hover",
+            "strata_logs",
             "strata_references",
+            "strata_run",
+            "strata_start_dev_server",
             "strata_status",
+            "strata_stop",
             "strata_symbols"
         ]
     );

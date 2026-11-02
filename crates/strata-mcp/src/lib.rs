@@ -45,6 +45,34 @@ pub struct FileArgs {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct DevArgs {
+    /// Command to run instead of the project's dev command.
+    pub command: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct RunArgs {
+    /// Shell command, run in your worktree.
+    pub command: String,
+    /// Stop it after this many seconds (default 120).
+    pub timeout_s: Option<u64>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct ProcessArgs {
+    /// Process id from strata_start_dev_server, strata_run or strata_status (not the OS pid).
+    pub process_id: i64,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct LogsArgs {
+    /// Process id from strata_start_dev_server, strata_run or strata_status (not the OS pid).
+    pub process_id: i64,
+    /// How many lines from the end (default 200).
+    pub lines: Option<usize>,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct PositionArgs {
     /// File relative to your worktree.
     pub file: String,
@@ -230,6 +258,113 @@ impl Server {
             .await)
     }
 
+    #[tool(
+        description = "Start this worktree's dev server (the project's dev command unless `command` is given) and return its URL at once. Each agent has its own port and URL; if the server is already running, returns it."
+    )]
+    async fn strata_start_dev_server(
+        &self,
+        ctx: RequestContext<RoleServer>,
+        Parameters(a): Parameters<DevArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self
+            .procs(&ctx, json!({ "kind": "dev", "cmd": a.command }), |v| {
+                let state = if v["already_running"] == true { "already running" } else { "started" };
+                format!(
+                    "Dev server {state}: {}\nDirect URL (for OAuth callbacks that reject .localhost): {}\nProcess {} (`{}`); see its output with strata_logs.",
+                    v["url"].as_str().unwrap_or("?"),
+                    v["direct_url"].as_str().unwrap_or("?"),
+                    v["process"]["id"],
+                    v["process"]["cmd"].as_str().unwrap_or("?")
+                )
+            })
+            .await)
+    }
+
+    #[tool(
+        description = "Run a shell command in your worktree under Strata's supervision (it counts toward your memory budget and is cleaned up with the worktree). Returns the exit code and the last 200 lines of output."
+    )]
+    async fn strata_run(
+        &self,
+        ctx: RequestContext<RoleServer>,
+        Parameters(a): Parameters<RunArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let timeout = a.timeout_s.unwrap_or(120);
+        Ok(self
+            .procs(
+                &ctx,
+                json!({ "kind": "run", "cmd": a.command, "timeout_s": timeout }),
+                move |v| {
+                    let head = if v["timed_out"] == true {
+                        format!("Stopped after {timeout} s (timeout).")
+                    } else {
+                        format!("Exit code {}.", v["exit_code"])
+                    };
+                    let lines: Vec<&str> = v["output"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|l| l.as_str())
+                        .collect();
+                    format!("{head}\n{}", lines.join("\n"))
+                },
+            )
+            .await)
+    }
+
+    #[tool(description = "Stop one of your processes (and everything it started).")]
+    async fn strata_stop(
+        &self,
+        ctx: RequestContext<RoleServer>,
+        Parameters(a): Parameters<ProcessArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let agent = match self.resolve(&ctx).await {
+            Ok(a) => a,
+            Err(e) => return Ok(failure(e.to_string())),
+        };
+        let path = format!("/v1/procs/{}", a.process_id);
+        let body = json!({ "agent": agent.name });
+        Ok(
+            match blocking(move || client::request("DELETE", &path, Some(body))).await {
+                Ok(_) => text(format!("Stopped process {}.", a.process_id)),
+                Err(e) => failure(e.to_string()),
+            },
+        )
+    }
+
+    #[tool(description = "The last lines of one of your processes' output.")]
+    async fn strata_logs(
+        &self,
+        ctx: RequestContext<RoleServer>,
+        Parameters(a): Parameters<LogsArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let agent = match self.resolve(&ctx).await {
+            Ok(a) => a,
+            Err(e) => return Ok(failure(e.to_string())),
+        };
+        let path = format!(
+            "/v1/procs/{}/logs?lines={}&agent={}",
+            a.process_id,
+            a.lines.unwrap_or(200),
+            agent.name
+        );
+        Ok(match blocking(move || client::get(&path)).await {
+            Ok(v) => {
+                let lines: Vec<&str> = v["lines"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|l| l.as_str())
+                    .collect();
+                text(if lines.is_empty() {
+                    "No output yet.".into()
+                } else {
+                    lines.join("\n")
+                })
+            }
+            Err(e) => failure(e.to_string()),
+        })
+    }
+
     #[tool(description = "This agent's worktree, branch and type-checker state.")]
     async fn strata_status(
         &self,
@@ -275,15 +410,44 @@ impl Server {
                 .unwrap_or("?")
                 .to_string()
         };
+        let running: String = me
+            .as_ref()
+            .and_then(|m| m["processes"].as_array().cloned())
+            .unwrap_or_default()
+            .iter()
+            .filter(|p| p["state"] == "running")
+            .map(|p| {
+                format!(
+                    "\nprocess {} ({}): {}",
+                    p["id"],
+                    p["kind"].as_str().unwrap_or("?"),
+                    p["cmd"].as_str().unwrap_or("?")
+                )
+            })
+            .collect();
+        let memory = me
+            .as_ref()
+            .and_then(|m| m["memory_bytes"].as_u64())
+            .unwrap_or(0)
+            / 1048576;
+        let budget = me
+            .as_ref()
+            .and_then(|m| m["budget"].as_str())
+            .unwrap_or("ok")
+            .to_string();
+        let port = me
+            .as_ref()
+            .map(|m| m["port"].to_string())
+            .unwrap_or_default();
+        let typescript = checker
+            .map(|g| format!(", TypeScript {}", g["typescript"].as_str().unwrap_or("?")))
+            .unwrap_or_default();
         Ok(text(format!(
-            "agent: {}\nworktree: {}\nbranch: {}\nstate: {}\nchecker: {sharing}{}",
+            "agent: {}\nworktree: {}\nbranch: {}\nstate: {}\nport: {port}\nmemory: {memory} MB (budget: {budget})\nchecker: {sharing}{typescript}{running}",
             agent.name,
             agent.path.display(),
             field("branch"),
             field("state"),
-            checker
-                .map(|g| format!(", TypeScript {}", g["typescript"].as_str().unwrap_or("?")))
-                .unwrap_or_default(),
         )))
     }
 }
@@ -301,6 +465,24 @@ impl Server {
         };
         body["repo"] = json!(agent.repo);
         let path = format!("/v1/agents/{}/check", agent.name);
+        match blocking(move || client::post(&path, body)).await {
+            Ok(v) => text(fmt(&v) + &budget_note(&agent).await),
+            Err(e) => failure(e.to_string()),
+        }
+    }
+
+    async fn procs(
+        &self,
+        ctx: &RequestContext<RoleServer>,
+        mut body: Value,
+        fmt: impl Fn(&Value) -> String,
+    ) -> CallToolResult {
+        let agent = match self.resolve(ctx).await {
+            Ok(a) => a,
+            Err(e) => return failure(e.to_string()),
+        };
+        body["repo"] = json!(agent.repo);
+        let path = format!("/v1/agents/{}/procs", agent.name);
         match blocking(move || client::post(&path, body)).await {
             Ok(v) => text(fmt(&v) + &budget_note(&agent).await),
             Err(e) => failure(e.to_string()),
