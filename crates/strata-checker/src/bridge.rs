@@ -42,7 +42,9 @@ pub fn node() -> PathBuf {
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value>>>>>;
 
 pub struct Bridge {
-    stdin: tokio::sync::Mutex<ChildStdin>,
+    /// `None` after `shutdown`: dropping it is what closes the pipe (tokio's `shutdown()` on a
+    /// child pipe only flushes).
+    stdin: tokio::sync::Mutex<Option<ChildStdin>>,
     pending: Pending,
     next: AtomicU64,
     alive: Arc<AtomicBool>,
@@ -111,7 +113,7 @@ impl Bridge {
         });
         let pid = child.id().unwrap_or(0);
         let mut bridge = Self {
-            stdin: tokio::sync::Mutex::new(stdin),
+            stdin: tokio::sync::Mutex::new(Some(stdin)),
             pending,
             next: AtomicU64::new(0),
             alive,
@@ -145,14 +147,11 @@ impl Bridge {
         let (tx, rx) = oneshot::channel();
         self.pending.lock().unwrap().insert(id, tx);
         let line = json!({ "id": id, "method": method, "params": params }).to_string() + "\n";
-        if self
-            .stdin
-            .lock()
-            .await
-            .write_all(line.as_bytes())
-            .await
-            .is_err()
-        {
+        let written = match self.stdin.lock().await.as_mut() {
+            Some(stdin) => stdin.write_all(line.as_bytes()).await.is_ok(),
+            None => false,
+        };
+        if !written {
             self.pending.lock().unwrap().remove(&id);
             return Err(restarting());
         }
@@ -169,9 +168,9 @@ impl Bridge {
         }
     }
 
-    /// Stops the bridge (and with it tsgo): closing stdin makes it exit cleanly; kill if it lingers.
+    /// Stops the bridge (and with it tsgo): closing stdin makes it exit; kill if it lingers.
     pub async fn shutdown(&self) {
-        let _ = self.stdin.lock().await.shutdown().await;
+        drop(self.stdin.lock().await.take());
         let Some(mut child) = self.child.lock().unwrap().take() else {
             return;
         };

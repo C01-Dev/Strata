@@ -13,6 +13,7 @@ strata-core = { path = "crates/strata-core" }
 strata-git = { path = "crates/strata-git" }
 strata-checker = { path = "crates/strata-checker" }
 strata-overlay = { path = "crates/strata-overlay" }
+strata-proc = { path = "crates/strata-proc" }
 axum = "0.8.9"
 clap = { version = "4.6.7", features = ["derive"] }
 libc = "0.2"

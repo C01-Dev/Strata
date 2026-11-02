@@ -221,7 +221,7 @@ const methods = {
       }
     }
     items = sortUnique(items);
-    return { items: limit === undefined ? items : items.slice(0, limit), total: items.length };
+    return { items: limit == null ? items : items.slice(0, limit), total: items.length };
   },
 
   async hover({ agent: name, file, line, character }) {
@@ -308,7 +308,8 @@ createInterface({ input: process.stdin }).on("line", async (line) => {
     const code = e instanceof BridgeError ? e.code : "internal";
     send({ id: req?.id ?? null, error: { code, message: String(e?.message ?? e).split("\n")[0] } });
   }
-}).on("close", async () => {
-  await api?.close().catch(() => {});
+}).on("close", () => {
+  // stdin closed: the daemon is done with us. tsgo exits when our pipes close; api.close()
+  // can wait on undisposed snapshots, so do not wait for it.
   process.exit(0);
 });

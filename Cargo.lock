@@ -898,8 +898,11 @@ name = "strata-checker"
 version = "0.1.0"
 dependencies = [
  "proptest",
+ "serde",
  "serde_json",
  "strata-core",
+ "strata-overlay",
+ "strata-proc",
  "tempfile",
  "tokio",
  "tracing",
@@ -932,6 +935,13 @@ version = "0.1.0"
 dependencies = [
  "tempfile",
  "xxhash-rust",
+]
+
+[[package]]
+name = "strata-proc"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

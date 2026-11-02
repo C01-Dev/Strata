@@ -239,3 +239,19 @@ Not covered: Linux x86_64 (CI's `ubuntu-latest` is x86_64; it would need an emul
 - Each root is matched in its given and its real (symlink-resolved) spelling, longest first, and only as a whole root: preceded by start or a non-name character and followed by `/`, end, or a non-name character. So `/x/.base2/...`, `/y/x/.base/...` and `a/x/.base/...` are left alone.
 - proptest (also run with 2,000 cases): round trips for random relative paths; outside and lookalike paths unchanged; every whole root replaced in text. It found nothing in the translator; the case it flagged was a test mistake (a root glued to a word is correctly left alone). Writing the fix exposed one real bug: when two matches touched, the preceding-character check ignored the text already emitted.
 - Lowercased `PathKey`s never reach Rust: the bridge reports `fileName` from resolved nodes (task 2.1).
+
+## Phase 2 — task 2.5 broker
+
+- `strata-checker::broker::Broker`: one group per repo (one bridge, so one tsgo, plus the base snapshot) and one snapshot per agent. Before each query the agent's worktree is rescanned and its snapshot updated if the layer hash, the base version or the bridge changed. The base is rescanned at most every `base_rescan` (2 s): a content change re-opens the base (agents move lazily; the bridge keeps the old base until the last one moves), a `dep_key` change restarts the group.
+- Sharing per agent, reported in every answer and in status:
+  - shared: layered on base, at base paths (translator base → worktree);
+  - unshared, same process: `dep_key` differs ("dependencies differ") or more than `huge_diff_ratio` of base files changed ("large diff (N of M files changed)"); a snapshot at the worktree's own paths;
+  - unshared, own process: the worktree's `node_modules/typescript` reports a different version than the base's. A worktree without its own `node_modules` uses the base's TypeScript.
+- Locks: agent, then group. The group lock covers bridge start/restart, base rescan, layer computation and the snapshot update (so a layer is never applied to a different base than it was computed against). Queries run under the agent's lock only, so agents query concurrently. The agent map stores each worktree next to its lock so lookups never wait on a running query.
+- A dead bridge (crash, OOM, kill) is restarted by the next query; queries that were in flight get "checker restarting, retry in a few seconds". Status counts restarts.
+- `maintain()` disposes snapshots idle longer than `idle_dispose_secs`, and while the group's process tree (new `strata-proc::tree_memory`: macOS `phys_footprint`, Linux PSS, summed over descendants) is above `group_memory_mb`, the least recently used one per call (`ponytail`: Go returns freed memory minutes later, so measuring right after an eviction would over-evict).
+- Answers: 1-based `line`/`column`/`endLine`/`endColumn` (UTF-16), `file` relative to the worktree when inside it, absolute otherwise.
+- Checker off (Yarn PnP, TypeScript missing or older than 7.1, checked on the base) is a clear refusal.
+- Fixed on the way: tokio's `ChildStdin::shutdown()` does not close a child pipe (only dropping it does), so bridge shutdown waited 5 s and killed; the bridge also no longer waits on `api.close()` when stdin closes. A `limit: null` sliced diagnostics to nothing.
+- Known Phase 2 stopgap for the daemon: the `.base` worktree has no `node_modules` until Phase 4 seeding (and agent worktrees none until Phase 3.0 installs). Wired up in task 2.6.
+- 7 broker tests on real toy projects: edits, additions and deletions followed; base changes reach agents (the agent's own copy of a file wins); the three unshared modes; restart after SIGKILL; idle disposal; errors.
