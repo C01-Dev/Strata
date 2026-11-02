@@ -1,0 +1,63 @@
+[excalidraw-baseline-5] start +0.0s
+[excalidraw-baseline-5] loaded +1.1s
+[excalidraw-baseline-5] diagnostics_start +1.1s
+[excalidraw-baseline-5] diagnostics_done +3.3s
+[excalidraw-baseline-5] hover_done +3.4s
+[excalidraw-baseline-5] warm +13.4s
+[excalidraw-baseline-5] idle_60 +63.4s
+[excalidraw-baseline-5] idle_900 +903.4s
+{"tag":"excalidraw-baseline-5","mode":"baseline","fixture":"excalidraw","agents":5,"typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":31.37914276123047,"peak":3692.494125366211,"warm":3684.681121826172,"idle_60":3684.352996826172,"idle_900":1649.103271484375},"seconds":{"start":0,"loaded":1.097,"diagnostics_start":1.097,"diagnostics_done":3.3,"hover_done":3.416,"warm":13.417,"idle_60":63.419,"idle_900":903.422},"maxProcs":7,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-shared-5] start +0.0s
+[excalidraw-shared-5] base_loaded +0.7s
+[excalidraw-shared-5] layers_computed +1.7s
+[excalidraw-shared-5] loaded +1.9s
+[excalidraw-shared-5] diagnostics_start +1.9s
+[excalidraw-shared-5] diagnostics_done +8.7s
+[excalidraw-shared-5] hover_done +8.8s
+[excalidraw-shared-5] warm +18.8s
+[excalidraw-shared-5] idle_60 +68.8s
+[excalidraw-shared-5] idle_900 +908.8s
+{"tag":"excalidraw-shared-5","mode":"shared","fixture":"excalidraw","agents":5,"typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":34.613311767578125,"peak":3025.9613189697266,"warm":3015.6164932250977,"idle_60":2971.6633682250977,"idle_900":711.11669921875},"seconds":{"start":0,"base_loaded":0.651,"layers_computed":1.677,"loaded":1.864,"diagnostics_start":1.864,"diagnostics_done":8.69,"hover_done":8.82,"warm":18.821,"idle_60":68.822,"idle_900":908.826},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[excalidraw-lsp-5] start +0.0s
+[excalidraw-lsp-5] loaded +0.6s
+[excalidraw-lsp-5] hover_done +1.0s
+[excalidraw-lsp-5] warm +11.0s
+[excalidraw-lsp-5] idle_60 +61.0s
+{"tag":"excalidraw-lsp-5","mode":"lsp","fixture":"excalidraw","agents":5,"typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":33.457313537597656,"peak":1087.648910522461,"warm":1079.3514862060547,"idle_60":1073.3358612060547},"seconds":{"start":0,"loaded":0.615,"hover_done":1.037,"warm":11.039,"idle_60":61.038},"maxProcs":6,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-baseline-5] start +0.0s
+[calcom-baseline-5] loaded +4.0s
+[calcom-baseline-5] diagnostics_start +4.0s
+[calcom-baseline-5] diagnostics_done +14.5s
+[calcom-baseline-5] hover_done +14.8s
+[calcom-baseline-5] warm +24.8s
+[calcom-baseline-5] idle_60 +74.8s
+[calcom-baseline-5] idle_900 +914.8s
+{"tag":"calcom-baseline-5","mode":"baseline","fixture":"calcom","agents":5,"typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":43.05152130126953,"peak":10484.579803466797,"warm":10480.845428466797,"idle_60":10480.814178466797,"idle_900":5708.704780578613},"seconds":{"start":0,"loaded":3.963,"diagnostics_start":3.964,"diagnostics_done":14.549,"hover_done":14.79,"warm":24.793,"idle_60":74.792,"idle_900":914.796},"maxProcs":7,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-shared-5] start +0.0s
+[calcom-shared-5] base_loaded +1.1s
+[calcom-shared-5] layers_computed +11.8s
+[calcom-shared-5] loaded +13.5s
+[calcom-shared-5] diagnostics_start +13.5s
+[calcom-shared-5] diagnostics_done +32.3s
+[calcom-shared-5] hover_done +32.7s
+[calcom-shared-5] warm +42.7s
+[calcom-shared-5] idle_60 +92.7s
+[calcom-shared-5] idle_900 +932.7s
+{"tag":"calcom-shared-5","mode":"shared","fixture":"calcom","agents":5,"typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":30.64435577392578,"peak":8015.026008605957,"warm":7323.026329040527,"idle_60":7322.995079040527,"idle_900":2916.1200790405273},"seconds":{"start":0,"base_loaded":1.136,"layers_computed":11.837,"loaded":13.521,"diagnostics_start":13.521,"diagnostics_done":32.277,"hover_done":32.7,"warm":42.702,"idle_60":92.7,"idle_900":932.704},"maxProcs":2,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-lsp-5] start +0.0s
+[calcom-lsp-5] loaded +0.6s
+[calcom-lsp-5] hover_done +4.2s
+[calcom-lsp-5] warm +14.2s
+[calcom-lsp-5] idle_60 +64.2s
+{"tag":"calcom-lsp-5","mode":"lsp","fixture":"calcom","agents":5,"typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":33.26979064941406,"peak":5770.839752197266,"warm":5762.245429992676,"idle_60":5768.448554992676},"seconds":{"start":0,"loaded":0.609,"hover_done":4.176,"warm":14.177,"idle_60":64.178},"maxProcs":6,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}
+[calcom-shared-5] start +0.0s
+[calcom-shared-5] base_loaded +1.0s
+[calcom-shared-5] layers_computed +6.4s
+[calcom-shared-5] loaded +7.3s
+[calcom-shared-5] diagnostics_start +7.3s
+[calcom-shared-5] diagnostics_done +25.3s
+[calcom-shared-5] hover_done +25.7s
+[calcom-shared-5] warm +35.7s
+[calcom-shared-5] idle_60 +85.7s
+[calcom-shared-5] idle_900 +925.7s
+{"tag":"calcom-shared-5","mode":"shared","fixture":"calcom","agents":5,"typescript":"7.1.0-beta","gogc":"default","gomemlimit":"default","mb":{"harness":32.894447326660156,"peak":7805.546424865723,"warm":7770.10636138916,"idle_60":7409.559326171875,"idle_900":2078.324996948242},"seconds":{"start":0,"base_loaded":1.031,"layers_computed":6.406,"loaded":7.292,"diagnostics_start":7.292,"diagnostics_done":25.268,"hover_done":25.726,"warm":35.729,"idle_60":85.729,"idle_900":925.731},"maxProcs":3,"machine":{"cpu":"Apple M5 Pro","ramGb":24,"os":"Darwin 27.0.0","fs":"apfs"}}

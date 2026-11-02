@@ -1,0 +1,61 @@
+{
+ "targets": 5,
+ "matrix": {
+  "diagnostics": {
+   "works": 5,
+   "matches": 5,
+   "errors": [],
+   "msShared": 3.215874999999505,
+   "msDedicated": 2.49078300000001
+  },
+  "hover": {
+   "works": 5,
+   "matches": 5,
+   "errors": [],
+   "msShared": 1.0945918000004893,
+   "msDedicated": 0.8621584000004077
+  },
+  "definition": {
+   "works": 5,
+   "matches": 5,
+   "errors": [],
+   "msShared": 0.3446747999994841,
+   "msDedicated": 0.26894159999974365
+  },
+  "references": {
+   "works": 5,
+   "matches": 5,
+   "errors": [],
+   "msShared": 316.6085913999999,
+   "msDedicated": 317.5144663999999
+  },
+  "symbols": {
+   "works": 5,
+   "matches": 5,
+   "errors": [],
+   "msShared": 0.06319140000014159,
+   "msDedicated": 0.0233167999995203
+  },
+  "completions": {
+   "works": 5,
+   "matches": 4,
+   "errors": [],
+   "msShared": 332.6957751999995,
+   "msDedicated": 324.0091251999994
+  },
+  "rename": {
+   "works": 0,
+   "matches": 0,
+   "errors": [
+    "not exposed by the 7.1 API"
+   ],
+   "msShared": 0.05073320000046806,
+   "msDedicated": 0.005183799999940675
+  }
+ }
+}
+{"snapshots":1,"createMs":201,"diagMsMax":3290,"hoverMsMax":2,"errors":[],"footprintMb":3465}
+{"snapshots":2,"createMs":346,"diagMsMax":6756,"hoverMsMax":4,"errors":[],"footprintMb":3949}
+{"snapshots":4,"createMs":685,"diagMsMax":13614,"hoverMsMax":7,"errors":[],"footprintMb":6545}
+{"snapshots":8,"createMs":1299,"diagMsMax":39386,"hoverMsMax":30,"errors":[],"footprintMb":12502}
+{"snapshots":16,"createMs":2689,"diagMsMax":117763,"hoverMsMax":41,"errors":[],"footprintMb":17296}
