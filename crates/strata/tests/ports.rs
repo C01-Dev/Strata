@@ -4,6 +4,7 @@ mod common;
 
 use common::{initialized, node_server, set_ports, start_dev, wait_until};
 use std::net::TcpListener;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 
 fn port_of(e: &common::Env, agent: &str) -> u64 {
@@ -80,9 +81,12 @@ fn servers_started_outside_strata_are_listed() {
     let e = initialized();
     set_ports(&e, 46400, 46499, 46003);
     let wt = PathBuf::from(e.strata(&["new", "a"]).trim());
+    // Its own process group, so the cleanup reaches node too (Debian's dash forks it instead
+    // of exec'ing, so killing `sh` alone would leave the server running).
     let mut outside = std::process::Command::new("sh")
         .args(["-c", &node_server("rogue", Some(46488))])
         .current_dir(&wt)
+        .process_group(0)
         .spawn()
         .unwrap();
     wait_until("listed as unmanaged", || {
@@ -95,12 +99,8 @@ fn servers_started_outside_strata_are_listed() {
         .unwrap()
         .to_string();
     assert!(hint.contains("strata_start_dev_server"), "{hint}");
-    outside.kill().unwrap();
+    common::kill_group(outside.id());
     outside.wait().unwrap();
-    std::process::Command::new("pkill")
-        .args(["-f", "listen(46488)"])
-        .status()
-        .unwrap();
 }
 
 fn through_proxy(proxy: u16, host: &str) -> String {

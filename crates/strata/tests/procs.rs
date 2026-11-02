@@ -212,10 +212,7 @@ fn processes_gone_after_a_restart_are_dead_unless_dev_restart() {
     let (id, pid) = dev(&e, "a", "sleep 300");
     let daemon = e.status()["pid"].to_string();
     Command::new("kill").args(["-9", &daemon]).status().unwrap();
-    Command::new("kill")
-        .args(["-9", &format!("-{pid}")])
-        .status()
-        .unwrap(); // "reboot"
+    common::kill_group(pid); // "reboot"
     e.strata(&["daemon", "start"]);
     assert_eq!(process(&e, "a", id)["state"], "dead");
     let newest = &e.agent("a").unwrap()["processes"][0];

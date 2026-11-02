@@ -535,13 +535,12 @@ mod tests {
                 .unwrap()
                 .contains(&d.to_string())
         );
-        assert_eq!(
-            fix_up(&donor, &target, &["node_modules".into()])
-                .unwrap()
-                .rewritten
-                .len(),
-            1,
-            "only the timestamp, again"
+        // Again: the shim is already right. (The timestamp may or may not change: same
+        // millisecond on a fast machine.)
+        let again = fix_up(&donor, &target, &["node_modules".into()]).unwrap();
+        assert!(
+            !again.rewritten.iter().any(|p| p.ends_with(".bin/tool")),
+            "{again:?}"
         );
     }
 

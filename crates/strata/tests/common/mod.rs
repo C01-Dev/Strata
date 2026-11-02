@@ -189,6 +189,14 @@ pub fn node_server(text: &str, port: Option<u16>) -> String {
     format!("node -e \"require('http').createServer((q, s) => s.end('{text}')).listen({port})\"")
 }
 
+/// SIGKILL to a process group. The `--` matters: procps-ng's `kill -9 -19999` (Debian, 4.0.2)
+/// reads the `-1…` as pid -1 and signals every process the user may signal.
+pub fn kill_group(pgid: impl std::fmt::Display) {
+    let _ = Command::new("kill")
+        .args(["-9", "--", &format!("-{pgid}")])
+        .status();
+}
+
 /// Polls `check` every 100 ms for up to 10 s.
 pub fn wait_until(what: &str, check: impl FnMut() -> bool) {
     wait_secs(what, 10, check);
@@ -219,9 +227,7 @@ impl Drop for Env {
                         .flatten()
                         .filter(|p| p["state"] == "running")
                     {
-                        let _ = Command::new("kill")
-                            .args(["-9", &format!("-{}", p["pid"])])
-                            .status();
+                        kill_group(&p["pid"]);
                     }
                 }
             }

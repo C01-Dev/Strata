@@ -60,10 +60,7 @@ fn memory_is_metered_and_over_budget_warns() {
     assert!(events(&e).contains(&"budget.exceeded".to_string()));
     assert_eq!(agent["processes"][0]["state"], "running", "warn only");
     assert!(e.strata(&["status"]).contains("(over budget)"));
-    Command::new("kill")
-        .args(["-9", &format!("-{}", p["pid"])])
-        .status()
-        .unwrap();
+    common::kill_group(&p["pid"]);
 }
 
 #[test]

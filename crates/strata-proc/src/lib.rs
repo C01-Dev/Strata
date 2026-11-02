@@ -35,7 +35,9 @@ pub fn descendants(pid: u32) -> Vec<u32> {
 }
 
 /// When `pid` started (microseconds on macOS, clock ticks since boot on Linux). With the pid, it
-/// identifies a process across daemon restarts: a reused pid has another start time.
+/// identifies a process across daemon restarts: a reused pid has another start time. `None` for
+/// a zombie: it has exited and only waits to be reaped (found on Linux in a container whose
+/// PID 1 never reaps).
 pub fn start_time(pid: u32) -> Option<u64> {
     platform::start_time(pid)
 }
@@ -167,8 +169,9 @@ mod platform {
     }
 
     pub fn start_time(pid: u32) -> Option<u64> {
+        const SZOMB: u32 = 5; // <sys/proc.h>
         let info: libc::proc_bsdinfo = pidinfo(pid, libc::PROC_PIDTBSDINFO)?;
-        Some(info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec)
+        (info.pbi_status != SZOMB).then(|| info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec)
     }
 
     pub fn cwd(pid: u32) -> Option<PathBuf> {
@@ -227,7 +230,11 @@ mod platform {
     }
 
     pub fn start_time(pid: u32) -> Option<u64> {
-        stat_fields(pid)?.get(19)?.parse().ok() // field 22, starttime
+        let f = stat_fields(pid)?;
+        if f.first().is_some_and(|state| state == "Z") {
+            return None;
+        }
+        f.get(19)?.parse().ok() // field 22, starttime
     }
 
     pub fn cwd(pid: u32) -> Option<PathBuf> {
@@ -320,6 +327,19 @@ mod tests {
         child.kill().unwrap();
         child.wait().unwrap();
         assert_eq!(tree_memory(u32::MAX - 1), 0, "gone pid");
+    }
+
+    #[test]
+    fn a_zombie_is_not_alive() {
+        // Killed but not yet reaped (we are its parent and do not wait): a zombie. Without an
+        // init that reaps (a container's `sleep` as PID 1), orphans stay zombies indefinitely.
+        let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+        let (pid, start) = (child.id(), start_time(child.id()).unwrap());
+        assert!(alive(pid, start));
+        send(pid, libc::SIGKILL);
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(!alive(pid, start), "a zombie counts as gone");
+        child.wait().unwrap();
     }
 
     #[test]
