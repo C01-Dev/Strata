@@ -18,6 +18,7 @@ pub struct Daemon {
     pub checker: Broker,
     pub procs: procs::Table,
     pub meter: procs::Meter,
+    pub routes: crate::ports::Routes,
     /// Linux with systemd delegation: the daemon's cgroup, with one child per agent.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     cgroup: Option<std::path::PathBuf>,
@@ -36,6 +37,7 @@ impl Daemon {
             checker: Broker::new(home),
             procs: Default::default(),
             meter: Default::default(),
+            routes: Default::default(),
             cgroup: cgroup_root(),
             git: Mutex::new(()),
             shutdown: Notify::new(),
@@ -142,6 +144,19 @@ async fn blocking_value<T: Send + 'static>(
 }
 
 async fn status(State(d): State<Shared>) -> ApiResult {
+    let all_agents: Vec<_> = {
+        let store = d.store();
+        let repos = store.repos().map_err(ApiError)?;
+        let mut all = vec![];
+        for r in repos {
+            all.extend(store.agents(r.id).map_err(ApiError)?);
+        }
+        all
+    };
+    let dd = d.clone();
+    let unmanaged = tokio::task::spawn_blocking(move || crate::ports::unmanaged(&dd, &all_agents))
+        .await
+        .unwrap_or_default();
     let repos = {
         let store = d.store();
         let mut repos = vec![];
@@ -150,6 +165,7 @@ async fn status(State(d): State<Shared>) -> ApiResult {
             let mut agents = vec![];
             for agent in store.agents(repo.id).map_err(ApiError)? {
                 let mut a = json!(agent);
+                a["port"] = json!(store.agent_port(agent.id).map_err(ApiError)?);
                 let mut ps = store.processes(agent.id).map_err(ApiError)?;
                 ps.truncate(10);
                 a["processes"] = json!(ps);
@@ -176,6 +192,8 @@ async fn status(State(d): State<Shared>) -> ApiResult {
         "repos": repos,
         "checker": d.checker.status().await,
         "events": d.store().events(20).map_err(ApiError)?,
+        "unmanaged": unmanaged,
+        "routes": d.routes.read().unwrap().iter().map(|(h, a)| (h.clone(), json!(a.to_string()))).collect::<serde_json::Map<_, _>>(),
     })))
 }
 

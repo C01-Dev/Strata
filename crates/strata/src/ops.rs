@@ -216,13 +216,14 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
     let mut warnings = warnings;
     warnings.extend(failed);
     d.store().set_agent_seed_tier(agent.id, tier)?;
+    let port = crate::ports::ensure(d, &agent, &cfg)?;
     d.store().set_agent_state(agent.id, AgentState::Ready)?;
     d.store().event(
         Some(agent.id),
         "agent.created",
         &format!("{name} (dependencies: {tier})"),
     )?;
-    Ok(json!({ "agent": d.store().agent(repo.id, &name)?, "warnings": warnings }))
+    Ok(json!({ "agent": d.store().agent(repo.id, &name)?, "port": port, "warnings": warnings }))
 }
 
 /// `$STRATA_HOME/logs/<agent>/`.
@@ -323,7 +324,8 @@ pub fn adopt(d: &Daemon, req: Adopt) -> Result<Value> {
         .insert_agent(repo.id, &name, &path, &branch, AgentState::Ready)?;
     d.store()
         .event(Some(agent.id), "agent.adopted", &path.to_string_lossy())?;
-    Ok(json!({ "agent": agent }))
+    let port = crate::ports::ensure(d, &agent, &cfg)?;
+    Ok(json!({ "agent": agent, "port": port }))
 }
 
 #[derive(Deserialize)]

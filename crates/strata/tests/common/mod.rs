@@ -107,6 +107,45 @@ pub fn initialized() -> Env {
     e
 }
 
+/// Sets `dev.port_range` and `dev.proxy_port` in the repo's strata.toml (tests run in parallel,
+/// so each picks its own range).
+pub fn set_ports(e: &Env, lo: u16, hi: u16, proxy: u16) {
+    let config = std::fs::read_to_string(e.root.join("strata.toml")).unwrap();
+    let config = config
+        .replace(
+            "port_range = [4100, 4999]",
+            &format!("port_range = [{lo}, {hi}]"),
+        )
+        .replace("proxy_port = 7355", &format!("proxy_port = {proxy}"));
+    std::fs::write(e.root.join("strata.toml"), config).unwrap();
+}
+
+/// Starts a dev process through the API (`kind: dev`); returns the response.
+pub fn start_dev(e: &Env, agent: &str, cmd: &str) -> Value {
+    let body = serde_json::json!({ "repo": e.root, "kind": "dev", "cmd": cmd }).to_string();
+    let out = Command::new("curl")
+        .args(["-s", "--unix-socket"])
+        .arg(e.home.join("strata.sock"))
+        .args([
+            "-X",
+            "POST",
+            "-H",
+            "content-type: application/json",
+            "-d",
+            &body,
+            &format!("http://strata/v1/agents/{agent}/procs"),
+        ])
+        .output()
+        .unwrap();
+    serde_json::from_slice(&out.stdout).unwrap_or(Value::Null)
+}
+
+/// A Node HTTP server answering `text`, on `$PORT` unless `port` is given.
+pub fn node_server(text: &str, port: Option<u16>) -> String {
+    let port = port.map_or("process.env.PORT".to_string(), |p| p.to_string());
+    format!("node -e \"require('http').createServer((q, s) => s.end('{text}')).listen({port})\"")
+}
+
 /// Polls `check` every 100 ms for up to 10 s.
 pub fn wait_until(what: &str, mut check: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);

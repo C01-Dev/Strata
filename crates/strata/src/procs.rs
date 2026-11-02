@@ -114,6 +114,11 @@ fn finished(d: &Daemon, id: i64, code: Option<i32>) {
     if !leftovers.is_empty() {
         strata_proc::terminate(t.pgid, &leftovers, GRACE);
     }
+    let port = d.store().process(id).ok().flatten().and_then(|p| p.port);
+    d.routes
+        .write()
+        .unwrap()
+        .retain(|_, addr| Some(addr.port()) != port);
     let state = if t.stopping { "stopped" } else { "exited" };
     let store = d.store();
     let _ = store.set_process_state(id, state, code);
@@ -416,8 +421,8 @@ pub struct ProcRequest {
 /// `POST /v1/agents/{name}/procs`. `dev` starts the dev server (or returns the running one) and
 /// returns at once; `run` waits for the command, up to `timeout_s`, and returns its output.
 pub async fn request(d: &Arc<Daemon>, name: String, req: ProcRequest) -> Result<Value> {
-    let (_repo, agent, cfg) = crate::ops::ready_agent(d, &req.repo, &name)?;
-    let env = vec![("STRATA_AGENT".to_string(), agent.name.clone())];
+    let (repo, agent, cfg) = crate::ops::ready_agent(d, &req.repo, &name)?;
+    let mut env = vec![("STRATA_AGENT".to_string(), agent.name.clone())];
     match req.kind.as_str() {
         "dev" => {
             if let Some(p) = d
@@ -438,8 +443,20 @@ pub async fn request(d: &Arc<Daemon>, name: String, req: ProcRequest) -> Result<
                             .into(),
                     )
                 })?;
-            let id = start(d, &agent, "dev", &cmd, &env, None)?;
-            Ok(json!({ "process": d.store().process(id)? }))
+            let port = crate::ports::ensure(d, &agent, &cfg)?;
+            let url = crate::ports::url(&agent.name, &repo, &cfg);
+            env.push(("PORT".into(), port.to_string()));
+            env.push(("STRATA_URL".into(), url.clone()));
+            let id = start(d, &agent, "dev", &cmd, &env, Some(port))?;
+            tokio::spawn(crate::ports::confirm(
+                d.clone(),
+                id,
+                crate::ports::host(&agent.name, &repo, &cfg),
+                port,
+            ));
+            Ok(
+                json!({ "process": d.store().process(id)?, "port": port, "url": url, "direct_url": format!("http://localhost:{port}") }),
+            )
         }
         "run" => {
             let cmd = req

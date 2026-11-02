@@ -331,3 +331,11 @@ Gate 2: "parity passes on all three fixtures, and `strata bench` reproduces the 
 - Warnings reach: `strata status` (`memory N MB (over budget)`), `/v1/status` (`memory_bytes`, `budget`, plus the last 20 `events`), and every MCP answer (a warning line appended while the agent is near or over).
 - Found while doing this: two scripted edits in task 3.1 had silently not applied (the `strata status` process lines); scripted replacements now assert that they matched.
 - Tests: a 60 MB process against a 10 MB budget is metered and reported over budget (warn keeps it running), and with `stop` its process is stopped while the agent stays ready.
+
+## Phase 3 — task 3.3 port registry
+
+- Each agent owns one port from `dev.port_range`, reserved by `strata new` (after the install) and `strata adopt`: the lowest port no agent holds that also binds on 127.0.0.1 and ::1 (a port an outside program uses is skipped; no IPv6 on the machine counts as free there). Assignment is serialized in the daemon and the `ports` primary key backs it; `rm` frees the port.
+- `strata dev` / `kind: dev` sets `PORT`, `STRATA_AGENT` and `STRATA_URL` (`http://<agent>.<app>.localhost:<proxy_port>`) and answers with the port, the proxy URL and the direct `http://localhost:<port>` (PLAN: for OAuth callbacks that reject `.localhost`).
+- Within 30 s the daemon finds which process of the tree listens (`listeners` crate, filtered to the recorded tree) and routes `<agent>.<app>` there; a wildcard listener is reached on loopback of its family. A server that ignored `PORT` is routed to where it really listens, its record updated, and a `route.updated` event written; nothing within 30 s writes `listener.missing`. Routes are in memory: a restarted daemon confirms running dev servers again. A route goes when its server ends.
+- Status lists `unmanaged` listeners: sockets of processes whose working directory is inside a worktree but which Strata did not start, with a hint to use `strata_start_dev_server`.
+- 4 e2e tests (each with its own port range, since test daemons run in parallel): distinct ports skipping an outsider's, reuse after `rm`; port, URL and confirmed route for a Node server; a server on another port gets the route and the event; an outside server in a worktree is listed.
