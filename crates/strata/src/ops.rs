@@ -199,7 +199,7 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
 /// What seeding did for one checkout.
 #[derive(Default)]
 pub struct Seeded {
-    /// clone, install, install-failed, or none (no package.json)
+    /// clone, clone-failed (disk full), install, install-failed, or none (no package.json)
     pub tier: &'static str,
     pub dep_key: Option<String>,
     pub donor: Option<PathBuf>,
@@ -273,6 +273,23 @@ fn seed(
                     return s;
                 }
                 Ok(false) => {}
+                // An install would fill the disk too: stop, the partial clone is already gone.
+                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::StorageFull => {
+                    s.tier = "clone-failed";
+                    s.warnings.push(format!(
+                        "disk full while cloning dependencies from {}: {} MB free; a full install needs about {} MB",
+                        from.display(),
+                        strata_seed::free_space(path).unwrap_or(0) / 1_000_000,
+                        strata_seed::size(
+                            &from,
+                            &strata_seed::folders(
+                                &git::ignored(&from).unwrap_or_default(),
+                                &cfg.seed.paths
+                            )
+                        ) / 1_000_000,
+                    ));
+                    return s;
+                }
                 Err(e) => s.warnings.push(format!(
                     "cloning dependencies from {} failed ({e}); installing instead",
                     from.display()

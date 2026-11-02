@@ -1,6 +1,7 @@
 //! Dependency seeding (PLAN Phase 4): which of a checkout's ignored folders to seed, and
 //! cloning them from a donor checkout that has the same `dep_key`.
 
+use rayon::prelude::*;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -58,6 +59,36 @@ pub fn clone_folders(donor: &Path, target: &Path, folders: &[PathBuf]) -> io::Re
     Ok(done)
 }
 
+/// Bytes free to an unprivileged user on the volume holding `path`.
+pub fn free_space(path: &Path) -> io::Result<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+    // SAFETY: `c` is a valid path and `st` is a writable statvfs.
+    if unsafe { libc::statvfs(c.as_ptr(), &mut st) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    #[allow(clippy::unnecessary_cast)] // the field types differ by platform
+    Ok(st.f_bavail as u64 * st.f_frsize as u64)
+}
+
+/// Bytes in the files under `checkout`'s `folders` (apparent size, what a copy needs).
+pub fn size(checkout: &Path, folders: &[PathBuf]) -> u64 {
+    fn tree(p: &Path) -> u64 {
+        fs::read_dir(p)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| match e.file_type() {
+                Ok(t) if t.is_dir() => tree(&e.path()),
+                Ok(t) if t.is_file() => e.metadata().map_or(0, |m| m.len()),
+                _ => 0,
+            })
+            .sum()
+    }
+    folders.iter().map(|rel| tree(&checkout.join(rel))).sum()
+}
+
 /// Removes a file, symlink or folder; missing is fine.
 pub fn remove(path: &Path) -> io::Result<()> {
     let result = match path.symlink_metadata() {
@@ -73,7 +104,7 @@ pub fn remove(path: &Path) -> io::Result<()> {
 
 /// macOS: one `clonefile(2)` clones the whole tree (APFS; 272k entries in about 2 s).
 #[cfg(target_os = "macos")]
-fn clone_tree(src: &Path, dst: &Path) -> io::Result<()> {
+pub fn clone_tree(src: &Path, dst: &Path) -> io::Result<()> {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
     const CLONE_NOFOLLOW: u32 = 0x0001;
@@ -87,12 +118,75 @@ fn clone_tree(src: &Path, dst: &Path) -> io::Result<()> {
     }
 }
 
+/// Linux: there is no tree clone, so the walker reflinks file by file (btrfs, XFS with
+/// `reflink=1`, OpenZFS 2.2+). Elsewhere (ext4) the first file fails with EOPNOTSUPP or EXDEV.
 #[cfg(not(target_os = "macos"))]
-fn clone_tree(_src: &Path, _dst: &Path) -> io::Result<()> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "cloning is not implemented on this platform yet",
-    ))
+pub fn clone_tree(src: &Path, dst: &Path) -> io::Result<()> {
+    walk(src, dst, Op::Reflink)
+}
+
+/// How `walk` makes each file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Op {
+    /// Shares the donor's blocks until either side writes (Linux `FICLONE`).
+    Reflink,
+    Copy,
+    /// The same file as the donor's: a write in one shows in the other.
+    Hardlink,
+}
+
+/// Recreates the tree at `src` as `dst`: folders with their modes, symlinks as symlinks (never
+/// followed), files by `op` with their modes and modification times. Each folder's entries are
+/// handled in parallel; cloning is metadata-bound, so threads help.
+pub fn walk(src: &Path, dst: &Path, op: Op) -> io::Result<()> {
+    let meta = fs::symlink_metadata(src)?;
+    fs::create_dir(dst)?;
+    let entries = fs::read_dir(src)?.collect::<io::Result<Vec<_>>>()?;
+    entries.par_iter().try_for_each(|e| {
+        let (from, to) = (e.path(), dst.join(e.file_name()));
+        let kind = e.file_type()?;
+        if kind.is_dir() {
+            walk(&from, &to, op)
+        } else if kind.is_symlink() {
+            std::os::unix::fs::symlink(fs::read_link(&from)?, &to)
+        } else {
+            file(&from, &to, op)
+        }
+    })?;
+    // Last, so a read-only folder still gets its entries.
+    fs::set_permissions(dst, meta.permissions())
+}
+
+fn file(from: &Path, to: &Path, op: Op) -> io::Result<()> {
+    if op == Op::Hardlink {
+        return fs::hard_link(from, to);
+    }
+    let src = fs::File::open(from)?;
+    let meta = src.metadata()?;
+    let dst = fs::File::create_new(to)?;
+    if op == Op::Reflink {
+        reflink(&src, &dst)?;
+    } else {
+        io::copy(&mut &src, &mut &dst)?;
+    }
+    dst.set_permissions(meta.permissions())?;
+    dst.set_modified(meta.modified()?)
+}
+
+#[cfg(target_os = "linux")]
+fn reflink(src: &fs::File, dst: &fs::File) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+    // SAFETY: both descriptors are open for the duration of the call.
+    if unsafe { libc::ioctl(dst.as_raw_fd(), libc::FICLONE, src.as_raw_fd()) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn reflink(_src: &fs::File, _dst: &fs::File) -> io::Result<()> {
+    Err(io::Error::from(io::ErrorKind::Unsupported))
 }
 
 #[cfg(test)]
@@ -136,6 +230,65 @@ mod tests {
                 "apps/web/node_modules".into()
             ]
         );
+    }
+
+    #[test]
+    fn the_walker_keeps_folders_links_modes_and_times() {
+        use std::os::unix::fs::PermissionsExt;
+        let t = tempfile::tempdir().unwrap();
+        let src = t.path().join("src");
+        fs::create_dir_all(src.join("pkg/bin")).unwrap();
+        fs::write(src.join("pkg/index.js"), "x").unwrap();
+        fs::write(src.join("pkg/bin/run"), "#!/bin/sh\n").unwrap();
+        fs::set_permissions(src.join("pkg/bin/run"), fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("../pkg/index.js", src.join("pkg/bin/link")).unwrap();
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        fs::File::options()
+            .write(true)
+            .open(src.join("pkg/index.js"))
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        for op in [Op::Copy, Op::Hardlink] {
+            let dst = t.path().join(format!("{op:?}"));
+            walk(&src, &dst, op).unwrap();
+            assert_eq!(fs::read_to_string(dst.join("pkg/index.js")).unwrap(), "x");
+            let mode = fs::metadata(dst.join("pkg/bin/run"))
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o755, "{op:?}");
+            assert_eq!(
+                fs::read_link(dst.join("pkg/bin/link")).unwrap(),
+                Path::new("../pkg/index.js")
+            );
+            assert_eq!(
+                fs::metadata(dst.join("pkg/index.js"))
+                    .unwrap()
+                    .modified()
+                    .unwrap(),
+                old
+            );
+        }
+        let ino = |p: &Path| std::os::unix::fs::MetadataExt::ino(&fs::metadata(p).unwrap());
+        assert_eq!(
+            ino(&t.path().join("Hardlink/pkg/index.js")),
+            ino(&src.join("pkg/index.js"))
+        );
+        assert_ne!(
+            ino(&t.path().join("Copy/pkg/index.js")),
+            ino(&src.join("pkg/index.js"))
+        );
+    }
+
+    #[test]
+    fn size_and_free_space() {
+        let t = tempfile::tempdir().unwrap();
+        fs::create_dir_all(t.path().join("node_modules/a")).unwrap();
+        fs::write(t.path().join("node_modules/a/x"), [0u8; 300]).unwrap();
+        fs::write(t.path().join("node_modules/y"), [0u8; 20]).unwrap();
+        assert_eq!(size(t.path(), &["node_modules".into()]), 320);
+        assert!(free_space(t.path()).unwrap() > 0);
     }
 
     #[cfg(target_os = "macos")]

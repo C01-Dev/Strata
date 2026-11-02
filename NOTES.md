@@ -398,3 +398,20 @@ Two runs on macOS (M-series, warm npm cache), both passed:
 - Measured on cal.com `node_modules` (272,033 entries, 3.3 GB, APFS, M-series): `clonefile` of the folder 2.14 s; recursive `copyfile(COPYFILE_CLONE | COPYFILE_RECURSIVE)` 57.5 s (it clones file by file, like Phase 0's `cp -c -R`, which took 51 s for all ignored paths); free space unchanged after both. Deleting either clone took 15.4–15.5 s (`rm -rf`), which matters for `strata rm` later. `COPYFILE_CLONE_FORCE` rejects folders (EINVAL), as its man page says.
 - Gate 3 test again with seeding: `strata new` 0.12–0.13 s per agent (was 2.0–2.2 s with `npm ci`), still passing.
 - Tests (`tests/seed.rs`, replaces `install.rs`): base installs and agents clone from it; the main checkout seeds the base when its key matches; a new key installs and becomes the donor, a second agent clones from it, a donor whose `package.json` changed is never used, removing the donor removes it; a failed install still gives a usable worktree; no `package.json` means tier `none`. Clone assertions are macOS-only until 4.2.
+
+## Phase 4 — task 4.2 clone engine
+
+- macOS: one `clonefile(2)` per seed folder (4.1). Deviation: no recursive `copyfile` fallback. Measured on cal.com, it clones file by file (57.5 s against `clonefile`'s 2–8 s), and on a volume that cannot clone `COPYFILE_CLONE` silently degrades to a full copy, which is the opt-in `copy` tier's job, not the clone tier's. When `clonefile` fails, the configured fallback runs (4.3).
+- Linux: `walk` recreates the tree in parallel (rayon 1.12.0, MIT/Apache-2.0): folders with their modes (set after their entries, so read-only folders work), symlinks as symlinks (never followed), files reflinked with `ioctl(FICLONE)` with mode and mtime kept. Deviation: `libc::FICLONE` instead of the `reflink-copy` crate, since it is one call and `libc` is already a dependency. On ext4 the first file fails (EOPNOTSUPP/EXDEV) and the fallback runs. The same walker does the `copy` and `hardlink` tiers on both platforms. **The Linux path compiles and passes clippy for `aarch64-unknown-linux-gnu` but has not run on Linux yet** (Gate 4 runs it on XFS).
+- A full disk (`ENOSPC`) while cloning: the partial folder is removed, no install is attempted (it would fill the disk too), tier `clone-failed`, and the warning gives free space and the donor's apparent size.
+- `examples/clone.rs` times one way on a tree. cal.com `node_modules` (272,033 entries, 3.3 GB) on APFS, M-series, release build:
+
+| Way | Time |
+| --- | --- |
+| `clonefile` (one call) | 2.14, 4.34, 8.41, 7.11, 7.77 s (five runs, in that order) |
+| walker, copy (parallel) | 20.06 s |
+| walker, hardlink (parallel) | 55.58 s |
+| recursive `copyfile` with `COPYFILE_CLONE` (C, 4.1) | 57.53 s |
+| `rm -rf` of one clone | 13.6–15.5 s |
+
+  `clonefile` times drift upward across back-to-back runs; Spotlight indexing the fresh trees is a suspect, not confirmed. APFS hardlinks are slower than a parallel copy here. Free space did not move for clones and dropped by about the tree's size for the copy.
