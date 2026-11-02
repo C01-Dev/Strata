@@ -171,24 +171,26 @@ The owner chose "Go to Phase 1" after the task 0.8 follow-up, i.e. REPORT option
 - Process re-adoption (pid and start time) belongs to Phase 3, when there are processes.
 - Known gap: a graceful shutdown (SIGTERM, `daemon stop`) waits for in-flight requests; a request stuck forever would block it until the service manager's stop timeout sends SIGKILL, after which recovery runs. No such hang is known after the task 1.5 fix.
 
-## Gate 1 status (2026-11-02): macOS passed, Linux not yet run — waiting for the owner
+## Gate 1 result (2026-11-02): PASSED on macOS and Linux — stopped, waiting for the owner
 
 Gate 1: "the git-level part of every Git row in the edge-case table passes end to end on macOS and Linux."
 
-| Edge-case row (Git) | Test (`crates/strata/tests/`) | macOS |
-| --- | --- | --- |
-| Branch already checked out in another worktree | `worktrees::refuses_a_branch_checked_out_in_another_worktree` | pass |
-| Worktree name or path already exists | `worktrees::refuses_an_existing_name_or_path` | pass |
-| Folder deleted by hand → orphaned, unlock, prune | `worktrees::a_hand_deleted_folder_is_orphaned_unlocked_and_pruned`, `recovery::worktree_deleted_while_the_daemon_was_down_is_orphaned` | pass |
-| `rm` with uncommitted changes refused unless `--force` | `worktrees::rm_refuses_uncommitted_changes_unless_forced` (+ unmerged branches kept) | pass |
-| Base branch moves → base worktree advances | `worktrees::base_worktree_follows_the_base_branch_not_the_main_checkout` | pass |
-| User switches branches in the main checkout → no effect | same test | pass |
-| Agent rebases or merges inside its worktree | `worktrees::rebase_merge_and_branch_switch_inside_a_worktree` | pass |
-| Several agents run git at once; locks survive a stray prune; unlock before own remove | `worktrees::concurrent_creates_serialize_and_locks_survive_a_stray_prune` | pass |
-| Worktrees nested inside the repo (`.claude/worktrees/`) | `worktrees::adopt_a_worktree_nested_inside_the_repo` | pass |
-| Repo uses submodules → warn | `worktrees::new_warns_about_uninitialized_submodules` | pass |
-| Worktree created by another tool → `adopt` | `worktrees::adopt_a_worktree_made_by_plain_git` | pass |
+| Edge-case row (Git) | Test (`crates/strata/tests/`) | macOS | Linux |
+| --- | --- | --- | --- |
+| Branch already checked out in another worktree | `worktrees::refuses_a_branch_checked_out_in_another_worktree` | pass | pass |
+| Worktree name or path already exists | `worktrees::refuses_an_existing_name_or_path` | pass | pass |
+| Folder deleted by hand → orphaned, unlock, prune | `worktrees::a_hand_deleted_folder_is_orphaned_unlocked_and_pruned`, `recovery::worktree_deleted_while_the_daemon_was_down_is_orphaned` | pass | pass |
+| `rm` with uncommitted changes refused unless `--force` | `worktrees::rm_refuses_uncommitted_changes_unless_forced` (+ unmerged branches kept) | pass | pass |
+| Base branch moves → base worktree advances | `worktrees::base_worktree_follows_the_base_branch_not_the_main_checkout` | pass | pass |
+| User switches branches in the main checkout → no effect | same test | pass | pass |
+| Agent rebases or merges inside its worktree | `worktrees::rebase_merge_and_branch_switch_inside_a_worktree` | pass | pass |
+| Several agents run git at once; locks survive a stray prune; unlock before own remove | `worktrees::concurrent_creates_serialize_and_locks_survive_a_stray_prune` | pass | pass |
+| Worktrees nested inside the repo (`.claude/worktrees/`) | `worktrees::adopt_a_worktree_nested_inside_the_repo` | pass | pass |
+| Repo uses submodules → warn | `worktrees::new_warns_about_uninitialized_submodules` | pass | pass |
+| Worktree created by another tool → `adopt` | `worktrees::adopt_a_worktree_made_by_plain_git` | pass | pass |
 
 Also passing: daemon rows (second daemon refused, socket 0600, socket path length), crash recovery at 4 kill points, config and detection. 55 tests, stable over repeated runs; `cargo fmt --check`, `clippy -D warnings` and `cargo deny check` clean.
 
-**Linux: not run.** No Linux machine here, Docker Desktop is installed but not running, and the CI workflow has never run because the repo has no remote. Running it needs either starting Docker Desktop and pulling an official Rust image (about 1 GB), or pushing to a GitHub remote so CI runs. Both need the owner's OK.
+**Linux (owner OK'd Docker):** official `rust:1.99.1-bookworm` image (2.08 GB on disk), Debian bookworm, kernel 7.0.14-linuxkit, aarch64, git 2.39.5, source mounted read-only. `cargo fmt --check` ok, `cargo clippy --locked --all-targets -- -D warnings` clean (first Linux build of the systemd code path), `cargo test --locked`: all 55 pass, first try. The 27 end-to-end tests also pass as an unprivileged user (uid 1000), since the container otherwise runs them as root.
+
+Not covered: Linux x86_64 (CI's `ubuntu-latest` is x86_64; it would need an emulated image here), the real service install on either OS (`STRATA_SYSTEM_TESTS=1`, CI only), and GitHub CI itself (no remote yet).
