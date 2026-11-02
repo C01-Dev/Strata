@@ -8,3 +8,6 @@ publish.workspace = true
 
 [dependencies]
 strata-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -116,3 +116,11 @@ The owner chose "Go to Phase 1" after the task 0.8 follow-up, i.e. REPORT option
 - Toolchain pinned to 1.99.1, edition 2024. Crate versions pinned in `[workspace.dependencies]`, exact versions in the committed `Cargo.lock`.
 - `cargo deny check`: advisories, bans, licenses, sources all ok. Our own crates' license is left open (PLAN open question) with `private.ignore`.
 - CI (`.github/workflows/ci.yml`, macOS + Ubuntu) is written but has never run: the repo has no remote yet.
+
+## Phase 1 — task 1.2 config and init
+
+- `strata.toml` parses into PLAN's full schema with serde defaults; unknown keys are errors, and validation checks the port range, that the proxy port is outside it, `huge_diff_ratio` in (0, 1], a non-empty `tsconfig` list and `dev.app` as a DNS label (it becomes `<agent>.<app>.localhost`).
+- `strata init` resolves the main checkout even when run inside a linked worktree. It writes `strata.toml` once (never overwrites) with `repo.base` = `main`, else `master`, else the current branch, plus `worktree_dir = "../.strata/<folder>"`, the dev command and `dev.app` from the folder name.
+- Detection: lockfile order pnpm, bun, yarn, npm, then `packageManager`, then npm if a `package.json` exists. Yarn Berry is Plug'n'Play unless `.yarnrc.yml` sets `nodeLinker: node-modules` (Yarn 1 never is). TypeScript comes from `node_modules/typescript/package.json`; 7.1 prereleases count as 7.1.
+- Deviation: "checker off" is not written into the config. It is derived from detection each time (Yarn PnP, TypeScript missing or older than 7.1), so a repo that upgrades TypeScript turns the checker on without editing `strata.toml`. `init` prints the reason.
+- Registering the repo with the daemon, the base worktree and the service install are added to `init` in tasks 1.4–1.6.
