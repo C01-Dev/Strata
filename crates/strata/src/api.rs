@@ -1,6 +1,6 @@
 //! Control API: JSON over HTTP/1.1 on the Unix socket.
 
-use crate::ops;
+use crate::{ops, procs};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -16,6 +16,10 @@ use tokio::sync::Notify;
 pub struct Daemon {
     store: Mutex<Store>,
     pub checker: Broker,
+    pub procs: procs::Table,
+    /// Linux with systemd delegation: the daemon's cgroup, with one child per agent.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    cgroup: Option<std::path::PathBuf>,
     /// Held for the whole of every worktree operation: Strata's git calls never overlap.
     pub git: Mutex<()>,
     pub shutdown: Notify,
@@ -29,6 +33,8 @@ impl Daemon {
         Arc::new(Self {
             store: Mutex::new(store),
             checker: Broker::new(home),
+            procs: Default::default(),
+            cgroup: cgroup_root(),
             git: Mutex::new(()),
             shutdown: Notify::new(),
             started_at: now(),
@@ -38,6 +44,36 @@ impl Daemon {
     pub fn store(&self) -> MutexGuard<'_, Store> {
         self.store.lock().unwrap()
     }
+
+    /// The agent's cgroup (created on first use), where the daemon has delegation.
+    pub fn agent_cgroup(&self, _agent: &str) -> Option<std::path::PathBuf> {
+        #[cfg(target_os = "linux")]
+        if let Some(root) = &self.cgroup {
+            return strata_proc::cgroup::agent(root, _agent).ok();
+        }
+        None
+    }
+
+    pub fn kill_agent_cgroup(&self, _agent: &str) {
+        #[cfg(target_os = "linux")]
+        if let Some(cg) = self.agent_cgroup(_agent) {
+            let _ = strata_proc::cgroup::kill(&cg);
+        }
+    }
+}
+
+fn cgroup_root() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        let root = strata_proc::cgroup::setup();
+        match &root {
+            Some(r) => tracing::info!(cgroup = %r.display(), "per-agent cgroups enabled"),
+            None => tracing::info!("no delegated cgroup; tracking process trees by parent pid"),
+        }
+        root
+    }
+    #[cfg(not(target_os = "linux"))]
+    None
 }
 
 pub fn router(daemon: Shared) -> Router {
@@ -49,6 +85,9 @@ pub fn router(daemon: Shared) -> Router {
         .route("/v1/agents/adopt", post(adopt))
         .route("/v1/agents/{name}", delete(remove))
         .route("/v1/agents/{name}/check", post(check))
+        .route("/v1/agents/{name}/procs", post(start_proc))
+        .route("/v1/procs/{id}", delete(stop_proc))
+        .route("/v1/procs/{id}/logs", get(proc_logs))
         .with_state(daemon)
 }
 
@@ -81,13 +120,32 @@ async fn blocking(
     }
 }
 
+/// As `blocking`, for operations that return a value rather than JSON.
+async fn blocking_value<T: Send + 'static>(
+    d: Shared,
+    op: impl FnOnce(&Daemon) -> Result<T> + Send + 'static,
+) -> std::result::Result<T, ApiError> {
+    match tokio::task::spawn_blocking(move || op(&d)).await {
+        Ok(result) => result.map_err(ApiError),
+        Err(e) => Err(ApiError(Error::Io(std::io::Error::other(e)))),
+    }
+}
+
 async fn status(State(d): State<Shared>) -> ApiResult {
     let repos = {
         let store = d.store();
         let mut repos = vec![];
         for repo in store.repos().map_err(ApiError)? {
             let mut r = json!(repo);
-            r["agents"] = json!(store.agents(repo.id).map_err(ApiError)?);
+            let mut agents = vec![];
+            for agent in store.agents(repo.id).map_err(ApiError)? {
+                let mut a = json!(agent);
+                let mut ps = store.processes(agent.id).map_err(ApiError)?;
+                ps.truncate(10);
+                a["processes"] = json!(ps);
+                agents.push(a);
+            }
+            r["agents"] = json!(agents);
             repos.push(r);
         }
         repos
@@ -126,6 +184,15 @@ async fn remove(
 ) -> ApiResult {
     req.name = name.clone();
     let repo = req.repo.canonicalize().unwrap_or_else(|_| req.repo.clone());
+    // Validate first, then stop the agent's processes, then remove the worktree.
+    let check = ops::Remove {
+        repo: req.repo.clone(),
+        name: req.name.clone(),
+        force: req.force,
+        keep_branch: req.keep_branch,
+    };
+    let agent = blocking_value(d.clone(), move |d| ops::removable(d, &check)).await?;
+    procs::stop_agent(&d, &agent).await;
     let out = blocking(d.clone(), |d| ops::remove(d, req)).await?;
     d.checker.dispose_agent(&repo, &name).await;
     Ok(out)
@@ -137,4 +204,43 @@ async fn check(
     Json(req): Json<ops::Check>,
 ) -> ApiResult {
     ops::check(&d, name, req).await.map(Json).map_err(ApiError)
+}
+
+async fn start_proc(
+    State(d): State<Shared>,
+    Path(name): Path<String>,
+    Json(req): Json<procs::ProcRequest>,
+) -> ApiResult {
+    procs::request(&d, name, req)
+        .await
+        .map(Json)
+        .map_err(ApiError)
+}
+
+#[derive(serde::Deserialize, Default)]
+struct Owner {
+    agent: Option<String>,
+    lines: Option<usize>,
+}
+
+async fn stop_proc(
+    State(d): State<Shared>,
+    Path(id): Path<i64>,
+    body: Option<Json<Owner>>,
+) -> ApiResult {
+    let owner = body.map(|Json(o)| o).unwrap_or_default();
+    procs::owned(&d, id, owner.agent.as_deref()).map_err(ApiError)?;
+    procs::stop(&d, id).await.map_err(ApiError)?;
+    Ok(Json(json!({ "stopped": id })))
+}
+
+async fn proc_logs(
+    State(d): State<Shared>,
+    Path(id): Path<i64>,
+    axum::extract::Query(q): axum::extract::Query<Owner>,
+) -> ApiResult {
+    let p = procs::owned(&d, id, q.agent.as_deref()).map_err(ApiError)?;
+    Ok(Json(
+        json!({ "process": p, "lines": procs::tail(&p.log_path, q.lines.unwrap_or(200)) }),
+    ))
 }

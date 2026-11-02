@@ -4,6 +4,7 @@ mod daemon;
 mod init;
 mod logging;
 mod ops;
+mod procs;
 mod service;
 
 use clap::{Parser, Subcommand};
@@ -92,6 +93,23 @@ enum Command {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Run a command in an agent's worktree under supervision; prints its output, exits with its code
+    Run {
+        name: String,
+        /// Stop it after this many seconds
+        #[arg(long, default_value_t = 600)]
+        timeout: u64,
+        #[arg(last = true, required = true)]
+        cmd: Vec<String>,
+    },
+    /// Print the end of a process's log (default: the agent's newest process)
+    Logs {
+        name: String,
+        /// Process id from `strata status`
+        process: Option<i64>,
+        #[arg(long, default_value_t = 200)]
+        lines: usize,
+    },
     /// Show repos and agents
     Status {
         #[arg(long)]
@@ -163,6 +181,12 @@ fn main() {
                 .map_err(Into::into)
                 .and_then(|rt| rt.block_on(bench::run(args)))
         }
+        Command::Run { name, timeout, cmd } => run(name, timeout, cmd),
+        Command::Logs {
+            name,
+            process,
+            lines,
+        } => logs(name, process, lines),
         Command::Status { json } => status(json),
     };
     if let Err(e) = result {
@@ -206,6 +230,80 @@ fn rm(name: String, force: bool, keep_branch: bool) -> Result<()> {
     println!("removed {name}");
     for note in out["notes"].as_array().into_iter().flatten() {
         println!("note: {}", note.as_str().unwrap_or_default());
+    }
+    Ok(())
+}
+
+/// Joins arguments into one `sh -c` command, quoting those the shell would split or expand.
+fn shell_join(args: &[String]) -> String {
+    let safe = |a: &str| {
+        !a.is_empty()
+            && a.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "-_./=:,+@%".contains(c))
+    };
+    args.iter()
+        .map(|a| {
+            if safe(a) {
+                a.clone()
+            } else {
+                format!("'{}'", a.replace('\'', "'\\''"))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn run(name: String, timeout: u64, cmd: Vec<String>) -> Result<()> {
+    let cmd = if cmd.len() == 1 {
+        cmd[0].clone()
+    } else {
+        shell_join(&cmd)
+    };
+    let out = client::post(
+        &format!("/v1/agents/{name}/procs"),
+        json!({ "repo": repo()?, "kind": "run", "cmd": cmd, "timeout_s": timeout }),
+    )?;
+    for line in out["output"].as_array().into_iter().flatten() {
+        println!("{}", line.as_str().unwrap_or_default());
+    }
+    if out["timed_out"] == true {
+        eprintln!("strata: stopped after {timeout} s");
+        std::process::exit(124);
+    }
+    std::process::exit(out["exit_code"].as_i64().unwrap_or(1) as i32);
+}
+
+fn logs(name: String, process: Option<i64>, lines: usize) -> Result<()> {
+    let id = match process {
+        Some(id) => id,
+        None => {
+            let status = client::get("/v1/status")?;
+            let root = repo()?;
+            let repo = status["repos"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|r| r["root"] == root.to_string_lossy().as_ref());
+            let agent = repo.and_then(|r| {
+                r["agents"]
+                    .as_array()?
+                    .iter()
+                    .find(|a| a["name"] == name.as_str())
+                    .cloned()
+            });
+            let agent = agent.ok_or_else(|| {
+                strata_core::Error::NotFound(format!(
+                    "no agent named {name:?}; see `strata status`"
+                ))
+            })?;
+            agent["processes"][0]["id"].as_i64().ok_or_else(|| {
+                strata_core::Error::NotFound(format!("{name} has no processes yet"))
+            })?
+        }
+    };
+    let out = client::get(&format!("/v1/procs/{id}/logs?lines={lines}&agent={name}"))?;
+    for line in out["lines"].as_array().into_iter().flatten() {
+        println!("{}", line.as_str().unwrap_or_default());
     }
     Ok(())
 }

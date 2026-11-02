@@ -1,6 +1,6 @@
 //! `strata daemon start|stop|status`, and the daemon process itself.
 
-use crate::{api, logging, ops};
+use crate::{api, logging, ops, procs};
 use std::fs::{self, DirBuilder, File, OpenOptions, Permissions, TryLockError};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
@@ -154,6 +154,10 @@ fn run() -> Result<()> {
     let daemon = api::Daemon::new(Store::open(&home.join("state.db"))?, &home);
     if let Err(e) = ops::recover(&daemon) {
         tracing::error!("crash recovery: {e}");
+    }
+    match procs::recover(&daemon) {
+        Ok(dead) => procs::restart_dev_servers(&daemon, dead),
+        Err(e) => tracing::error!("process recovery: {e}"),
     }
     // We hold the lock, so a socket file left behind belongs to a dead daemon.
     let _ = fs::remove_file(&socket);

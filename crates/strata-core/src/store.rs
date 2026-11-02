@@ -78,6 +78,42 @@ impl AgentState {
     }
 }
 
+/// A supervised process. `state`: running, stopping, stopped (by Strata), exited (by itself),
+/// dead (found gone after a daemon restart).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Process {
+    pub id: i64,
+    pub agent_id: i64,
+    pub kind: String,
+    pub cmd: String,
+    pub pid: Option<u32>,
+    pub pid_start_time: Option<u64>,
+    pub port: Option<u16>,
+    pub state: String,
+    pub log_path: PathBuf,
+    pub started_at: Option<i64>,
+    pub exit_code: Option<i32>,
+}
+
+const PROCESS_COLS: &str =
+    "id, agent_id, kind, cmd, pid, pid_start_time, port, state, log_path, started_at, exit_code";
+
+fn process(r: &Row) -> rusqlite::Result<Process> {
+    Ok(Process {
+        id: r.get(0)?,
+        agent_id: r.get(1)?,
+        kind: r.get(2)?,
+        cmd: r.get(3)?,
+        pid: r.get(4)?,
+        pid_start_time: r.get::<_, Option<i64>>(5)?.map(|t| t as u64),
+        port: r.get(6)?,
+        state: r.get(7)?,
+        log_path: PathBuf::from(r.get::<_, String>(8)?),
+        started_at: r.get(9)?,
+        exit_code: r.get(10)?,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Event {
     pub at: i64,
@@ -207,6 +243,11 @@ impl Store {
             .optional()?)
     }
 
+    pub fn agent_by_id(&self, id: i64) -> Result<Option<Agent>> {
+        let sql = format!("SELECT {AGENT_COLS} FROM agents WHERE id = ?1");
+        Ok(self.conn.query_row(&sql, [id], agent).optional()?)
+    }
+
     pub fn agent_by_path(&self, path: &Path) -> Result<Option<Agent>> {
         let sql = format!("SELECT {AGENT_COLS} FROM agents WHERE path = ?1");
         Ok(self.conn.query_row(&sql, [text(path)?], agent).optional()?)
@@ -229,7 +270,12 @@ impl Store {
         Ok(())
     }
 
+    /// Deletes the agent with its process records, ports and snapshot record.
     pub fn delete_agent(&self, id: i64) -> Result<()> {
+        for table in ["processes", "ports", "snapshots"] {
+            self.conn
+                .execute(&format!("DELETE FROM {table} WHERE agent_id = ?1"), [id])?;
+        }
         self.conn
             .execute("DELETE FROM agents WHERE id = ?1", [id])?;
         Ok(())
@@ -249,6 +295,103 @@ impl Store {
             "UPDATE agents SET branch = ?1 WHERE id = ?2",
             params![branch, id],
         )?;
+        Ok(())
+    }
+
+    pub fn insert_process(
+        &self,
+        agent_id: i64,
+        kind: &str,
+        cmd: &str,
+        log_path: &Path,
+        port: Option<u16>,
+    ) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO processes (agent_id, kind, cmd, port, state, log_path) VALUES (?1, ?2, ?3, ?4, 'starting', ?5)",
+            params![agent_id, kind, cmd, port, text(log_path)?],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn set_process_running(&self, id: i64, pid: u32, start: u64) -> Result<()> {
+        let sql = "UPDATE processes SET pid = ?1, pid_start_time = ?2, state = 'running', started_at = ?3 WHERE id = ?4";
+        self.conn
+            .execute(sql, params![pid, start as i64, now(), id])?;
+        Ok(())
+    }
+
+    pub fn set_process_state(&self, id: i64, state: &str, exit_code: Option<i32>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE processes SET state = ?1, exit_code = COALESCE(?2, exit_code) WHERE id = ?3",
+            params![state, exit_code, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_process_port(&self, id: i64, port: u16) -> Result<()> {
+        self.conn.execute(
+            "UPDATE processes SET port = ?1 WHERE id = ?2",
+            params![port, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn process(&self, id: i64) -> Result<Option<Process>> {
+        let sql = format!("SELECT {PROCESS_COLS} FROM processes WHERE id = ?1");
+        Ok(self.conn.query_row(&sql, [id], process).optional()?)
+    }
+
+    /// An agent's processes, newest first.
+    pub fn processes(&self, agent_id: i64) -> Result<Vec<Process>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {PROCESS_COLS} FROM processes WHERE agent_id = ?1 ORDER BY id DESC"
+        ))?;
+        Ok(stmt
+            .query_map([agent_id], process)?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Processes Strata believes are alive (starting, running or stopping).
+    pub fn live_processes(&self) -> Result<Vec<Process>> {
+        let sql = format!(
+            "SELECT {PROCESS_COLS} FROM processes WHERE state IN ('starting', 'running', 'stopping') ORDER BY id"
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        Ok(stmt
+            .query_map([], process)?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Records `port` for the agent; false if another agent holds it.
+    pub fn reserve_port(&self, port: u16, agent_id: i64) -> Result<bool> {
+        let n = self.conn.execute(
+            "INSERT OR IGNORE INTO ports (port, agent_id, state) VALUES (?1, ?2, 'reserved')",
+            params![port, agent_id],
+        )?;
+        Ok(n == 1)
+    }
+
+    pub fn agent_port(&self, agent_id: i64) -> Result<Option<u16>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT port FROM ports WHERE agent_id = ?1 ORDER BY port LIMIT 1",
+                [agent_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn ports(&self) -> Result<Vec<u16>> {
+        let mut stmt = self.conn.prepare("SELECT port FROM ports ORDER BY port")?;
+        Ok(stmt
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub fn free_ports(&self, agent_id: i64) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM ports WHERE agent_id = ?1", [agent_id])?;
         Ok(())
     }
 
@@ -354,6 +497,46 @@ mod tests {
         assert!(matches!(err, Error::Refused(_)), "{err}");
         s.delete_agent(a.id).unwrap();
         assert_eq!(s.agent(repo.id, "fix-login").unwrap(), None);
+    }
+
+    #[test]
+    fn processes_and_ports() {
+        let (_dir, s) = store();
+        let repo = s.upsert_repo(Path::new("/src/app"), "main", None).unwrap();
+        let a = s
+            .insert_agent(repo.id, "a", Path::new("/w/a"), "a", AgentState::Ready)
+            .unwrap();
+        let b = s
+            .insert_agent(repo.id, "b", Path::new("/w/b"), "b", AgentState::Ready)
+            .unwrap();
+        assert!(s.reserve_port(4100, a.id).unwrap());
+        assert!(!s.reserve_port(4100, b.id).unwrap(), "one owner per port");
+        assert_eq!(s.agent_port(a.id).unwrap(), Some(4100));
+        let id = s
+            .insert_process(
+                a.id,
+                "dev",
+                "next dev",
+                Path::new("/h/logs/a/dev.log"),
+                Some(4100),
+            )
+            .unwrap();
+        s.set_process_running(id, 123, 456).unwrap();
+        assert_eq!(s.live_processes().unwrap().len(), 1);
+        s.set_process_state(id, "exited", Some(1)).unwrap();
+        let p = s.process(id).unwrap().unwrap();
+        assert_eq!(
+            (p.pid, p.pid_start_time, p.state.as_str(), p.exit_code),
+            (Some(123), Some(456), "exited", Some(1))
+        );
+        assert!(s.live_processes().unwrap().is_empty());
+        s.delete_agent(a.id).unwrap();
+        assert_eq!(
+            s.ports().unwrap(),
+            Vec::<u16>::new(),
+            "ports go with the agent"
+        );
+        assert!(s.process(id).unwrap().is_none());
     }
 
     #[test]

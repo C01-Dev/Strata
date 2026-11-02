@@ -117,8 +117,28 @@ pub fn wait_until(what: &str, mut check: impl FnMut() -> bool) {
 }
 
 impl Drop for Env {
-    /// Never leave a test daemon running.
+    /// Never leave a test daemon or a supervised process running.
     fn drop(&mut self) {
+        if let Ok(status) = serde_json::from_slice::<Value>(
+            &self
+                .strata_in(&self.root.clone(), &["status", "--json"])
+                .stdout,
+        ) {
+            for repo in status["repos"].as_array().into_iter().flatten() {
+                for a in repo["agents"].as_array().into_iter().flatten() {
+                    for p in a["processes"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter(|p| p["state"] == "running")
+                    {
+                        let _ = Command::new("kill")
+                            .args(["-9", &format!("-{}", p["pid"])])
+                            .status();
+                    }
+                }
+            }
+        }
         let _ = self.strata_in(&self.root.clone(), &["daemon", "stop"]);
     }
 }

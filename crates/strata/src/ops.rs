@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use strata_checker::broker::{Op, Request, Settings};
 use strata_core::config::{Config, is_dns_label, to_dns_label};
-use strata_core::store::{AgentState, Repo};
+use strata_core::store::{Agent, AgentState, Repo};
 use strata_core::{Error, Result, detect};
 use strata_git as git;
 
@@ -337,10 +337,10 @@ pub struct Remove {
     pub keep_branch: bool,
 }
 
-pub fn remove(d: &Daemon, req: Remove) -> Result<Value> {
-    let _git = d.git.lock().unwrap();
-    let (repo, cfg) = repo_for(d, &req.repo)?;
-    let root = &repo.root;
+/// Everything `remove` refuses for, checked without changing anything, so the caller can stop
+/// the agent's processes first.
+pub fn removable(d: &Daemon, req: &Remove) -> Result<Agent> {
+    let (repo, _) = repo_for(d, &req.repo)?;
     let agent = d.store().agent(repo.id, &req.name)?.ok_or_else(|| {
         Error::NotFound(format!(
             "no agent named {:?}; see `strata status`",
@@ -353,15 +353,25 @@ pub fn remove(d: &Daemon, req: Remove) -> Result<Value> {
             agent.name
         )));
     }
-    let mut notes = vec![];
-    if agent.path.exists() {
+    if agent.path.exists() && !req.force {
         let changed = git::changes(&agent.path)?;
-        if changed > 0 && !req.force {
+        if changed > 0 {
             return Err(Error::Refused(format!(
                 "{} has uncommitted changes in {changed} file(s); commit or stash them, or pass --force to discard them",
                 agent.name
             )));
         }
+    }
+    Ok(agent)
+}
+
+pub fn remove(d: &Daemon, req: Remove) -> Result<Value> {
+    let _git = d.git.lock().unwrap();
+    let (repo, cfg) = repo_for(d, &req.repo)?;
+    let root = &repo.root;
+    let agent = removable(d, &req)?;
+    let mut notes = vec![];
+    if agent.path.exists() {
         d.store().set_agent_state(agent.id, AgentState::Removing)?;
         fault("rm:before_git");
         if let Err(e) = git::remove(root, &agent.path, req.force) {
@@ -457,8 +467,9 @@ pub async fn maintain(d: Arc<Daemon>) {
         let dd = d.clone();
         match tokio::task::spawn_blocking(move || tick(&dd)).await {
             Ok(Ok(orphaned)) => {
-                for (repo, name) in orphaned {
-                    d.checker.dispose_agent(&repo, &name).await;
+                for (repo, agent) in orphaned {
+                    crate::procs::stop_agent(&d, &agent).await;
+                    d.checker.dispose_agent(&repo, &agent.name).await;
                 }
             }
             Ok(Err(e)) => tracing::warn!("maintenance: {e}"),
@@ -470,8 +481,9 @@ pub async fn maintain(d: Arc<Daemon>) {
     }
 }
 
-/// Returns agents it marked orphaned, as (repo root, name), so their snapshots can go.
-fn tick(d: &Daemon) -> Result<Vec<(PathBuf, String)>> {
+/// Returns agents it marked orphaned, with their repo root, so their processes and snapshots can go.
+fn tick(d: &Daemon) -> Result<Vec<(PathBuf, Agent)>> {
+    crate::procs::refresh(d);
     let mut orphaned = vec![];
     let _git = d.git.lock().unwrap();
     // Bind first: a `for` keeps its iterator expression's temporaries (the store guard) alive
@@ -507,7 +519,7 @@ fn tick(d: &Daemon) -> Result<Vec<(PathBuf, String)>> {
                     agent = agent.name,
                     "worktree folder deleted by hand; marked orphaned"
                 );
-                orphaned.push((repo.root.clone(), agent.name));
+                orphaned.push((repo.root.clone(), agent));
                 continue;
             }
             let branch = git::current_branch(&agent.path)?.unwrap_or_else(|| DETACHED.into());
@@ -531,27 +543,24 @@ pub struct Check {
 }
 
 /// A checker query for an agent, answered from the shared checker (see strata-checker).
-pub async fn check(d: &Daemon, name: String, req: Check) -> Result<Value> {
-    let (repo, agent, cfg) = {
-        let root = req.repo.canonicalize()?;
-        let store = d.store();
-        let repo = store.repo_by_root(&root)?.ok_or_else(|| {
-            Error::NotFound(format!(
-                "{} is not registered with Strata; run `strata init` there",
-                root.display()
-            ))
-        })?;
-        let agent = store.agent(repo.id, &name)?.ok_or_else(|| {
-            Error::NotFound(format!("no agent named {name:?}; see `strata status`"))
-        })?;
-        (repo, agent, Config::load(&root)?)
-    };
+/// The repo, a ready agent and the repo's config, for requests that act inside a worktree.
+pub fn ready_agent(d: &Daemon, repo: &Path, name: &str) -> Result<(Repo, Agent, Config)> {
+    let (repo, cfg) = repo_for(d, repo)?;
+    let agent = d
+        .store()
+        .agent(repo.id, name)?
+        .ok_or_else(|| Error::NotFound(format!("no agent named {name:?}; see `strata status`")))?;
     if agent.state != AgentState::Ready {
         return Err(Error::Refused(format!(
             "agent {name:?} is {}, not ready",
             agent.state.as_str()
         )));
     }
+    Ok((repo, agent, cfg))
+}
+
+pub async fn check(d: &Daemon, name: String, req: Check) -> Result<Value> {
+    let (repo, agent, cfg) = ready_agent(d, &req.repo, &name)?;
     let need = |what: &str| Error::Refused(format!("{} needs {what}", req.op));
     let file = || req.file.clone().ok_or_else(|| need("file"));
     let at = || -> Result<(String, u32, u32)> {
