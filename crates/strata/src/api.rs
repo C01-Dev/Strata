@@ -8,12 +8,14 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex, MutexGuard};
+use strata_checker::broker::Broker;
 use strata_core::store::{Store, now};
 use strata_core::{Error, Result};
 use tokio::sync::Notify;
 
 pub struct Daemon {
     store: Mutex<Store>,
+    pub checker: Broker,
     /// Held for the whole of every worktree operation: Strata's git calls never overlap.
     pub git: Mutex<()>,
     pub shutdown: Notify,
@@ -23,9 +25,10 @@ pub struct Daemon {
 pub type Shared = Arc<Daemon>;
 
 impl Daemon {
-    pub fn new(store: Store) -> Shared {
+    pub fn new(store: Store, home: &std::path::Path) -> Shared {
         Arc::new(Self {
             store: Mutex::new(store),
+            checker: Broker::new(home),
             git: Mutex::new(()),
             shutdown: Notify::new(),
             started_at: now(),
@@ -45,6 +48,7 @@ pub fn router(daemon: Shared) -> Router {
         .route("/v1/agents", post(new_agent))
         .route("/v1/agents/adopt", post(adopt))
         .route("/v1/agents/{name}", delete(remove))
+        .route("/v1/agents/{name}/check", post(check))
         .with_state(daemon)
 }
 
@@ -78,18 +82,22 @@ async fn blocking(
 }
 
 async fn status(State(d): State<Shared>) -> ApiResult {
-    let store = d.store();
-    let mut repos = vec![];
-    for repo in store.repos().map_err(ApiError)? {
-        let mut r = json!(repo);
-        r["agents"] = json!(store.agents(repo.id).map_err(ApiError)?);
-        repos.push(r);
-    }
+    let repos = {
+        let store = d.store();
+        let mut repos = vec![];
+        for repo in store.repos().map_err(ApiError)? {
+            let mut r = json!(repo);
+            r["agents"] = json!(store.agents(repo.id).map_err(ApiError)?);
+            repos.push(r);
+        }
+        repos
+    };
     Ok(Json(json!({
         "pid": std::process::id(),
         "version": env!("CARGO_PKG_VERSION"),
         "started_at": d.started_at,
         "repos": repos,
+        "checker": d.checker.status().await,
     })))
 }
 
@@ -116,6 +124,17 @@ async fn remove(
     Path(name): Path<String>,
     Json(mut req): Json<ops::Remove>,
 ) -> ApiResult {
-    req.name = name;
-    blocking(d, |d| ops::remove(d, req)).await
+    req.name = name.clone();
+    let repo = req.repo.canonicalize().unwrap_or_else(|_| req.repo.clone());
+    let out = blocking(d.clone(), |d| ops::remove(d, req)).await?;
+    d.checker.dispose_agent(&repo, &name).await;
+    Ok(out)
+}
+
+async fn check(
+    State(d): State<Shared>,
+    Path(name): Path<String>,
+    Json(req): Json<ops::Check>,
+) -> ApiResult {
+    ops::check(&d, name, req).await.map(Json).map_err(ApiError)
 }

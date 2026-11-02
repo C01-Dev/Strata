@@ -1,10 +1,10 @@
 //! Blocking HTTP/1.1 client for the daemon's Unix socket. One request per connection
 //! (`Connection: close`), JSON in and out; the daemon never streams these responses.
 
+use crate::{Error, Result, strata_home};
 use serde_json::Value;
 use std::io::{ErrorKind, Read, Write};
 use std::os::unix::net::UnixStream;
-use strata_core::{Error, Result, strata_home};
 
 pub const SOCKET: &str = "strata.sock";
 

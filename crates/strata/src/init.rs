@@ -1,9 +1,10 @@
 //! `strata init`: detect the repo's setup, write `strata.toml`, install the per-user service
 //! (which starts the daemon) and register the repo (which creates the base worktree).
 
-use crate::{client, daemon, service};
+use crate::{daemon, service};
 use serde_json::json;
 use std::fs;
+use strata_core::client;
 use strata_core::config::{self, Config, to_dns_label};
 use strata_core::{Result, detect};
 

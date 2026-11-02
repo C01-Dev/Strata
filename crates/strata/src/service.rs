@@ -230,7 +230,7 @@ mod tests {
         assert!(file.exists());
         let mut up = false;
         for _ in 0..100 {
-            if crate::client::get("/v1/status").is_ok() {
+            if strata_core::client::get("/v1/status").is_ok() {
                 up = true;
                 break;
             }

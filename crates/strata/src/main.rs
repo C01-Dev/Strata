@@ -1,5 +1,4 @@
 mod api;
-mod client;
 mod daemon;
 mod init;
 mod logging;
@@ -9,7 +8,7 @@ mod service;
 use clap::{Parser, Subcommand};
 use serde_json::json;
 use std::path::PathBuf;
-use strata_core::Result;
+use strata_core::{Result, client};
 
 #[derive(Parser)]
 #[command(
@@ -57,6 +56,20 @@ enum Command {
         #[arg(long)]
         keep_branch: bool,
     },
+    /// Print diagnostics for an agent's worktree from the shared checker
+    Check {
+        name: String,
+        /// One file (relative to the worktree); default: the whole project
+        file: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// MCP server on stdio for an agent (put `strata mcp` in the agent's MCP config)
+    Mcp {
+        /// Agent name, when neither MCP roots nor the working directory identify it
+        #[arg(long)]
+        agent: Option<String>,
+    },
     /// Show repos and agents
     Status {
         #[arg(long)]
@@ -102,6 +115,10 @@ fn main() {
             force,
             keep_branch,
         } => rm(name, force, keep_branch),
+        Command::Check { name, file, json } => check(name, file, json),
+        Command::Mcp { agent } => tokio::runtime::Runtime::new()
+            .map_err(Into::into)
+            .and_then(|rt| rt.block_on(strata_mcp::serve(agent))),
         Command::Status { json } => status(json),
     };
     if let Err(e) = result {
@@ -145,6 +162,26 @@ fn rm(name: String, force: bool, keep_branch: bool) -> Result<()> {
     println!("removed {name}");
     for note in out["notes"].as_array().into_iter().flatten() {
         println!("note: {}", note.as_str().unwrap_or_default());
+    }
+    Ok(())
+}
+
+/// Exits 1 when there are errors, like tsc.
+fn check(name: String, file: Option<String>, json: bool) -> Result<()> {
+    let out = client::post(
+        &format!("/v1/agents/{name}/check"),
+        json!({ "repo": repo()?, "op": "diagnostics", "file": file }),
+    )?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+    } else {
+        println!("{}", strata_mcp::format::diagnostics(&out));
+    }
+    if out["items"]
+        .as_array()
+        .is_some_and(|items| items.iter().any(|d| d["category"] == "error"))
+    {
+        std::process::exit(1);
     }
     Ok(())
 }

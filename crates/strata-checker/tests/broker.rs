@@ -251,7 +251,7 @@ async fn unshared_when_dependencies_differ_or_the_diff_is_huge() {
         d["sharing"]["reason"]
             .as_str()
             .unwrap()
-            .starts_with("large diff (1 of"),
+            .starts_with("large diff (1 of "),
         "{d}"
     );
     f.broker.shutdown().await;

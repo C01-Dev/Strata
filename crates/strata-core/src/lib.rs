@@ -1,5 +1,6 @@
 //! Config, shared types, errors and the state store.
 
+pub mod client;
 pub mod config;
 pub mod detect;
 mod error;

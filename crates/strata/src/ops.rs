@@ -8,6 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use strata_checker::broker::{Op, Request, Settings};
 use strata_core::config::{Config, is_dns_label, to_dns_label};
 use strata_core::store::{AgentState, Repo};
 use strata_core::{Error, Result, detect};
@@ -66,13 +67,50 @@ fn ensure_base(root: &Path, cfg: &Config) -> Result<(PathBuf, bool)> {
             if moved {
                 git::checkout_detached(&path, &commit)?;
             }
+            link_dependencies(root, &path, &cfg.seed.paths)?;
             return Ok((path, moved));
         }
         git::forget(root, &path)?;
     }
     fs::create_dir_all(cfg.worktree_dir(root))?;
     git::add_detached(root, &path, &commit)?;
+    link_dependencies(root, &path, &cfg.seed.paths)?;
     Ok((path, true))
+}
+
+/// Phase 2 stopgap until Phase 4 seeds `.base` by clone: symlink each `seed.paths` folder
+/// (`node_modules`, `apps/*/node_modules`, ...) that exists in the main checkout into the base
+/// worktree, so the shared checker can resolve packages. Agents share the base's resolution.
+fn link_dependencies(root: &Path, base: &Path, patterns: &[String]) -> Result<()> {
+    for pattern in patterns {
+        let mut matches = vec![PathBuf::new()];
+        for part in pattern.split('/') {
+            let mut next = vec![];
+            for m in &matches {
+                if part == "*" {
+                    for entry in fs::read_dir(root.join(m)).into_iter().flatten().flatten() {
+                        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                            next.push(m.join(entry.file_name()));
+                        }
+                    }
+                } else {
+                    next.push(m.join(part));
+                }
+            }
+            matches = next;
+        }
+        for rel in matches {
+            let (from, to) = (root.join(&rel), base.join(&rel));
+            if from.is_dir()
+                && !to.exists()
+                && to.symlink_metadata().is_err()
+                && to.parent().is_some_and(Path::exists)
+            {
+                std::os::unix::fs::symlink(&from, &to)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -350,16 +388,29 @@ pub fn recover(d: &Daemon) -> Result<()> {
 // ponytail: polling git; Phase 2's file watcher can trigger this instead.
 pub async fn maintain(d: Arc<Daemon>) {
     let mut every = tokio::time::interval(Duration::from_secs(2));
+    let mut n = 0u64;
     loop {
         every.tick().await;
-        let d = d.clone();
-        if let Ok(Err(e)) = tokio::task::spawn_blocking(move || tick(&d)).await {
-            tracing::warn!("maintenance: {e}");
+        n += 1;
+        let dd = d.clone();
+        match tokio::task::spawn_blocking(move || tick(&dd)).await {
+            Ok(Ok(orphaned)) => {
+                for (repo, name) in orphaned {
+                    d.checker.dispose_agent(&repo, &name).await;
+                }
+            }
+            Ok(Err(e)) => tracing::warn!("maintenance: {e}"),
+            Err(e) => tracing::warn!("maintenance: {e}"),
+        }
+        if n.is_multiple_of(15) {
+            d.checker.maintain().await;
         }
     }
 }
 
-fn tick(d: &Daemon) -> Result<()> {
+/// Returns agents it marked orphaned, as (repo root, name), so their snapshots can go.
+fn tick(d: &Daemon) -> Result<Vec<(PathBuf, String)>> {
+    let mut orphaned = vec![];
     let _git = d.git.lock().unwrap();
     // Bind first: a `for` keeps its iterator expression's temporaries (the store guard) alive
     // for the whole loop, and the body takes the store lock again.
@@ -394,6 +445,7 @@ fn tick(d: &Daemon) -> Result<()> {
                     agent = agent.name,
                     "worktree folder deleted by hand; marked orphaned"
                 );
+                orphaned.push((repo.root.clone(), agent.name));
                 continue;
             }
             let branch = git::current_branch(&agent.path)?.unwrap_or_else(|| DETACHED.into());
@@ -402,5 +454,68 @@ fn tick(d: &Daemon) -> Result<()> {
             }
         }
     }
-    Ok(())
+    Ok(orphaned)
+}
+
+#[derive(Deserialize)]
+pub struct Check {
+    pub repo: PathBuf,
+    /// diagnostics | hover | definition | references | symbols
+    pub op: String,
+    pub file: Option<String>,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
+    pub limit: Option<usize>,
+}
+
+/// A checker query for an agent, answered from the shared checker (see strata-checker).
+pub async fn check(d: &Daemon, name: String, req: Check) -> Result<Value> {
+    let (repo, agent, cfg) = {
+        let root = req.repo.canonicalize()?;
+        let store = d.store();
+        let repo = store.repo_by_root(&root)?.ok_or_else(|| {
+            Error::NotFound(format!(
+                "{} is not registered with Strata; run `strata init` there",
+                root.display()
+            ))
+        })?;
+        let agent = store.agent(repo.id, &name)?.ok_or_else(|| {
+            Error::NotFound(format!("no agent named {name:?}; see `strata status`"))
+        })?;
+        (repo, agent, Config::load(&root)?)
+    };
+    if agent.state != AgentState::Ready {
+        return Err(Error::Refused(format!(
+            "agent {name:?} is {}, not ready",
+            agent.state.as_str()
+        )));
+    }
+    let need = |what: &str| Error::Refused(format!("{} needs {what}", req.op));
+    let file = || req.file.clone().ok_or_else(|| need("file"));
+    let at = || -> Result<(String, u32, u32)> {
+        Ok((
+            file()?,
+            req.line.ok_or_else(|| need("line"))?,
+            req.column.ok_or_else(|| need("column"))?,
+        ))
+    };
+    let op = match req.op.as_str() {
+        "diagnostics" => Op::Diagnostics {
+            file: req.file.clone(),
+            limit: req.limit,
+        },
+        "hover" => at().map(|(file, line, column)| Op::Hover { file, line, column })?,
+        "definition" => at().map(|(file, line, column)| Op::Definition { file, line, column })?,
+        "references" => at().map(|(file, line, column)| Op::References { file, line, column })?,
+        "symbols" => Op::Symbols { file: file()? },
+        other => return Err(Error::Refused(format!("unknown check {other:?}"))),
+    };
+    let request = Request {
+        base: base_path(&repo.root, &cfg),
+        repo: repo.root,
+        agent: name,
+        worktree: agent.path,
+        op,
+    };
+    d.checker.check(request, &Settings::from_config(&cfg)).await
 }

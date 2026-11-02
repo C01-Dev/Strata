@@ -1,6 +1,5 @@
 //! `strata daemon start|stop|status`, and the daemon process itself.
 
-use crate::client::{self, SOCKET};
 use crate::{api, logging, ops};
 use std::fs::{self, DirBuilder, File, OpenOptions, Permissions, TryLockError};
 use std::io::Write;
@@ -10,6 +9,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use strata_core::client::{self, SOCKET};
 use strata_core::store::Store;
 use strata_core::{Error, Result, strata_home};
 use tokio::signal::unix::{SignalKind, signal};
@@ -151,7 +151,7 @@ fn run() -> Result<()> {
     }
     let _lock = lock(&home)?;
     logging::init(&home, "daemon")?;
-    let daemon = api::Daemon::new(Store::open(&home.join("state.db"))?);
+    let daemon = api::Daemon::new(Store::open(&home.join("state.db"))?, &home);
     if let Err(e) = ops::recover(&daemon) {
         tracing::error!("crash recovery: {e}");
     }
@@ -164,6 +164,7 @@ fn run() -> Result<()> {
         tokio::spawn(ops::maintain(daemon.clone()));
         let mut term = signal(SignalKind::terminate())?;
         let stop = daemon.clone();
+        let checker = daemon.clone();
         axum::serve(listener, api::router(daemon))
             .with_graceful_shutdown(async move {
                 tokio::select! {
@@ -173,6 +174,7 @@ fn run() -> Result<()> {
                 }
             })
             .await?;
+        checker.checker.shutdown().await;
         Ok::<_, Error>(())
     })?;
     let _ = fs::remove_file(&socket);

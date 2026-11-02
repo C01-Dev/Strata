@@ -539,12 +539,15 @@ impl Group {
             Sharing::Unshared {
                 reason: "dependencies differ".into(),
             }
-        } else if diff.changed.len() as f64 > self.settings.huge_diff_ratio * s.base.len() as f64 {
+        } else if diff.changed.len() as f64
+            > self.settings.huge_diff_ratio * s.program_files.max(1) as f64
+        {
+            // PLAN: a share of the project's files, i.e. the program (libs and dependency types included).
             Sharing::Unshared {
                 reason: format!(
-                    "large diff ({} of {} files changed)",
+                    "large diff ({} of {} project files changed)",
                     diff.changed.len(),
-                    s.base.len()
+                    s.program_files
                 ),
             }
         } else {

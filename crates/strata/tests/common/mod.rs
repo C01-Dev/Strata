@@ -43,6 +43,10 @@ pub fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()
 }
 
+pub fn write_file(dir: &Path, file: &str, text: &str) {
+    std::fs::write(dir.join(file), text).unwrap();
+}
+
 pub fn commit_file(dir: &Path, file: &str, text: &str) {
     std::fs::write(dir.join(file), text).unwrap();
     git(dir, &["add", file]);
@@ -65,6 +69,35 @@ pub fn env(files: &[(&str, &str)]) -> Env {
     let root = root.canonicalize().unwrap();
     let home = tmp.path().canonicalize().unwrap().join("home");
     Env { tmp, root, home }
+}
+
+/// A TypeScript repo (TypeScript 7.1 linked from packages/tsbridge, ignored by git) plus
+/// `strata init`.
+pub fn ts_initialized() -> Env {
+    let e = env(&[
+        (".gitignore", "node_modules\n"),
+        ("package.json", r#"{"name":"app","private":true}"#),
+        (
+            "tsconfig.json",
+            r#"{ "compilerOptions": { "strict": true, "target": "es2022", "module": "esnext", "moduleResolution": "bundler" }, "include": ["src"] }"#,
+        ),
+        (
+            "src/a.ts",
+            "/** Adds one. */\nexport function addOne(n: number): number { return n + 1; }\n",
+        ),
+        (
+            "src/b.ts",
+            "import { addOne } from \"./a\";\nexport const total = addOne(2);\n",
+        ),
+    ]);
+    let ts = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/tsbridge/node_modules/typescript")
+        .canonicalize()
+        .expect("run `npm ci --prefix packages/tsbridge`");
+    std::fs::create_dir(e.root.join("node_modules")).unwrap();
+    std::os::unix::fs::symlink(ts, e.root.join("node_modules/typescript")).unwrap();
+    e.strata(&["init", "--no-service"]);
+    e
 }
 
 /// `env` plus `strata init` (daemon running, base worktree created).

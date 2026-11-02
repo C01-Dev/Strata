@@ -14,10 +14,12 @@ strata-git = { path = "crates/strata-git" }
 strata-checker = { path = "crates/strata-checker" }
 strata-overlay = { path = "crates/strata-overlay" }
 strata-proc = { path = "crates/strata-proc" }
+strata-mcp = { path = "crates/strata-mcp" }
 axum = "0.8.9"
 clap = { version = "4.6.7", features = ["derive"] }
 libc = "0.2"
 proptest = "1.12.0"
+rmcp = { version = "3.8.0", default-features = false, features = ["server", "macros", "transport-io"] }
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
