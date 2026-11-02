@@ -466,3 +466,24 @@ Two runs on macOS (M-series, warm npm cache), both passed:
 | 2 | own `npm ci` each | 2094 MB | −1034 MB |
 
   Footprint (macOS `phys_footprint`, which excludes clean file pages) is the same within 1%, as expected: the servers' own memory does not depend on how their files got there. The page-cache column is not usable. The machine (24 GB) had about 130 MB free and the system evicted file cache while the servers allocated, so every delta is negative. The `mincore` test above is the evidence for the page-cache answer, not this column.
+
+## Gate 4 (2026-11-02): APFS half measured; XFS half not run yet
+
+Gate 4: "on the cal.com fixture (200k+ files), `strata new` with a matching donor takes under 15 s on APFS and on XFS with reflink, and the fixture's own tests pass inside the seeded worktree."
+
+- Setup: `bench/fixtures/calcom/base` (cal.com at the Phase 0 pin, Yarn 4 with `nodeLinker: node-modules`, 272,033 entries and 3.3 GB in 12 `node_modules` folders, 7,711 tracked files), release build, `STRATA_HOME=bench/fixtures/g4h`. A home under the scratchpad failed cleanly: the socket path came to over 103 bytes, which Strata's own check caught. `strata.toml` adds the files cal.com generates at install time (`packages/prisma/{generated,zod,enums}`, `packages/platform/*/dist`, `packages/kysely/types.ts`, the last a single file, which seeding now accepts) and sets `warm_pool = 0`, so every `new` really clones.
+- `strata init`: 7.56 s (base worktree checked out and cloned from the main checkout, whose key matched).
+- `strata new` with the base as matching donor (clone tier, APFS, M-series): **7.59 s, 7.87 s, 7.98 s** (three agents). That covers `git worktree add` of 7,711 files, two dep_key scans, `clonefile` of 12 folders plus the generated paths, fix-ups and the port. Under 15 s.
+- With the warm pool on (`warm_pool = 1`): the entry was seeded about 10 s after the previous `new`, and taking it took **0.87 s** (`clone from .base (warm pool)`). The `new` that triggered the fill took 9.72 s, a clone running alongside the fill's own clone.
+- The fixture's own tests (`yarn test`, i.e. `TZ=UTC vitest run`, every unit test and no integration tests), run the same way in both places:
+
+| Where | Test files | Tests | Wall time |
+| --- | --- | --- | --- |
+| Main checkout (Phase 0 install) | 364 passed, 49 failed, 3 skipped | 3642 passed, 39 skipped | 41.8 s |
+| Seeded worktree `g1` (clone from `.base`) | 364 passed, 49 failed, 3 skipped | 3642 passed, 39 skipped | 52.5 s |
+
+  The 49 failing files are the same list in both (diffed), all `Cannot find module '.prisma/client/default'`: prismock looks for the Prisma client where older Prisma put it, and this cal.com pin generates it into `packages/prisma/generated`. That is a fixture issue from Phase 0 (it fails on the main checkout Strata never touched), not seeding. **Reading of the gate's test clause: the seeded worktree gives exactly the main checkout's results, so it passes as far as the fixture can.** Fixing the 49 would mean changing the fixture's install, which is out of scope.
+- **Not run: XFS with reflink.** It needs Linux. Docker is not running here, and the run needs a privileged container with a loop-mounted `mkfs.xfs -m reflink=1` volume, a Linux build of Strata, and a Linux `yarn install` of cal.com (its darwin `node_modules` can be copied in to time the clone, but its tests need Linux binaries: esbuild, rollup and the like). The Linux walker has only been compiled and linted for `aarch64-unknown-linux-gnu`, never run.
+- Cleanup also measured `strata rm --force` on cal.com agents: 24.6, 31.7, 27.0, 28.9, 28.9 s each (release build). Almost all of it is `git worktree remove` deleting the 272k-entry seeded trees (`rm -rf` of one such tree was 13.6–15.5 s in 4.2). Not a gate item, but `rm` is now about 3–4× slower than `new` on large repos. Renaming the seeded folders aside and deleting them in the background after the git step would make `rm` return in about a second; noted for Phase 5. The fixture was left as Phase 0 made it: Strata's worktrees, `strata.toml` and `bench/fixtures/g4h` removed.
+
+**Gate 4 status: APFS half passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the main checkout). XFS-with-reflink half not run (needs Docker, a privileged loop-mounted XFS volume and a Linux install of cal.com). Stopped, waiting for the owner.**

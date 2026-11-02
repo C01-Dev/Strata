@@ -51,8 +51,9 @@ impl Way {
     }
 }
 
-/// Seeds each folder from `donor` into `target` the given way, where the donor has it as a real
-/// folder (a symlink would share, not isolate) and `target` has its parent but not the folder.
+/// Seeds each folder (or file) from `donor` into `target` the given way, where the donor has it
+/// as a real folder or file (a symlink would share, not isolate) and `target` has its parent
+/// but not the folder.
 /// Each one is made under a temporary name and renamed into place, so a failure leaves no
 /// half-seeded folder. Returns the folders seeded.
 pub fn seed_folders(
@@ -64,7 +65,9 @@ pub fn seed_folders(
     let mut done = vec![];
     for rel in folders {
         let (src, dst) = (donor.join(rel), target.join(rel));
-        if !src.symlink_metadata().is_ok_and(|m| m.is_dir())
+        if !src
+            .symlink_metadata()
+            .is_ok_and(|m| m.is_dir() || m.is_file())
             || dst.symlink_metadata().is_ok()
             || !dst.parent().is_some_and(Path::is_dir)
         {
@@ -324,11 +327,14 @@ pub enum Op {
     Hardlink,
 }
 
-/// Recreates the tree at `src` as `dst`: folders with their modes, symlinks as symlinks (never
+/// Recreates the tree (or file) at `src` as `dst`: folders with their modes, symlinks as symlinks (never
 /// followed), files by `op` with their modes and modification times. Each folder's entries are
 /// handled in parallel; cloning is metadata-bound, so threads help.
 pub fn walk(src: &Path, dst: &Path, op: Op) -> io::Result<()> {
     let meta = fs::symlink_metadata(src)?;
+    if meta.is_file() {
+        return file(src, dst, op);
+    }
     fs::create_dir(dst)?;
     let entries = fs::read_dir(src)?.collect::<io::Result<Vec<_>>>()?;
     entries.par_iter().try_for_each(|e| {
@@ -585,16 +591,22 @@ mod tests {
         for d in ["apps/web", "apps/api"] {
             fs::create_dir_all(target.join(d)).unwrap();
         }
+        fs::write(donor.join("apps/web/types.ts"), "generated").unwrap();
         let all: Vec<PathBuf> = [
             "node_modules",
             "apps/web/node_modules",
+            "apps/web/types.ts",
             "apps/api/node_modules",
             "gone/node_modules",
         ]
         .map(PathBuf::from)
         .to_vec();
         let done = seed_folders(&donor, &target, &all, Way::Clone).unwrap();
-        assert_eq!(done, all[..2]);
+        assert_eq!(done, all[..3]);
+        assert_eq!(
+            fs::read_to_string(target.join("apps/web/types.ts")).unwrap(),
+            "generated"
+        );
         assert_eq!(
             fs::read_to_string(target.join("node_modules/pkg/index.js")).unwrap(),
             "x"
