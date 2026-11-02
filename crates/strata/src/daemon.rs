@@ -152,6 +152,9 @@ fn run() -> Result<()> {
     let _lock = lock(&home)?;
     logging::init(&home, "daemon")?;
     let daemon = api::Daemon::new(Store::open(&home.join("state.db"))?);
+    if let Err(e) = ops::recover(&daemon) {
+        tracing::error!("crash recovery: {e}");
+    }
     // We hold the lock, so a socket file left behind belongs to a dead daemon.
     let _ = fs::remove_file(&socket);
     tokio::runtime::Runtime::new()?.block_on(async {

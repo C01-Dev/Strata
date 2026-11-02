@@ -159,3 +159,14 @@ The owner chose "Go to Phase 1" after the task 0.8 follow-up, i.e. REPORT option
 - `strata init` installs the service by default and lets it start the daemon. It first stops a hand-started daemon: otherwise the service's daemon would lose the lock, exit 1 and be relaunched every 10 s. `--no-service` starts the daemon directly (all e2e tests use it). Added `strata daemon install|uninstall` (not in PLAN's CLI table) so the service can be removed.
 - Platform code: one `platform` module per `cfg(target_os)` with the same functions (`file`, `render`, `load`, `unload`) instead of a trait with one implementation per build.
 - **Not exercised on this machine:** installing a LaunchAgent is a persistent change to the owner's login, so the real install/uninstall test runs only with `STRATA_SYSTEM_TESTS=1` (CI). The plist passes `plutil -lint`; the systemd unit is checked by string tests only until it runs on Linux.
+
+## Phase 1 — task 1.7 crash recovery
+
+- At startup, before serving, `ops::recover` settles what a crash interrupted:
+  - `creating` → undone (worktree force-removed if git registered it, row deleted). The caller already got an error and never saw the path, so nothing of the user's is inside. A pre-existing branch is never deleted; a branch created by the interrupted `-b` stays (harmless; a retry reuses it).
+  - `removing` → if git still has the worktree, it is re-locked and `ready` again (the caller saw a failure and can retry); otherwise the remove is finished.
+  - `ready` whose worktree git no longer has → `orphaned`, unlocked and pruned.
+  - Every action is logged and recorded as an `agent.recovered` event.
+- Test hook (debug builds only): `STRATA_FAULT=<point>` stalls the daemon at `new:before_git`, `new:after_git`, `rm:before_git` or `rm:after_git`; the e2e test SIGKILLs it there, restarts and checks git and the store agree. Plus a worktree deleted while the daemon was down.
+- Process re-adoption (pid and start time) belongs to Phase 3, when there are processes.
+- Known gap: a graceful shutdown (SIGTERM, `daemon stop`) waits for in-flight requests; a request stuck forever would block it until the service manager's stop timeout sends SIGKILL, after which recovery runs. No such hang is known after the task 1.5 fix.

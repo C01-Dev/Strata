@@ -92,10 +92,15 @@ impl Drop for Env {
 
 impl Env {
     pub fn strata_in(&self, dir: &Path, args: &[&str]) -> Output {
+        self.strata_with(dir, args, &[])
+    }
+
+    pub fn strata_with(&self, dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
         let mut cmd = isolated(Command::new(env!("CARGO_BIN_EXE_strata")));
         cmd.args(args)
             .current_dir(dir)
             .env("STRATA_HOME", &self.home)
+            .envs(envs.iter().copied())
             .output()
             .unwrap()
     }

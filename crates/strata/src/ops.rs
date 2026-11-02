@@ -15,6 +15,15 @@ use strata_git as git;
 
 const DETACHED: &str = "(detached)";
 
+/// Test hook for task 1.7, debug builds only: with `STRATA_FAULT=<point>` the daemon stalls
+/// at that point so a test can SIGKILL it mid-operation.
+fn fault(point: &str) {
+    if cfg!(debug_assertions) && std::env::var("STRATA_FAULT").is_ok_and(|p| p == point) {
+        tracing::warn!("fault point {point}: stalling");
+        std::thread::sleep(Duration::from_secs(600));
+    }
+}
+
 fn base_path(root: &Path, cfg: &Config) -> PathBuf {
     cfg.worktree_dir(root).join(".base")
 }
@@ -152,10 +161,12 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
     let agent = d
         .store()
         .insert_agent(repo.id, &name, &path, &branch, AgentState::Creating)?;
+    fault("new:before_git");
     if let Err(e) = git::add(root, &path, &branch, from.as_deref()) {
         d.store().delete_agent(agent.id)?;
         return Err(e);
     }
+    fault("new:after_git");
     let warnings: Vec<String> = git::uninitialized_submodules(&path)?
         .into_iter()
         .map(|s| format!("submodule {s} is not initialized; run `git submodule update --init {s}` in the worktree"))
@@ -252,10 +263,12 @@ pub fn remove(d: &Daemon, req: Remove) -> Result<Value> {
             )));
         }
         d.store().set_agent_state(agent.id, AgentState::Removing)?;
+        fault("rm:before_git");
         if let Err(e) = git::remove(root, &agent.path, req.force) {
             d.store().set_agent_state(agent.id, AgentState::Ready)?;
             return Err(e);
         }
+        fault("rm:after_git");
     } else {
         git::forget(root, &agent.path)?;
         notes.push("its folder was already gone".to_string());
@@ -275,6 +288,61 @@ pub fn remove(d: &Daemon, req: Remove) -> Result<Value> {
     d.store()
         .event(Some(agent.id), "agent.removed", &agent.name)?;
     Ok(json!({ "removed": agent.name, "notes": notes }))
+}
+
+/// At startup, before serving: settle operations a crash interrupted, and orphan ready agents
+/// whose worktree git no longer knows. An interrupted `new` is undone (its caller got an error and
+/// never saw the path); an interrupted `rm` is finished if git already removed the worktree,
+/// otherwise the agent is ready again so the caller can retry.
+pub fn recover(d: &Daemon) -> Result<()> {
+    let _git = d.git.lock().unwrap();
+    let repos = d.store().repos()?;
+    for repo in repos {
+        let listed = git::list(&repo.root)?;
+        let agents = d.store().agents(repo.id)?;
+        for a in agents {
+            let present =
+                a.path.exists() && listed.iter().any(|w| git::same_path(&w.path, &a.path));
+            let detail = match (a.state, present) {
+                (AgentState::Creating, true) => {
+                    git::remove(&repo.root, &a.path, true)?;
+                    d.store().delete_agent(a.id)?;
+                    "interrupted create undone"
+                }
+                (AgentState::Creating, false) => {
+                    git::forget(&repo.root, &a.path)?;
+                    d.store().delete_agent(a.id)?;
+                    if a.path.exists() {
+                        tracing::warn!(path = %a.path.display(), "left a partial folder in place");
+                    }
+                    "interrupted create undone"
+                }
+                (AgentState::Removing, true) => {
+                    git::lock(&repo.root, &a.path)?;
+                    d.store().set_agent_state(a.id, AgentState::Ready)?;
+                    "interrupted remove undone; run `strata rm` again"
+                }
+                (AgentState::Removing, false) => {
+                    git::forget(&repo.root, &a.path)?;
+                    d.store().delete_agent(a.id)?;
+                    "interrupted remove finished"
+                }
+                (AgentState::Ready, false) => {
+                    git::forget(&repo.root, &a.path)?;
+                    d.store().set_agent_state(a.id, AgentState::Orphaned)?;
+                    "worktree gone while the daemon was down; orphaned"
+                }
+                _ => continue,
+            };
+            tracing::warn!(agent = a.name, "{detail}");
+            d.store().event(
+                Some(a.id),
+                "agent.recovered",
+                &format!("{}: {detail}", a.name),
+            )?;
+        }
+    }
+    Ok(())
 }
 
 /// Every 2 s: move the base worktree when the base branch moves, mark agents whose folder was
