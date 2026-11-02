@@ -131,3 +131,11 @@ The owner chose "Go to Phase 1" after the task 0.8 follow-up, i.e. REPORT option
 - Repository layer covers only what Phase 1 uses: repos (upsert, by root, list), agents (insert, by name, by path, list, set state, delete) and the event log. Agent states: `creating` and `removing` mark an operation in flight so crash recovery (task 1.7) can finish or undo it; `ready`; `orphaned` (folder deleted by hand).
 - A duplicate agent name maps to a `Refused` error with a message, not a raw constraint failure. Paths must be UTF-8 (refused otherwise).
 - `events.agent_id` has no foreign key (PLAN's schema), so events outlive their agent.
+
+## Phase 1 — task 1.4 daemon
+
+- `strata daemon start` spawns `strata daemon start --foreground` in its own process group (stdout/stderr to `logs/daemon.out`, `tracing` to `logs/daemon.log`) and waits up to 10 s for `/v1/status` to answer. `stop` posts `/v1/shutdown` (added to PLAN's API list) and waits for the socket to go; SIGTERM and Ctrl-C also shut down gracefully.
+- Single instance: `std::fs::File::try_lock` on `$STRATA_HOME/daemon.lock` (holds the owner's pid). A second daemon exits with a message naming that pid. Holding the lock is what makes it safe to delete a stale socket left by a SIGKILLed daemon.
+- `$STRATA_HOME` is created 0700 and the socket chmodded 0600 after bind. The socket path is checked against 103 bytes before binding.
+- CLI client: about 30 lines of blocking HTTP/1.1 over `std::os::unix::net::UnixStream` (`Connection: close`, read to EOF) instead of a hyper client; the daemon answers with fixed-length JSON. Error mapping: 404 → not found, other non-2xx → the daemon's message.
+- No leftover test daemons: every e2e `Env` stops its daemon on drop.

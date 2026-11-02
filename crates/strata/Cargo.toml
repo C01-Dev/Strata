@@ -9,9 +9,13 @@ publish.workspace = true
 [dependencies]
 strata-core.workspace = true
 strata-git.workspace = true
+axum.workspace = true
 clap.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+serde_json.workspace = true

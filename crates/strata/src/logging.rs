@@ -3,7 +3,6 @@ use std::path::Path;
 use std::sync::Mutex;
 
 /// Log with `tracing` to `<home>/logs/<name>.log`, appending.
-#[allow(dead_code)] // first caller is the daemon (task 1.4)
 pub fn init(home: &Path, name: &str) -> std::io::Result<()> {
     let dir = home.join("logs");
     fs::create_dir_all(&dir)?;

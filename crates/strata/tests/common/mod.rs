@@ -45,6 +45,16 @@ pub fn env(files: &[(&str, &str)]) -> Env {
     Env { tmp, root, home }
 }
 
+impl Drop for Env {
+    /// Never leave a test daemon running.
+    fn drop(&mut self) {
+        let _ = Command::new(env!("CARGO_BIN_EXE_strata"))
+            .args(["daemon", "stop"])
+            .env("STRATA_HOME", &self.home)
+            .output();
+    }
+}
+
 impl Env {
     /// Runs `strata <args>` in `dir` with this env's STRATA_HOME.
     pub fn strata_in(&self, dir: &Path, args: &[&str]) -> Output {
