@@ -217,3 +217,18 @@ Not covered: Linux x86_64 (CI's `ubuntu-latest` is x86_64; it would need an emul
 - The script is embedded with `include_str!` and written once to `$STRATA_HOME/tsbridge/<version>-<xxh3 of the script>/bridge.mjs` (atomic rename), so a changed script gets a new folder.
 - Verified: SIGKILL of the Node bridge also ends tsgo (its stdio closes); no orphans after the tests.
 - `xxhash-rust` is BSL-1.0 (Boost, permissive); added to the `cargo deny` allow list.
+
+## Phase 2 — task 2.3 overlay tracker
+
+- `strata-overlay::Tree`: walks a checkout for files the checker reads (`ts tsx mts cts js jsx mjs cjs json`). It skips `.git`, `node_modules`, `.next`, `.turbo`, `.cache`, `coverage`, `.yarn`, `.svelte-kit`, `.vercel` and `.parcel-cache`, plus any nested checkout (a folder with its own `.git`, e.g. `.claude/worktrees/*`). It does not follow directory symlinks. `checker.extra_paths` (literal relative paths) are walked even inside `node_modules`. Each file has an xxh3; a rescan rehashes only files whose size or mtime changed. Ignored and untracked files count (PLAN: content hash, not `git status`).
+- Deviation (decided before 2.1): no `notify` watcher. The broker rescans before queries; measured below. `dist/` and `build/` are walked, because a workspace package's `types` can point there.
+- `layer(base, wt)`: changed = differs or only in the worktree; removed = only in base; a hash identifies the exact layer so unchanged layers skip the snapshot update.
+- `dep_key`: xxh3 over every `package.json` outside `node_modules`, root lockfiles (`package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock(b)`), `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc(.yml)`, everything under `patches/`, and a runtime string (Node ABI and platform). Files under `extra_paths` are excluded (they are per-worktree on purpose). Since every `package.json` counts, an agent that edits one gets an unshared snapshot; PLAN's table says such changes are "usually" shareable, but its own `dep_key` definition includes them, and that is the safer reading.
+- Measured (`cargo run --release -p strata-overlay --example scan`, M5 Pro, APFS):
+
+| Fixture | Files walked | Cold scan | Warm rescan | Layer diff | Layer |
+| --- | --- | --- | --- | --- | --- |
+| cal.com | 6,426 | 725 ms | 50–60 ms | 0.6 ms | 6 changed, 1 removed |
+| excalidraw | 818 | 93 ms | 3.7 ms | 0.1 ms | 6 changed, 1 removed |
+
+  The layers match Phase 0's. A warm rescan of cal.com costs ~55 ms, so the broker rescans an agent's worktree on every query but the base at most every 2 s (the maintenance tick's cadence).

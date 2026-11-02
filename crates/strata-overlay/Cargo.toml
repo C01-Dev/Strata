@@ -1,0 +1,13 @@
+[package]
+name = "strata-overlay"
+description = "Which files differ between a worktree and the base, by content hash"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+xxhash-rust.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

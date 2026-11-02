@@ -751,6 +751,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "strata-overlay"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
