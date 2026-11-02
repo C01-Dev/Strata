@@ -97,6 +97,7 @@ pub fn ts_initialized() -> Env {
     std::fs::create_dir(e.root.join("node_modules")).unwrap();
     std::os::unix::fs::symlink(ts, e.root.join("node_modules/typescript")).unwrap();
     e.strata(&["init", "--no-service"]);
+    own_ports(&e);
     e
 }
 
@@ -104,6 +105,7 @@ pub fn ts_initialized() -> Env {
 pub fn initialized() -> Env {
     let e = env(&[]);
     e.strata(&["init", "--no-service"]);
+    own_ports(&e);
     e
 }
 
@@ -111,13 +113,23 @@ pub fn initialized() -> Env {
 /// so each picks its own range).
 pub fn set_ports(e: &Env, lo: u16, hi: u16, proxy: u16) {
     let config = std::fs::read_to_string(e.root.join("strata.toml")).unwrap();
-    let config = config
-        .replace(
-            "port_range = [4100, 4999]",
-            &format!("port_range = [{lo}, {hi}]"),
-        )
-        .replace("proxy_port = 7355", &format!("proxy_port = {proxy}"));
-    std::fs::write(e.root.join("strata.toml"), config).unwrap();
+    let config: Vec<String> = config
+        .lines()
+        .map(|l| match l.split_whitespace().next() {
+            Some("port_range") => format!("port_range = [{lo}, {hi}]"),
+            Some("proxy_port") => format!("proxy_port = {proxy}"),
+            _ => l.to_string(),
+        })
+        .collect();
+    std::fs::write(e.root.join("strata.toml"), config.join("\n") + "\n").unwrap();
+}
+
+/// Each initialized test repo gets its own port range and proxy port: tests in one binary run
+/// in parallel, each with its own daemon (binaries run one after another).
+fn own_ports(e: &Env) {
+    static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(30000);
+    let lo = NEXT.fetch_add(100, std::sync::atomic::Ordering::SeqCst);
+    set_ports(e, lo, lo + 49, lo + 50);
 }
 
 /// Starts a dev process through the API (`kind: dev`); returns the response.

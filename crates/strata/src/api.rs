@@ -19,6 +19,8 @@ pub struct Daemon {
     pub procs: procs::Table,
     pub meter: procs::Meter,
     pub routes: crate::ports::Routes,
+    /// Proxy tasks by port, started on first use.
+    pub proxies: Mutex<std::collections::HashMap<u16, tokio::task::JoinHandle<()>>>,
     /// Linux with systemd delegation: the daemon's cgroup, with one child per agent.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     cgroup: Option<std::path::PathBuf>,
@@ -38,6 +40,7 @@ impl Daemon {
             procs: Default::default(),
             meter: Default::default(),
             routes: Default::default(),
+            proxies: Default::default(),
             cgroup: cgroup_root(),
             git: Mutex::new(()),
             shutdown: Notify::new(),

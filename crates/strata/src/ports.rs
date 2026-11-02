@@ -5,7 +5,6 @@
 
 use crate::api::Daemon;
 use serde_json::{Value, json};
-use std::collections::HashMap;
 use std::net::{Ipv6Addr, SocketAddr, TcpListener};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -13,8 +12,31 @@ use strata_core::config::{Config, to_dns_label};
 use strata_core::store::{Agent, Repo};
 use strata_core::{Error, Result};
 
-/// Host label (`<agent>.<app>`) -> where its dev server listens. The proxy reads it.
-pub type Routes = Arc<std::sync::RwLock<HashMap<String, SocketAddr>>>;
+pub use strata_proxy::Routes;
+
+/// Starts the proxy on `port` unless it is already serving. Lazy, so a daemon without dev
+/// servers holds no port; a port held by another program fails here with its name.
+pub async fn ensure_proxy(d: &Arc<Daemon>, port: u16) -> Result<()> {
+    if d.proxies
+        .lock()
+        .unwrap()
+        .get(&port)
+        .is_some_and(|t| !t.is_finished())
+    {
+        return Ok(());
+    }
+    let listeners = strata_proxy::bind(port).await.map_err(Error::Refused)?;
+    let mut proxies = d.proxies.lock().unwrap();
+    if proxies.get(&port).is_some_and(|t| !t.is_finished()) {
+        return Ok(()); // another request started it meanwhile; ours closes when dropped
+    }
+    tracing::info!(port, "proxy listening on 127.0.0.1 and ::1");
+    proxies.insert(
+        port,
+        tokio::spawn(strata_proxy::serve(listeners, d.routes.clone())),
+    );
+    Ok(())
+}
 
 /// Serializes assignment, so agents created at the same moment never get the same port.
 static ASSIGN: Mutex<()> = Mutex::new(());
@@ -145,13 +167,21 @@ pub async fn reconfirm(d: Arc<Daemon>) {
                         && p.state == "running"
                         && let Some(port) = p.port
                     {
-                        work.push((p.id, host(&agent.name, &repo, &cfg), port));
+                        work.push((
+                            p.id,
+                            host(&agent.name, &repo, &cfg),
+                            port,
+                            cfg.dev.proxy_port,
+                        ));
                     }
                 }
             }
         }
     }
-    for (id, host, port) in work {
+    for (id, host, port, proxy) in work {
+        if let Err(e) = ensure_proxy(&d, proxy).await {
+            tracing::error!("{e}");
+        }
         tokio::spawn(confirm(d.clone(), id, host, port));
     }
 }

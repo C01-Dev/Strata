@@ -443,6 +443,7 @@ pub async fn request(d: &Arc<Daemon>, name: String, req: ProcRequest) -> Result<
                             .into(),
                     )
                 })?;
+            crate::ports::ensure_proxy(d, cfg.dev.proxy_port).await?;
             let port = crate::ports::ensure(d, &agent, &cfg)?;
             let url = crate::ports::url(&agent.name, &repo, &cfg);
             env.push(("PORT".into(), port.to_string()));

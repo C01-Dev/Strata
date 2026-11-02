@@ -102,3 +102,61 @@ fn servers_started_outside_strata_are_listed() {
         .status()
         .unwrap();
 }
+
+fn through_proxy(proxy: u16, host: &str) -> String {
+    let out = std::process::Command::new("curl")
+        .args([
+            "-s",
+            "-H",
+            &format!("Host: {host}"),
+            &format!("http://127.0.0.1:{proxy}/"),
+        ])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[test]
+fn the_proxy_routes_each_agent_to_its_dev_server() {
+    let e = initialized();
+    set_ports(&e, 46500, 46599, 46004);
+    for (agent, text) in [("a", "from a"), ("b", "from b")] {
+        e.strata(&["new", agent]);
+        start_dev(&e, agent, &node_server(text, None));
+    }
+    wait_until("both routed", || {
+        e.status()["routes"]
+            .as_object()
+            .is_some_and(|r| r.len() == 2)
+    });
+    assert_eq!(through_proxy(46004, "a.app.localhost:46004"), "from a");
+    assert_eq!(through_proxy(46004, "b.app.localhost:46004"), "from b");
+    let page = through_proxy(46004, "nobody.app.localhost:46004");
+    assert!(
+        page.contains("http://a.app.localhost:46004/")
+            && page.contains("http://b.app.localhost:46004/"),
+        "{page}"
+    );
+}
+
+#[test]
+fn a_held_proxy_port_fails_dev_with_the_holder_named() {
+    let e = initialized();
+    set_ports(&e, 46600, 46699, 46005);
+    let _holder = TcpListener::bind("127.0.0.1:46005").unwrap();
+    e.strata(&["new", "a"]);
+    let out = start_dev(&e, "a", &node_server("x", None));
+    let err = out["error"].as_str().unwrap_or_default();
+    assert!(
+        err.contains("proxy port 46005 is held by")
+            && err.contains(&format!("pid {}", std::process::id())),
+        "{out}"
+    );
+    assert!(
+        e.agent("a").unwrap()["processes"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "nothing started"
+    );
+}
