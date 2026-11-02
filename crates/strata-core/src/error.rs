@@ -6,6 +6,8 @@ use std::path::PathBuf;
 pub enum Error {
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("state store: {0}")]
+    Store(#[from] rusqlite::Error),
     #[error("{}: {message}", path.display())]
     Config { path: PathBuf, message: String },
     #[error("git {args}: {stderr}")]

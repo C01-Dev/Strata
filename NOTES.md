@@ -124,3 +124,10 @@ The owner chose "Go to Phase 1" after the task 0.8 follow-up, i.e. REPORT option
 - Detection: lockfile order pnpm, bun, yarn, npm, then `packageManager`, then npm if a `package.json` exists. Yarn Berry is Plug'n'Play unless `.yarnrc.yml` sets `nodeLinker: node-modules` (Yarn 1 never is). TypeScript comes from `node_modules/typescript/package.json`; 7.1 prereleases count as 7.1.
 - Deviation: "checker off" is not written into the config. It is derived from detection each time (Yarn PnP, TypeScript missing or older than 7.1), so a repo that upgrades TypeScript turns the checker on without editing `strata.toml`. `init` prints the reason.
 - Registering the repo with the daemon, the base worktree and the service install are added to `init` in tasks 1.4–1.6.
+
+## Phase 1 — task 1.3 state store
+
+- `strata-core::store`: rusqlite 0.41 (bundled SQLite) in WAL mode, `foreign_keys` on, 5 s busy timeout. PLAN's data model is migration 1; migrations are append-only and tracked with `PRAGMA user_version`.
+- Repository layer covers only what Phase 1 uses: repos (upsert, by root, list), agents (insert, by name, by path, list, set state, delete) and the event log. Agent states: `creating` and `removing` mark an operation in flight so crash recovery (task 1.7) can finish or undo it; `ready`; `orphaned` (folder deleted by hand).
+- A duplicate agent name maps to a `Refused` error with a message, not a raw constraint failure. Paths must be UTF-8 (refused otherwise).
+- `events.agent_id` has no foreign key (PLAN's schema), so events outlive their agent.

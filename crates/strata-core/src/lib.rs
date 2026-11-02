@@ -3,6 +3,7 @@
 pub mod config;
 pub mod detect;
 mod error;
+pub mod store;
 
 pub use error::{Error, Result};
 
