@@ -335,3 +335,21 @@ fn commands_need_a_registered_repo() {
         "{err}"
     );
 }
+
+#[test]
+fn rm_takes_the_worktree_path_or_dot() {
+    let e = initialized();
+    e.strata(&["new", "a"]);
+    e.strata(&["new", "b"]);
+    let out = e.strata_in(&e.wt("a"), &["rm", "."]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("removed a"));
+    e.strata(&["rm", e.wt("b").to_str().unwrap()]);
+    assert!(e.agent("a").is_none() && e.agent("b").is_none());
+    let err = e.strata_err(&["rm", e.root.to_str().unwrap()]);
+    assert!(err.contains("is not an agent's worktree"), "{err}");
+}

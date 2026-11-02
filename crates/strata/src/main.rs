@@ -11,7 +11,7 @@ mod procs;
 mod service;
 
 use clap::{Parser, Subcommand};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::path::PathBuf;
 use strata_core::{Result, client};
 
@@ -53,6 +53,7 @@ enum Command {
     Adopt { path: PathBuf },
     /// Remove an agent's worktree and, if merged, its branch
     Rm {
+        /// Agent name, or the path of its worktree (`.` inside it)
         name: String,
         /// Discard uncommitted changes
         #[arg(long)]
@@ -248,6 +249,7 @@ fn adopt(path: PathBuf) -> Result<()> {
 }
 
 fn rm(name: String, force: bool, keep_branch: bool) -> Result<()> {
+    let name = agent_name(&name)?;
     let body = json!({ "repo": repo()?, "force": force, "keep_branch": keep_branch });
     let out = client::request("DELETE", &format!("/v1/agents/{name}"), Some(body))?;
     println!("removed {name}");
@@ -255,6 +257,35 @@ fn rm(name: String, force: bool, keep_branch: bool) -> Result<()> {
         println!("note: {}", note.as_str().unwrap_or_default());
     }
     Ok(())
+}
+
+/// An agent name as given, or the agent whose worktree a path (with a `/`, or `.`) names: hooks
+/// and setup scripts of other tools know the folder, not Strata's name for it.
+fn agent_name(arg: &str) -> Result<String> {
+    if arg != "." && !arg.contains('/') {
+        return Ok(arg.to_string());
+    }
+    let path = std::path::absolute(arg)?.canonicalize()?;
+    let s = client::get("/v1/status")?;
+    let same = |a: &Value| {
+        a["path"]
+            .as_str()
+            .and_then(|p| PathBuf::from(p).canonicalize().ok())
+            .is_some_and(|p| p == path)
+    };
+    s["repos"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|r| r["agents"].as_array().into_iter().flatten())
+        .find(|a| same(a))
+        .and_then(|a| a["name"].as_str().map(String::from))
+        .ok_or_else(|| {
+            strata_core::Error::NotFound(format!(
+                "{} is not an agent's worktree; see `strata status`",
+                path.display()
+            ))
+        })
 }
 
 /// Joins arguments into one `sh -c` command, quoting those the shell would split or expand.

@@ -584,3 +584,14 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
   - The Homebrew formula has no `depends_on "node"`: dist writes only build dependencies, and PLAN makes Node a documented requirement.
   - Nothing has run on GitHub.
   - The shell installer and formula point at `github.com/OWNER/strata` release URLs, so they cannot be installed until a real release exists.
+
+## Phase 5 — task 5.4 docs
+
+- `README.md`: what Strata is (one checker for every worktree, dependencies by clone, dev servers with URL, budget and cleanup), requirements, install (Homebrew, npm, shell installer, from source; names are the 5.3 placeholders), quickstart, every command, the ten MCP tools, recipes, the full `strata.toml` with notes on seeding tiers, dev presets and the checker, platform notes, benchmarks, troubleshooting (`doctor --report`), development and releasing.
+- Recipes, checked against each tool's current docs (2026-11-02):
+  - **Claude Code:** `.mcp.json` (or `claude mcp add --transport stdio --scope project strata -- strata mcp`). `WorktreeCreate` and `WorktreeRemove` hooks in `.claude/settings.json`: create reads `{"name", "cwd", …}` on stdin and must print the absolute path as the last stdout line; remove gets `worktree_path`. Simulated with hand-made hook input: create printed the path, remove exited 0. The docs do not say where hooks run, so the recipe `cd`s to `cwd`. It uses `jq`, which macOS ships in `/usr/bin`.
+  - **Codex:** `[mcp_servers.strata]` in `~/.codex/config.toml` or a trusted project's `.codex/config.toml`.
+  - **Cursor:** `.cursor/mcp.json`.
+  - **Conductor:** `.conductor/settings.toml`, `[scripts] setup = "strata adopt ."` and `archive = "strata rm . --force --keep-branch"`; its scripts run in the workspace folder.
+- For those recipes, `strata rm` now takes a worktree path (or `.` inside it) as well as a name: Conductor's archive script and Claude Code's remove hook know the folder, not Strata's name. Test: `rm .` inside a worktree and `rm <path>` both remove; the main checkout's path is refused.
+- Not checked by running the tools themselves: Claude Code's hook contract was read from its docs and simulated, and Conductor's archive behaviour around its own worktree deletion is untested. If Conductor deletes the folder itself, Strata orphans the agent and `strata gc` clears it.
