@@ -62,6 +62,22 @@ pub fn start(foreground: bool) -> Result<()> {
     }
 }
 
+/// Waits for a daemon started elsewhere (by the service manager) to answer.
+pub fn wait_ready() -> Result<()> {
+    let deadline = Instant::now() + WAIT;
+    while client::get("/v1/status").is_err() {
+        if Instant::now() > deadline {
+            let out = strata_home().join("logs/daemon.out");
+            return Err(Error::Refused(format!(
+                "the daemon did not answer within {WAIT:?}; see {}",
+                out.display()
+            )));
+        }
+        sleep(Duration::from_millis(50));
+    }
+    Ok(())
+}
+
 pub fn stop() -> Result<()> {
     match client::post("/v1/shutdown", serde_json::json!({})) {
         Err(Error::NotFound(_)) => {

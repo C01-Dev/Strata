@@ -1,13 +1,13 @@
-//! `strata init`: detect the repo's setup, write `strata.toml`, start the daemon and register
-//! the repo (which creates the base worktree).
+//! `strata init`: detect the repo's setup, write `strata.toml`, install the per-user service
+//! (which starts the daemon) and register the repo (which creates the base worktree).
 
-use crate::{client, daemon};
+use crate::{client, daemon, service};
 use serde_json::json;
 use std::fs;
 use strata_core::config::{self, Config, to_dns_label};
 use strata_core::{Result, detect};
 
-pub fn run() -> Result<()> {
+pub fn run(no_service: bool) -> Result<()> {
     let root = strata_git::repo_root(&std::env::current_dir()?)?;
     let found = detect::detect(&root);
     let path = root.join(config::FILE);
@@ -45,8 +45,17 @@ pub fn run() -> Result<()> {
             .as_deref()
             .unwrap_or("none (set dev.command in strata.toml)")
     );
-    if client::get("/v1/status").is_err() {
-        daemon::start(false)?;
+    if no_service {
+        if client::get("/v1/status").is_err() {
+            daemon::start(false)?;
+        }
+    } else {
+        // The service manager owns the daemon from now on; a hand-started one would hold the lock.
+        if client::get("/v1/status").is_ok() {
+            daemon::stop()?;
+        }
+        println!("service: {}", service::install()?.display());
+        daemon::wait_ready()?;
     }
     let registered = client::post("/v1/repos", json!({ "root": root }))?;
     println!(

@@ -4,6 +4,7 @@ mod daemon;
 mod init;
 mod logging;
 mod ops;
+mod service;
 
 use clap::{Parser, Subcommand};
 use serde_json::json;
@@ -23,8 +24,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Detect the repo's setup, write strata.toml, start the daemon and create the base worktree
-    Init,
+    /// Detect the repo's setup, write strata.toml, install the service and create the base worktree
+    Init {
+        /// Do not install the per-user service; start the daemon directly
+        #[arg(long)]
+        no_service: bool,
+    },
     /// Manage the background daemon
     Daemon {
         #[command(subcommand)]
@@ -71,21 +76,25 @@ enum DaemonCommand {
     Stop,
     /// Say whether the daemon is running
     Status,
+    /// Install the per-user service (LaunchAgent or systemd --user) that runs the daemon
+    Install,
+    /// Remove the per-user service
+    Uninstall,
 }
 
 fn main() {
     let cli = Cli::parse();
     let result = match cli.command {
-        Command::Init => init::run(),
-        Command::Daemon {
-            command: DaemonCommand::Start { foreground },
-        } => daemon::start(foreground),
-        Command::Daemon {
-            command: DaemonCommand::Stop,
-        } => daemon::stop(),
-        Command::Daemon {
-            command: DaemonCommand::Status,
-        } => daemon::status(),
+        Command::Init { no_service } => init::run(no_service),
+        Command::Daemon { command } => match command {
+            DaemonCommand::Start { foreground } => daemon::start(foreground),
+            DaemonCommand::Stop => daemon::stop(),
+            DaemonCommand::Status => daemon::status(),
+            DaemonCommand::Install => {
+                service::install().map(|f| println!("installed {}", f.display()))
+            }
+            DaemonCommand::Uninstall => service::uninstall().map(|()| println!("uninstalled")),
+        },
         Command::New { name, from, branch } => new(name, from, branch),
         Command::Adopt { path } => adopt(path),
         Command::Rm {

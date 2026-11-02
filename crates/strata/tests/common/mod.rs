@@ -70,7 +70,7 @@ pub fn env(files: &[(&str, &str)]) -> Env {
 /// `env` plus `strata init` (daemon running, base worktree created).
 pub fn initialized() -> Env {
     let e = env(&[]);
-    e.strata(&["init"]);
+    e.strata(&["init", "--no-service"]);
     e
 }
 

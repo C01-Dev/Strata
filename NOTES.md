@@ -151,3 +151,11 @@ The owner chose "Go to Phase 1" after the task 0.8 follow-up, i.e. REPORT option
 - API deviations: requests carry the repo root (`repo` in the JSON body) since agent names are unique per repo, and `DELETE /v1/agents/{name}` takes a JSON body (`repo`, `force`, `keep_branch`) instead of a query string, so paths need no URL encoding.
 - Bug found by the e2e tests: `for x in d.store().list()? { d.store()... }` deadlocks, because a `for` keeps its iterator expression's temporaries (the mutex guard) alive for the whole loop. Fixed by binding the list first. Side finding: a graceful-shutdown SIGTERM never completes while a request is stuck; task 1.7 notes it.
 - 14 end-to-end tests cover every Git row of the edge-case table (git-level part); stable over 3 repeated runs.
+
+## Phase 1 — task 1.6 service
+
+- Files written directly, no `service-manager` crate. macOS: `~/Library/LaunchAgents/dev.strata.daemon.plist`, loaded with `launchctl bootstrap gui/<uid>` (`bootout` first on reinstall). Linux: `$XDG_CONFIG_HOME/systemd/user/strata.service` with `Delegate=yes`, then `daemon-reload`, `enable`, `restart`. Both capture `STRATA_HOME` and the installing shell's `PATH` (launchd's default PATH lacks Homebrew, where Node will live in Phase 2).
+- Restart only on failure (`KeepAlive.SuccessfulExit = false`, `Restart=on-failure`), so `strata daemon stop` (exit 0) stays stopped and a crash is restarted.
+- `strata init` installs the service by default and lets it start the daemon. It first stops a hand-started daemon: otherwise the service's daemon would lose the lock, exit 1 and be relaunched every 10 s. `--no-service` starts the daemon directly (all e2e tests use it). Added `strata daemon install|uninstall` (not in PLAN's CLI table) so the service can be removed.
+- Platform code: one `platform` module per `cfg(target_os)` with the same functions (`file`, `render`, `load`, `unload`) instead of a trait with one implementation per build.
+- **Not exercised on this machine:** installing a LaunchAgent is a persistent change to the owner's login, so the real install/uninstall test runs only with `STRATA_SYSTEM_TESTS=1` (CI). The plist passes `plutil -lint`; the systemd unit is checked by string tests only until it runs on Linux.
