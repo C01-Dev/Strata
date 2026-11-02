@@ -231,6 +231,15 @@ impl Store {
         Ok(())
     }
 
+    /// The agent switched branches inside its worktree.
+    pub fn set_agent_branch(&self, id: i64, branch: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE agents SET branch = ?1 WHERE id = ?2",
+            params![branch, id],
+        )?;
+        Ok(())
+    }
+
     /// Appends to the event log. Events outlive their agent, so `agent_id` is not a foreign key.
     pub fn event(&self, agent_id: Option<i64>, kind: &str, detail: &str) -> Result<()> {
         self.conn.execute(

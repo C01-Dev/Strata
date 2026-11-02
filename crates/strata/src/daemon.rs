@@ -1,7 +1,7 @@
 //! `strata daemon start|stop|status`, and the daemon process itself.
 
 use crate::client::{self, SOCKET};
-use crate::{api, logging};
+use crate::{api, logging, ops};
 use std::fs::{self, DirBuilder, File, OpenOptions, Permissions, TryLockError};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
@@ -142,6 +142,7 @@ fn run() -> Result<()> {
         let listener = tokio::net::UnixListener::bind(&socket)?;
         fs::set_permissions(&socket, Permissions::from_mode(0o600))?;
         tracing::info!(pid = std::process::id(), socket = %socket.display(), "daemon started");
+        tokio::spawn(ops::maintain(daemon.clone()));
         let mut term = signal(SignalKind::terminate())?;
         let stop = daemon.clone();
         axum::serve(listener, api::router(daemon))

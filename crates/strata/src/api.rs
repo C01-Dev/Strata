@@ -1,18 +1,21 @@
 //! Control API: JSON over HTTP/1.1 on the Unix socket.
 
-use axum::extract::State;
+use crate::ops;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex};
-use strata_core::Error;
+use std::sync::{Arc, Mutex, MutexGuard};
 use strata_core::store::{Store, now};
+use strata_core::{Error, Result};
 use tokio::sync::Notify;
 
 pub struct Daemon {
-    pub store: Mutex<Store>,
+    store: Mutex<Store>,
+    /// Held for the whole of every worktree operation: Strata's git calls never overlap.
+    pub git: Mutex<()>,
     pub shutdown: Notify,
     pub started_at: i64,
 }
@@ -23,9 +26,14 @@ impl Daemon {
     pub fn new(store: Store) -> Shared {
         Arc::new(Self {
             store: Mutex::new(store),
+            git: Mutex::new(()),
             shutdown: Notify::new(),
             started_at: now(),
         })
+    }
+
+    pub fn store(&self) -> MutexGuard<'_, Store> {
+        self.store.lock().unwrap()
     }
 }
 
@@ -33,22 +41,20 @@ pub fn router(daemon: Shared) -> Router {
     Router::new()
         .route("/v1/status", get(status))
         .route("/v1/shutdown", post(shutdown))
+        .route("/v1/repos", post(register_repo))
+        .route("/v1/agents", post(new_agent))
+        .route("/v1/agents/adopt", post(adopt))
+        .route("/v1/agents/{name}", delete(remove))
         .with_state(daemon)
 }
 
 pub struct ApiError(Error);
 
-impl From<Error> for ApiError {
-    fn from(e: Error) -> Self {
-        Self(e)
-    }
-}
-
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
             Error::NotFound(_) => StatusCode::NOT_FOUND,
-            Error::Refused(_) | Error::Config { .. } => StatusCode::CONFLICT,
+            Error::Refused(_) | Error::Config { .. } | Error::Git { .. } => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status == StatusCode::INTERNAL_SERVER_ERROR {
@@ -58,14 +64,25 @@ impl IntoResponse for ApiError {
     }
 }
 
-type ApiResult = Result<Json<Value>, ApiError>;
+type ApiResult = std::result::Result<Json<Value>, ApiError>;
+
+/// Runs a worktree operation on the blocking pool (it shells out to git).
+async fn blocking(
+    d: Shared,
+    op: impl FnOnce(&Daemon) -> Result<Value> + Send + 'static,
+) -> ApiResult {
+    match tokio::task::spawn_blocking(move || op(&d)).await {
+        Ok(result) => result.map(Json).map_err(ApiError),
+        Err(e) => Err(ApiError(Error::Io(std::io::Error::other(e)))),
+    }
+}
 
 async fn status(State(d): State<Shared>) -> ApiResult {
-    let store = d.store.lock().unwrap();
+    let store = d.store();
     let mut repos = vec![];
-    for repo in store.repos()? {
+    for repo in store.repos().map_err(ApiError)? {
         let mut r = json!(repo);
-        r["agents"] = json!(store.agents(repo.id)?);
+        r["agents"] = json!(store.agents(repo.id).map_err(ApiError)?);
         repos.push(r);
     }
     Ok(Json(json!({
@@ -80,4 +97,25 @@ async fn shutdown(State(d): State<Shared>) -> ApiResult {
     tracing::info!("shutdown requested");
     d.shutdown.notify_one();
     Ok(Json(json!({})))
+}
+
+async fn register_repo(State(d): State<Shared>, Json(req): Json<ops::RegisterRepo>) -> ApiResult {
+    blocking(d, |d| ops::register_repo(d, req)).await
+}
+
+async fn new_agent(State(d): State<Shared>, Json(req): Json<ops::NewAgent>) -> ApiResult {
+    blocking(d, |d| ops::new_agent(d, req)).await
+}
+
+async fn adopt(State(d): State<Shared>, Json(req): Json<ops::Adopt>) -> ApiResult {
+    blocking(d, |d| ops::adopt(d, req)).await
+}
+
+async fn remove(
+    State(d): State<Shared>,
+    Path(name): Path<String>,
+    Json(mut req): Json<ops::Remove>,
+) -> ApiResult {
+    req.name = name;
+    blocking(d, |d| ops::remove(d, req)).await
 }

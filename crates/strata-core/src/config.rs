@@ -211,6 +211,22 @@ pub fn is_dns_label(s: &str) -> bool {
         && !s.ends_with('-')
 }
 
+/// `name` made into a DNS label (folder names become `dev.app` and adopted agent names).
+pub fn to_dns_label(name: &str) -> String {
+    let label: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let label = label.trim_matches('-');
+    let label = label[..label.len().min(63)].trim_end_matches('-');
+    if label.is_empty() {
+        "app".into()
+    } else {
+        label.into()
+    }
+}
+
 fn normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for c in path.components() {
@@ -337,6 +353,16 @@ mod tests {
                 .to_string()
                 .contains("strata init")
         );
+    }
+
+    #[test]
+    fn to_dns_label_from_folder_names() {
+        assert_eq!(to_dns_label("My_App.v2"), "my-app-v2");
+        assert_eq!(to_dns_label("日本"), "app");
+        assert!(is_dns_label(&to_dns_label(&format!(
+            "{}-x",
+            "a".repeat(62)
+        ))));
     }
 
     #[test]

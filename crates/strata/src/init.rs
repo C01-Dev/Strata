@@ -1,7 +1,10 @@
-//! `strata init`: detect the repo's setup and write `strata.toml`.
+//! `strata init`: detect the repo's setup, write `strata.toml`, start the daemon and register
+//! the repo (which creates the base worktree).
 
+use crate::{client, daemon};
+use serde_json::json;
 use std::fs;
-use strata_core::config::{self, Config};
+use strata_core::config::{self, Config, to_dns_label};
 use strata_core::{Result, detect};
 
 pub fn run() -> Result<()> {
@@ -18,7 +21,7 @@ pub fn run() -> Result<()> {
             &base,
             &format!("../.strata/{folder}"),
             found.dev_command.as_deref(),
-            &dns_label(&folder),
+            &to_dns_label(&folder),
         );
         fs::write(&path, text)?;
         println!("wrote {}", path.display());
@@ -42,33 +45,13 @@ pub fn run() -> Result<()> {
             .as_deref()
             .unwrap_or("none (set dev.command in strata.toml)")
     );
+    if client::get("/v1/status").is_err() {
+        daemon::start(false)?;
+    }
+    let registered = client::post("/v1/repos", json!({ "root": root }))?;
+    println!(
+        "base worktree: {}",
+        registered["base_worktree"].as_str().unwrap_or("?")
+    );
     Ok(())
-}
-
-/// Folder name turned into a hostname label for `dev.app`.
-fn dns_label(name: &str) -> String {
-    let label: String = name
-        .to_lowercase()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    let label = label.trim_matches('-');
-    let label = &label[..label.len().min(63)];
-    if label.is_empty() {
-        "app".into()
-    } else {
-        label.trim_end_matches('-').into()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn dns_label_from_folder() {
-        assert_eq!(super::dns_label("My_App.v2"), "my-app-v2");
-        assert_eq!(super::dns_label("日本"), "app");
-        assert!(strata_core::config::is_dns_label(&super::dns_label(
-            &format!("{}-x", "a".repeat(62))
-        )));
-    }
 }
