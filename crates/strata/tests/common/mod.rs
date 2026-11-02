@@ -125,11 +125,42 @@ pub fn set_ports(e: &Env, lo: u16, hi: u16, proxy: u16) {
 }
 
 /// Each initialized test repo gets its own port range and proxy port: tests in one binary run
-/// in parallel, each with its own daemon (binaries run one after another).
+/// in parallel, each with its own daemon (binaries run one after another). The warm pool is
+/// off, so other tests always see the same worktrees.
 fn own_ports(e: &Env) {
     static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(30000);
     let lo = NEXT.fetch_add(100, std::sync::atomic::Ordering::SeqCst);
     set_ports(e, lo, lo + 49, lo + 50);
+    no_pool(e);
+}
+
+/// `seed.warm_pool = 0`. The pool only fills after a `strata new`, so calling this right after
+/// `strata init` leaves no entry to race with.
+pub fn no_pool(e: &Env) {
+    let config = std::fs::read_to_string(e.root.join("strata.toml")).unwrap();
+    let config: Vec<String> = config
+        .lines()
+        .map(|l| match l.split_whitespace().next() {
+            Some("warm_pool") => "warm_pool = 0".to_string(),
+            _ => l.to_string(),
+        })
+        .collect();
+    std::fs::write(e.root.join("strata.toml"), config.join("\n") + "\n").unwrap();
+}
+
+/// An npm repo whose one dependency is a local folder, so installing needs no network.
+pub fn npm_repo() -> Env {
+    env(&[
+        (".gitignore", "node_modules\n"),
+        (
+            "package.json",
+            r#"{"name":"app","private":true,"dependencies":{"local":"file:./local"}}"#,
+        ),
+        (
+            "local/package.json",
+            r#"{"name":"local","version":"1.0.0"}"#,
+        ),
+    ])
 }
 
 /// Starts a dev process through the API (`kind: dev`); returns the response.

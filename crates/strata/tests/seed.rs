@@ -24,28 +24,15 @@ fn new(e: &common::Env, args: &[&str]) -> (PathBuf, String, serde_json::Value) {
     )
 }
 
-fn npm_repo() -> common::Env {
-    common::env(&[
-        (".gitignore", "node_modules\n"),
-        (
-            "package.json",
-            r#"{"name":"app","private":true,"dependencies":{"local":"file:./local"}}"#,
-        ),
-        (
-            "local/package.json",
-            r#"{"name":"local","version":"1.0.0"}"#,
-        ),
-    ])
-}
-
 fn real_dir(p: &Path) -> bool {
     p.symlink_metadata().is_ok_and(|m| m.is_dir())
 }
 
 #[test]
 fn the_base_installs_and_agents_clone_from_it() {
-    let e = npm_repo();
+    let e = common::npm_repo();
     let init = e.strata(&["init", "--no-service"]);
+    common::no_pool(&e);
     assert!(init.contains("(dependencies: install)"), "{init}");
     assert!(e.home.join("logs/.base/install.log").exists());
     let base = e.root.parent().unwrap().join(".strata/app/.base");
@@ -81,6 +68,7 @@ fn the_main_checkout_seeds_the_base_when_its_key_matches() {
     std::fs::create_dir_all(e.root.join("node_modules/pkg")).unwrap();
     std::fs::write(e.root.join("node_modules/pkg/index.js"), "main's").unwrap();
     let init = e.strata(&["init", "--no-service"]);
+    common::no_pool(&e);
     let base = e.root.parent().unwrap().join(".strata/app/.base");
     if CLONES {
         assert!(
@@ -97,8 +85,9 @@ fn the_main_checkout_seeds_the_base_when_its_key_matches() {
 
 #[test]
 fn a_new_dep_key_installs_and_becomes_the_donor() {
-    let e = npm_repo();
+    let e = common::npm_repo();
     e.strata(&["init", "--no-service"]);
+    common::no_pool(&e);
     let (a, _, _) = new(&e, &["a"]);
     common::commit_file(
         &a,
@@ -136,6 +125,7 @@ fn a_failed_install_leaves_a_usable_worktree_and_a_warning() {
     // Malformed package.json: npm fails at once (EJSONPARSE), without touching the network.
     let e = common::env(&[("package.json", "{ not json")]);
     let init = e.strata_in(&e.root, &["init", "--no-service"]);
+    common::no_pool(&e);
     assert!(
         String::from_utf8_lossy(&init.stderr).contains("failed"),
         "the base's install failed too"
@@ -165,7 +155,10 @@ fn without_clones_the_configured_fallback_runs() {
     let e = common::env(&[
         (".gitignore", "node_modules\n"),
         ("package.json", r#"{"name":"app","private":true}"#),
-        ("strata.toml", "[seed]\nfallback = \"copy\"\n"),
+        (
+            "strata.toml",
+            "[seed]\nfallback = \"copy\"\nwarm_pool = 0\n",
+        ),
     ]);
     std::fs::create_dir_all(e.root.join("node_modules/pkg")).unwrap();
     std::fs::write(e.root.join("node_modules/pkg/index.js"), "main's").unwrap();
@@ -259,6 +252,7 @@ fn pnpm_state_points_at_the_new_worktree() {
     common::git(&e.root, &["add", "."]);
     common::git(&e.root, &["commit", "-q", "-m", "exec"]);
     e.strata(&["init", "--no-service"]);
+    common::no_pool(&e);
     let (a, stderr, _) = new(&e, &["a"]);
     assert!(stderr.contains("dependencies: clone from"), "{stderr}");
     let state =
@@ -305,6 +299,7 @@ fn addons_built_in_the_donor_are_rebuilt() {
     )
     .unwrap();
     let init = e.strata(&["init", "--no-service"]);
+    common::no_pool(&e);
     assert!(init.contains(", rebuilt addon)"), "{init}");
     let (a, stderr, _) = new(&e, &["a"]);
     assert!(stderr.contains(", rebuilt addon"), "{stderr}");

@@ -184,6 +184,7 @@ async fn status(State(d): State<Shared>) -> ApiResult {
                 agents.push(a);
             }
             r["agents"] = json!(agents);
+            r["warm_pool"] = json!(crate::pool::count(&repo.root));
             repos.push(r);
         }
         repos
@@ -211,7 +212,12 @@ async fn register_repo(State(d): State<Shared>, Json(req): Json<ops::RegisterRep
 }
 
 async fn new_agent(State(d): State<Shared>, Json(req): Json<ops::NewAgent>) -> ApiResult {
-    blocking(d, |d| ops::new_agent(d, req)).await
+    let out = blocking(d.clone(), |d| ops::new_agent(d, req)).await?;
+    // Refill the warm pool off the critical path.
+    if let Some(repo_id) = out["agent"]["repo_id"].as_i64() {
+        tokio::task::spawn_blocking(move || ops::fill_pool(&d, repo_id));
+    }
+    Ok(out)
 }
 
 async fn adopt(State(d): State<Shared>, Json(req): Json<ops::Adopt>) -> ApiResult {

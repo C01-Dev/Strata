@@ -242,6 +242,14 @@ fn hash_dir(dir: &Path, rel: &str, out: &mut Vec<(String, u64)>) -> io::Result<(
     Ok(())
 }
 
+/// Whether a repo-relative path is an input of `dep_key` (outside `extra_paths`).
+pub fn is_dep_input(rel: &str) -> bool {
+    rel.rsplit('/').next() == Some("package.json")
+        || LOCKFILES.contains(&rel)
+        || PM_CONFIG.contains(&rel)
+        || rel.starts_with("patches/")
+}
+
 /// Files that differ from or are missing in `base`, and base files missing from `wt`.
 pub fn layer(base: &Tree, wt: &Tree) -> Layer {
     let mut changed: Vec<String> = wt

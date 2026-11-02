@@ -91,7 +91,8 @@ pub struct Worktree {
     pub head: String,
     /// Short name; `None` when detached.
     pub branch: Option<String>,
-    pub locked: bool,
+    /// The lock reason (`Some("")` when locked without one); `None` when not locked.
+    pub locked: Option<String>,
 }
 
 pub fn list(root: &Path) -> Result<Vec<Worktree>> {
@@ -114,14 +115,14 @@ fn parse_list(out: &str) -> Vec<Worktree> {
                     path: val.into(),
                     head: String::new(),
                     branch: None,
-                    locked: false,
+                    locked: None,
                 });
             }
             ("HEAD", Some(w)) => w.head = val.into(),
             ("branch", Some(w)) => {
                 w.branch = Some(val.strip_prefix("refs/heads/").unwrap_or(val).into())
             }
-            ("locked", Some(w)) => w.locked = true,
+            ("locked", Some(w)) => w.locked = Some(val.into()),
             _ => {}
         }
     }
@@ -162,6 +163,54 @@ pub fn add_detached(root: &Path, path: &Path, rev: &str) -> Result<()> {
         ],
     )
     .map(drop)
+}
+
+/// Like `add_detached`, locked with `reason` (the warm pool keeps its state there).
+pub fn add_detached_locked(root: &Path, path: &Path, rev: &str, reason: &str) -> Result<()> {
+    git(
+        root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            "--lock",
+            "--reason",
+            reason,
+            utf8(path)?,
+            rev,
+        ],
+    )
+    .map(drop)
+}
+
+/// Replaces the lock (and its reason).
+pub fn relock(root: &Path, path: &Path, reason: &str) -> Result<()> {
+    unlock(root, path)?;
+    git(root, &["worktree", "lock", "--reason", reason, utf8(path)?]).map(drop)
+}
+
+/// `git worktree move` (the worktree must be unlocked).
+pub fn move_worktree(root: &Path, from: &Path, to: &Path) -> Result<()> {
+    git(root, &["worktree", "move", utf8(from)?, utf8(to)?]).map(drop)
+}
+
+/// Checks out `branch` in the worktree: new from `from`, or the existing one when `from` is `None`.
+pub fn switch(path: &Path, branch: &str, from: Option<&str>) -> Result<()> {
+    match from {
+        Some(from) => git(path, &["switch", "-q", "-c", branch, from]),
+        None => git(path, &["switch", "-q", branch]),
+    }
+    .map(drop)
+}
+
+/// Paths that differ between two commits.
+pub fn changed_between(dir: &Path, a: &str, b: &str) -> Result<Vec<String>> {
+    Ok(git(dir, &["diff", "--name-only", "-z", a, b])?
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(String::from)
+        .collect())
 }
 
 pub fn lock(root: &Path, path: &Path) -> Result<()> {
@@ -359,13 +408,16 @@ mod tests {
                 path: "/a b".into(),
                 head: "1111".into(),
                 branch: Some("main".into()),
-                locked: false
+                locked: None
             }
         );
-        assert_eq!((list[1].branch.as_deref(), list[1].locked), (None, true));
         assert_eq!(
-            (list[2].branch.as_deref(), list[2].locked),
-            (Some("x"), true)
+            (list[1].branch.as_deref(), list[1].locked.as_deref()),
+            (None, Some(""))
+        );
+        assert_eq!(
+            (list[2].branch.as_deref(), list[2].locked.as_deref()),
+            (Some("x"), Some("because"))
         );
     }
 
@@ -379,7 +431,7 @@ mod tests {
             .into_iter()
             .find(|w| same_path(&w.path, &wt))
             .unwrap();
-        assert!(entry.locked);
+        assert!(entry.locked.is_some());
         assert_eq!(entry.branch.as_deref(), Some("feature"));
         lock(&root, &wt).unwrap(); // already locked is fine
         assert_eq!(changes(&wt).unwrap(), 0);
@@ -393,7 +445,7 @@ mod tests {
             list(&root)
                 .unwrap()
                 .iter()
-                .any(|w| same_path(&w.path, &wt) && w.locked),
+                .any(|w| same_path(&w.path, &wt) && w.locked.is_some()),
             "re-locked after a failed remove"
         );
         remove(&root, &wt, true).unwrap();

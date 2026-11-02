@@ -32,7 +32,7 @@ fn fault(point: &str) {
     }
 }
 
-fn base_path(root: &Path, cfg: &Config) -> PathBuf {
+pub fn base_path(root: &Path, cfg: &Config) -> PathBuf {
     cfg.worktree_dir(root).join(".base")
 }
 
@@ -180,10 +180,20 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
         .store()
         .insert_agent(repo.id, &name, &path, &branch, AgentState::Creating)?;
     fault("new:before_git");
-    if let Err(e) = git::add(root, &path, &branch, from.as_deref()) {
-        d.store().delete_agent(agent.id)?;
-        return Err(e);
-    }
+    let made = match crate::pool::take(root, &cfg, &path, &branch, from.as_deref()) {
+        Ok(None) => git::add(root, &path, &branch, from.as_deref()).map(|()| None),
+        taken => taken,
+    };
+    let pooled = match made {
+        Ok(pooled) => pooled,
+        Err(e) => {
+            if path.exists() {
+                let _ = git::remove(root, &path, true);
+            }
+            d.store().delete_agent(agent.id)?;
+            return Err(e);
+        }
+    };
     fault("new:after_git");
     let warnings: Vec<String> = git::uninitialized_submodules(&path)?
         .into_iter()
@@ -192,7 +202,10 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
     // Installing can take minutes; other agents' git operations need not wait for it. The agent
     // stays `creating` until it is done, so `rm` and the maintenance pass leave it alone.
     drop(git_lock);
-    let seeded = seed(d, &repo, &cfg, &path, &name, None);
+    let seeded = match pooled {
+        Some(entry) => settle_entry(d, &repo, &cfg, &path, &name, entry),
+        None => seed(d, &repo, &cfg, &path, &name, None, true),
+    };
     let mut warnings = warnings;
     warnings.extend(seeded.warnings.iter().cloned());
     d.store()
@@ -219,6 +232,8 @@ pub struct Seeded {
     pub donor: Option<PathBuf>,
     /// Native addons rebuilt after seeding (PLAN 4.4).
     pub rebuilt: Vec<String>,
+    /// Taken from the warm pool (PLAN 4.5).
+    pub warm: bool,
     pub warnings: Vec<String>,
 }
 
@@ -230,6 +245,9 @@ impl Seeded {
         };
         if !self.rebuilt.is_empty() {
             d += &format!(", rebuilt {}", self.rebuilt.join(", "));
+        }
+        if self.warm {
+            d += " (warm pool)";
         }
         d
     }
@@ -269,9 +287,21 @@ fn seed_from(from: &Path, path: &Path, cfg: &Config, way: Way) -> Result<Vec<Pat
 /// hardlinked: a rebuild would write into the donor's files.
 fn seeded(s: &mut Seeded, from: PathBuf, path: &Path, folders: &[PathBuf], way: Way, log: &str) {
     s.tier = way.name();
-    match strata_seed::fix_up(&from, path, folders) {
+    fix_ups(s, &from, path, folders, way == Way::Hardlink, log);
+    s.donor = Some(from);
+}
+
+fn fix_ups(
+    s: &mut Seeded,
+    from: &Path,
+    path: &Path,
+    folders: &[PathBuf],
+    hardlinked: bool,
+    log: &str,
+) {
+    match strata_seed::fix_up(from, path, folders) {
         Ok(f) if f.rebuild.is_empty() => {}
-        Ok(f) if way == Way::Hardlink => s.warnings.push(format!(
+        Ok(f) if hardlinked => s.warnings.push(format!(
             "native addons {} were built in {}; not rebuilt, since that would write into its hardlinked files",
             f.rebuild.join(", "),
             from.display()
@@ -288,12 +318,68 @@ fn seeded(s: &mut Seeded, from: PathBuf, path: &Path, folders: &[PathBuf], way: 
             "pointing state files at the new worktree failed ({e})"
         )),
     }
-    s.donor = Some(from);
+}
+
+/// Seeds a warm pool entry: like an agent, but it never becomes a donor (it moves).
+pub fn seed_entry(d: &Daemon, repo: &Repo, cfg: &Config, path: &Path) -> Seeded {
+    seed(d, repo, cfg, path, ".pool", None, false)
+}
+
+/// After `pool::take`: the entry's seeding carries over once fix-ups point it at its new
+/// folder (PLAN 4.5). Should its dep_key differ after all, its folders go and it is seeded
+/// afresh.
+fn settle_entry(
+    d: &Daemon,
+    repo: &Repo,
+    cfg: &Config,
+    path: &Path,
+    agent: &str,
+    entry: crate::pool::Entry,
+) -> Seeded {
+    let key = dep_key(path, cfg).ok();
+    let folders = git::ignored(path)
+        .map(|i| strata_seed::folders(&i, &cfg.seed.paths))
+        .unwrap_or_default();
+    if key.as_deref() == Some(entry.dep_key.as_str()) {
+        let mut s = Seeded {
+            tier: match entry.tier.as_str() {
+                "copy" => "copy",
+                "hardlink" => "hardlink",
+                "install" => "install",
+                _ => "clone",
+            },
+            dep_key: key,
+            donor: entry.donor,
+            warm: true,
+            ..Default::default()
+        };
+        let hardlinked = s.tier == "hardlink";
+        fix_ups(&mut s, &entry.path, path, &folders, hardlinked, agent);
+        return s;
+    }
+    for rel in &folders {
+        let _ = strata_seed::remove(&path.join(rel));
+    }
+    seed(d, repo, cfg, path, agent, None, true)
+}
+
+/// Refills the repo's warm pool (after `strata new` took an entry, or at daemon start).
+pub fn fill_pool(d: &Daemon, repo_id: i64) {
+    let repo = d
+        .store()
+        .repos()
+        .ok()
+        .and_then(|r| r.into_iter().find(|r| r.id == repo_id));
+    if let Some(repo) = repo
+        && let Err(e) = crate::pool::fill(d, &repo)
+    {
+        tracing::warn!("warm pool for {}: {e}", repo.root.display());
+    }
 }
 
 /// Seeds a checkout's dependencies (PLAN Phase 4): clones the `seed.paths` folders from the
 /// donor with the same dep_key (or from `also`, if it has that key), else installs, after which
-/// the checkout is the donor for its key. The checkout is usable whatever happens.
+/// the checkout is the donor for its key if `donate`. The checkout is usable whatever happens.
 fn seed(
     d: &Daemon,
     repo: &Repo,
@@ -301,6 +387,7 @@ fn seed(
     path: &Path,
     log: &str,
     also: Option<&Path>,
+    donate: bool,
 ) -> Seeded {
     let mut s = Seeded {
         tier: "none",
@@ -375,6 +462,7 @@ fn seed(
     s.tier = tier;
     s.warnings.extend(failed);
     if tier == "install"
+        && donate
         && let Some(key) = &s.dep_key
     {
         let _ = d.store().set_donor(repo.id, key, path);
@@ -413,7 +501,7 @@ pub fn seed_base(d: &Daemon, repo: &Repo) -> Result<Seeded> {
         for rel in strata_seed::folders(&git::ignored(&base)?, &cfg.seed.paths) {
             strata_seed::remove(&base.join(rel))?;
         }
-        let s = seed(d, repo, &cfg, &base, ".base", Some(&repo.root));
+        let s = seed(d, repo, &cfg, &base, ".base", Some(&repo.root), true);
         if s.tier == "clone"
             && let Some(key) = &s.dep_key
         {
@@ -618,6 +706,9 @@ pub fn recover(d: &Daemon) -> Result<()> {
     let _git = d.git.lock().unwrap();
     let repos = d.store().repos()?;
     for repo in repos {
+        if let Ok(cfg) = Config::load(&repo.root) {
+            crate::pool::recover(&repo.root, &cfg)?;
+        }
         let listed = git::list(&repo.root)?;
         let agents = d.store().agents(repo.id)?;
         for a in agents {
@@ -671,9 +762,21 @@ pub fn recover(d: &Daemon) -> Result<()> {
 pub async fn maintain(d: Arc<Daemon>) {
     let mut every = tokio::time::interval(Duration::from_secs(2));
     let mut n = 0u64;
-    // At start, a base that is not yet the donor for its key (new, or seeded by Phase 2's links).
-    for repo in d.store().repos().unwrap_or_default() {
-        reseed_base(&d, repo);
+    // At start, a base that is not yet the donor for its key (new, or seeded by Phase 2's
+    // links); then the warm pool of repos in use. Bound first: a `for` would hold the store
+    // guard of its head expression through the body, which takes the store lock again.
+    let repos = d.store().repos().unwrap_or_default();
+    for repo in repos {
+        let in_use = d.store().agents(repo.id).is_ok_and(|a| !a.is_empty());
+        let d = d.clone();
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = seed_base(&d, &repo) {
+                tracing::warn!("seeding the base worktree of {}: {e}", repo.root.display());
+            }
+            if in_use {
+                fill_pool(&d, repo.id);
+            }
+        });
     }
     loop {
         every.tick().await;
