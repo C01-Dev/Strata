@@ -98,6 +98,7 @@ pub fn router(daemon: Shared) -> Router {
         .route("/v1/repos", post(register_repo))
         .route("/v1/agents", post(new_agent))
         .route("/v1/agents/adopt", post(adopt))
+        .route("/v1/gc", post(gc))
         .route("/v1/agents/{name}", delete(remove))
         .route("/v1/agents/{name}/check", post(check))
         .route("/v1/agents/{name}/procs", post(start_proc))
@@ -164,6 +165,7 @@ async fn status(State(d): State<Shared>) -> ApiResult {
         let store = d.store();
         let mut repos = vec![];
         for repo in store.repos().map_err(ApiError)? {
+            let cfg = strata_core::config::Config::load(&repo.root).ok();
             let mut r = json!(repo);
             let mut agents = vec![];
             for agent in store.agents(repo.id).map_err(ApiError)? {
@@ -171,6 +173,11 @@ async fn status(State(d): State<Shared>) -> ApiResult {
                 a["port"] = json!(store.agent_port(agent.id).map_err(ApiError)?);
                 let mut ps = store.processes(agent.id).map_err(ApiError)?;
                 ps.truncate(10);
+                if let Some(cfg) = &cfg
+                    && ps.iter().any(|p| p.kind == "dev" && p.state == "running")
+                {
+                    a["url"] = json!(crate::ports::url(&agent.name, &repo, cfg));
+                }
                 a["processes"] = json!(ps);
                 let (bytes, level) = d
                     .meter
@@ -223,6 +230,10 @@ async fn new_agent(State(d): State<Shared>, Json(req): Json<ops::NewAgent>) -> A
 
 async fn adopt(State(d): State<Shared>, Json(req): Json<ops::Adopt>) -> ApiResult {
     blocking(d, |d| ops::adopt(d, req)).await
+}
+
+async fn gc(State(d): State<Shared>) -> ApiResult {
+    blocking(d, ops::gc).await
 }
 
 async fn remove(

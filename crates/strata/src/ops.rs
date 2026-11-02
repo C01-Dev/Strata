@@ -683,10 +683,13 @@ pub fn remove(d: &Daemon, req: Remove) -> Result<Value> {
     if agent.path.exists() {
         d.store().set_agent_state(agent.id, AgentState::Removing)?;
         fault("rm:before_git");
+        let aside = set_aside(root, &cfg, &agent);
         if let Err(e) = git::remove(root, &agent.path, req.force) {
+            aside.put_back();
             d.store().set_agent_state(agent.id, AgentState::Ready)?;
             return Err(e);
         }
+        aside.discard();
         fault("rm:after_git");
     } else {
         git::forget(root, &agent.path)?;
@@ -707,6 +710,145 @@ pub fn remove(d: &Daemon, req: Remove) -> Result<Value> {
     d.store()
         .event(Some(agent.id), "agent.removed", &agent.name)?;
     Ok(json!({ "removed": agent.name, "notes": notes }))
+}
+
+/// A worktree's seed folders moved to `<worktree_dir>/.trash/<millis>-<name>/<n>` before
+/// `git worktree remove`, which then deletes only the checkout: deleting a seeded cal.com
+/// `node_modules` takes 15 s and more, and happens in the background instead.
+struct Aside {
+    moved: Vec<(PathBuf, PathBuf)>,
+    trash: PathBuf,
+}
+
+/// Renames (same volume, so instant) whatever can be renamed; anything else stays for git.
+fn set_aside(root: &Path, cfg: &Config, agent: &Agent) -> Aside {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let trash = trash_dir(root, cfg).join(format!("{millis}-{}", agent.name));
+    let mut aside = Aside {
+        moved: vec![],
+        trash,
+    };
+    let folders = git::ignored(&agent.path)
+        .map(|i| strata_seed::folders(&i, &cfg.seed.paths))
+        .unwrap_or_default();
+    if folders.is_empty() || fs::create_dir_all(&aside.trash).is_err() {
+        return aside;
+    }
+    for (n, rel) in folders.iter().enumerate() {
+        let (from, to) = (agent.path.join(rel), aside.trash.join(n.to_string()));
+        if fs::rename(&from, &to).is_ok() {
+            aside.moved.push((from, to));
+        }
+    }
+    aside
+}
+
+impl Aside {
+    /// `git worktree remove` refused: the worktree stays, so its folders come back.
+    fn put_back(self) {
+        for (from, to) in &self.moved {
+            let _ = fs::rename(to, from);
+        }
+        let _ = fs::remove_dir(&self.trash);
+    }
+
+    fn discard(self) {
+        if self.trash.exists() {
+            std::thread::spawn(move || strata_seed::remove(&self.trash));
+        }
+    }
+}
+
+fn trash_dir(root: &Path, cfg: &Config) -> PathBuf {
+    cfg.worktree_dir(root).join(".trash")
+}
+
+/// `strata gc` (PLAN 5.2): removes what nothing uses any more. Agents orphaned by a hand-deleted
+/// folder (with their records and logs), donors whose folder is gone, port reservations without
+/// an agent, git's records of deleted worktrees, `.strata-seed-*` folders a crash left inside a
+/// worktree, logs of agents that no longer exist, and the trash (deleted in the background).
+pub fn gc(d: &Daemon) -> Result<Value> {
+    let _git = d.git.lock().unwrap();
+    let (mut agents_removed, mut donors_removed, mut leftovers, mut trash) = (vec![], 0, 0, 0);
+    let mut kept_logs = BTreeSet::from([".base".to_string(), ".pool".to_string()]);
+    let repos = d.store().repos()?;
+    for repo in repos {
+        let agents = d.store().agents(repo.id)?;
+        for a in &agents {
+            if a.state == AgentState::Orphaned {
+                d.store().delete_agent(a.id)?;
+                d.store().event(
+                    Some(a.id),
+                    "agent.removed",
+                    &format!("{} (orphaned; gc)", a.name),
+                )?;
+                agents_removed.push(a.name.clone());
+                continue;
+            }
+            kept_logs.insert(a.name.clone());
+            if a.state == AgentState::Ready && a.path.exists() {
+                for rel in git::git(
+                    &a.path,
+                    &[
+                        "ls-files",
+                        "-z",
+                        "--others",
+                        "--exclude-standard",
+                        "--directory",
+                    ],
+                )?
+                .split('\0')
+                .filter(|p| {
+                    p.trim_end_matches('/')
+                        .rsplit('/')
+                        .next()
+                        .is_some_and(|n| n.starts_with(".strata-seed-"))
+                }) {
+                    strata_seed::remove(&a.path.join(rel.trim_end_matches('/')))?;
+                    leftovers += 1;
+                }
+            }
+        }
+        let donors = d.store().donors(repo.id)?;
+        for path in donors {
+            if !path.exists() {
+                d.store().delete_donor(repo.id, &path)?;
+                donors_removed += 1;
+            }
+        }
+        git::git(&repo.root, &["worktree", "prune"])?;
+        if let Ok(cfg) = Config::load(&repo.root) {
+            let dir = trash_dir(&repo.root, &cfg);
+            trash += fs::read_dir(&dir).map_or(0, |e| e.count());
+            if dir.exists() {
+                std::thread::spawn(move || strata_seed::remove(&dir));
+            }
+        }
+    }
+    let ports_freed = d.store().delete_orphan_ports()?;
+    let mut logs_removed = vec![];
+    for entry in fs::read_dir(strata_core::strata_home().join("logs"))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if entry.path().is_dir() && !kept_logs.contains(&name) {
+            strata_seed::remove(&entry.path())?;
+            logs_removed.push(name);
+        }
+    }
+    Ok(json!({
+        "agents_removed": agents_removed,
+        "donors_removed": donors_removed,
+        "ports_freed": ports_freed,
+        "seed_leftovers_removed": leftovers,
+        "trash_removed": trash,
+        "logs_removed": logs_removed,
+    }))
 }
 
 /// At startup, before serving: settle operations a crash interrupted, and orphan ready agents
@@ -781,6 +923,10 @@ pub async fn maintain(d: Arc<Daemon>) {
         let in_use = d.store().agents(repo.id).is_ok_and(|a| !a.is_empty());
         let d = d.clone();
         tokio::task::spawn_blocking(move || {
+            // Trash a stopped daemon did not finish deleting (see `Aside`).
+            if let Ok(cfg) = Config::load(&repo.root) {
+                let _ = strata_seed::remove(&trash_dir(&repo.root, &cfg));
+            }
             if let Err(e) = seed_base(&d, &repo) {
                 tracing::warn!("seeding the base worktree of {}: {e}", repo.root.display());
             }

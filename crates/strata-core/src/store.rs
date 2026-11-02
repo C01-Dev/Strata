@@ -319,6 +319,27 @@ impl Store {
         Ok(())
     }
 
+    /// Donor paths of a repo.
+    pub fn donors(&self, repo_id: i64) -> Result<Vec<PathBuf>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path FROM donors WHERE repo_id = ?1")?;
+        let rows = stmt.query_map([repo_id], |r| r.get::<_, String>(0))?;
+        Ok(rows
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .into_iter()
+            .map(PathBuf::from)
+            .collect())
+    }
+
+    /// Ports whose agent no longer exists; returns how many.
+    pub fn delete_orphan_ports(&self) -> Result<usize> {
+        Ok(self.conn.execute(
+            "DELETE FROM ports WHERE agent_id IS NULL OR agent_id NOT IN (SELECT id FROM agents)",
+            [],
+        )?)
+    }
+
     pub fn delete_donor(&self, repo_id: i64, path: &Path) -> Result<()> {
         self.conn.execute(
             "DELETE FROM donors WHERE repo_id = ?1 AND path = ?2",

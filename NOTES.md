@@ -533,3 +533,24 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
 - `--report` prints a Markdown table under a header line (Strata version, OS, arch, `uname -sr`). The repo path becomes `<repo>`, its parent `<repo-parent>`, `$HOME` becomes `~` and the user name `<user>`; pipes are escaped.
 - Tests: a set-up repo passes (clone ok on macOS); a proxy port held by the test process fails and names its pid; a `STRATA_HOME` over the socket limit fails; the report has no repo or home path.
 - Found on the way: with an over-long `STRATA_HOME`, every client command failed with std's raw "path must be shorter than SUN_LEN". The client now says the socket path is too long and to set a shorter `STRATA_HOME`.
+
+## Phase 5 — task 5.2 cleanup and status
+
+- **`strata gc`** (`POST /v1/gc`) removes what nothing uses any more:
+  - agents orphaned by a hand-deleted folder (`delete_agent` takes their processes, ports, snapshot and donor rows), and their logs;
+  - donor rows whose folder is gone;
+  - port reservations without an agent;
+  - git's records of deleted worktrees (`git worktree prune`);
+  - `.strata-seed-*` folders a crash left inside a worktree, which leave it dirty;
+  - `$STRATA_HOME/logs/<name>` folders of agents that no longer exist;
+  - the trash (below), deleted in the background.
+
+  It prints one line per kind.
+- **`strata rm` is fast now:** before `git worktree remove`, the worktree's seed folders are renamed (same volume, so instantly) into `<worktree_dir>/.trash/<millis>-<name>/<n>`. git then deletes only the checkout, and a thread deletes the trash. If git refuses, they are renamed back. A daemon that stops mid-delete leaves trash, which the next daemon start deletes, and `gc` too. cal.com, release build: **0.84 s** (was 24.6–31.7 s in Gate 4).
+- **`strata status`:**
+  - **Header:** daemon version, pid and uptime.
+  - **Per repo:** the base branch and warm-pool count, then a table with AGENT, STATE, BRANCH, PORT, DEPS (the seed tier), MEMORY (with the budget note) and URL (while a dev server runs; `/v1/status` now carries `url` per agent).
+  - **After the table:** running processes, checker groups (TypeScript version, agents, memory, pid) and unmanaged listeners with the hint.
+
+  `--json` is the full `/v1/status`, unchanged.
+- Tests: `rm` leaves no worktree and the trash empties; `gc` removes an orphan with its logs and clears a seeding leftover in another worktree, which is clean again; the status table has every column and the agent's row.

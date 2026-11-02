@@ -120,6 +120,8 @@ enum Command {
         #[arg(long, default_value_t = 200)]
         lines: usize,
     },
+    /// Remove what nothing uses any more: orphaned agents, stale donors and ports, leftovers, trash, old logs
+    Gc,
     /// Check what Strata depends on (git, Node, clones, ports, .localhost, cgroups) and how to fix it
     Doctor {
         /// Print a redacted Markdown summary to paste into an issue
@@ -205,6 +207,7 @@ fn main() {
             lines,
         } => logs(name, process, lines),
         Command::Doctor { report } => doctor::run(report),
+        Command::Gc => gc(),
         Command::Status { json } => status(json),
     };
     if let Err(e) = result {
@@ -368,16 +371,57 @@ fn check(name: String, file: Option<String>, json: bool) -> Result<()> {
     Ok(())
 }
 
+fn gc() -> Result<()> {
+    let out = client::post("/v1/gc", json!({}))?;
+    let names = |k: &str| {
+        out[k]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default()
+    };
+    let n = |k: &str| out[k].as_u64().unwrap_or(0);
+    println!(
+        "orphaned agents removed: {}",
+        match names("agents_removed") {
+            s if s.is_empty() => "none".into(),
+            s => s,
+        }
+    );
+    println!("stale donors removed: {}", n("donors_removed"));
+    println!("port reservations freed: {}", n("ports_freed"));
+    println!("seeding leftovers removed: {}", n("seed_leftovers_removed"));
+    println!(
+        "trash folders deleting in the background: {}",
+        n("trash_removed")
+    );
+    println!(
+        "old agent logs removed: {}",
+        match names("logs_removed") {
+            s if s.is_empty() => "none".into(),
+            s => s,
+        }
+    );
+    Ok(())
+}
+
 fn status(json: bool) -> Result<()> {
     let s = client::get("/v1/status")?;
     if json {
         println!("{}", serde_json::to_string_pretty(&s).unwrap_or_default());
         return Ok(());
     }
+    let up = (strata_core::store::now() - s["started_at"].as_i64().unwrap_or(0)).max(0);
     println!(
-        "daemon pid {}, version {}",
+        "daemon {}, pid {}, up {}h {}m",
+        s["version"].as_str().unwrap_or("?"),
         s["pid"],
-        s["version"].as_str().unwrap_or("?")
+        up / 3600,
+        up % 3600 / 60
     );
     let repos = s["repos"].as_array().cloned().unwrap_or_default();
     if repos.is_empty() {
@@ -385,52 +429,98 @@ fn status(json: bool) -> Result<()> {
     }
     for repo in repos {
         println!(
-            "\n{} (base {})",
+            "\n{}  (base {}, warm pool {})",
             repo["root"].as_str().unwrap_or("?"),
-            repo["base_branch"].as_str().unwrap_or("?")
+            repo["base_branch"].as_str().unwrap_or("?"),
+            repo["warm_pool"]
         );
         let agents = repo["agents"].as_array().cloned().unwrap_or_default();
         if agents.is_empty() {
             println!("  no agents");
+            continue;
         }
-        for a in agents {
-            let field = |k: &str| a[k].as_str().unwrap_or("?").to_string();
-            println!(
-                "  {:<20} {:<9} {:<24} {}",
+        let mut rows =
+            vec![["AGENT", "STATE", "BRANCH", "PORT", "DEPS", "MEMORY", "URL"].map(String::from)];
+        let mut procs = vec![];
+        for a in &agents {
+            let field = |k: &str| a[k].as_str().unwrap_or("-").to_string();
+            let memory = match a["memory_bytes"].as_u64().unwrap_or(0) {
+                0 => "-".to_string(),
+                b => {
+                    let note = match a["budget"].as_str() {
+                        Some("over") => " (over budget)",
+                        Some("warning") => " (near budget)",
+                        _ => "",
+                    };
+                    format!("{}{note}", size(b))
+                }
+            };
+            rows.push([
                 field("name"),
                 field("state"),
                 field("branch"),
-                field("path")
-            );
-            if let Some(tier) = a["seed_tier"].as_str() {
-                println!("      dependencies: {tier}");
-            }
-            if a["memory_bytes"].as_u64().unwrap_or(0) > 0 {
-                let note = match a["budget"].as_str() {
-                    Some("over") => " (over budget)",
-                    Some("warning") => " (near budget)",
-                    _ => "",
-                };
-                println!(
-                    "      memory {} MB{note}",
-                    a["memory_bytes"].as_u64().unwrap_or(0) / 1048576
-                );
-            }
-            let running = a["processes"]
+                a["port"].as_u64().map_or("-".into(), |p| p.to_string()),
+                field("seed_tier"),
+                memory,
+                field("url"),
+            ]);
+            for p in a["processes"]
                 .as_array()
                 .into_iter()
                 .flatten()
-                .filter(|p| p["state"] == "running");
-            for p in running {
-                let kind = p["kind"].as_str().unwrap_or("?");
-                println!(
-                    "      process {} ({kind}, pid {}): {}",
+                .filter(|p| p["state"] == "running")
+            {
+                procs.push(format!(
+                    "  {} {} #{} (pid {}): {}",
+                    field("name"),
+                    p["kind"].as_str().unwrap_or("?"),
                     p["id"],
                     p["pid"],
                     p["cmd"].as_str().unwrap_or("?")
-                );
+                ));
+            }
+        }
+        let widths: Vec<usize> = (0..7)
+            .map(|c| rows.iter().map(|r| r[c].len()).max().unwrap_or(0))
+            .collect();
+        for r in &rows {
+            let line: Vec<String> = r
+                .iter()
+                .zip(&widths)
+                .map(|(v, w)| format!("{v:<w$}"))
+                .collect();
+            println!("  {}", line.join("  ").trim_end());
+        }
+        if !procs.is_empty() {
+            println!("\n  running:");
+            for p in procs {
+                println!("  {p}");
             }
         }
     }
+    for g in s["checker"].as_array().into_iter().flatten() {
+        println!(
+            "\nchecker: TypeScript {}, {} agents, {}, pid {}",
+            g["typescript"].as_str().unwrap_or("?"),
+            g["agents"].as_array().map_or(0, |a| a.len()),
+            size(g["memory_bytes"].as_u64().unwrap_or(0)),
+            g["pid"]
+        );
+    }
+    for u in s["unmanaged"].as_array().into_iter().flatten() {
+        println!(
+            "\nunmanaged: {} has pid {} listening on {}; start it with `strata dev` for a URL, a budget and cleanup",
+            u["agent"].as_str().unwrap_or("?"),
+            u["pid"],
+            u["port"]
+        );
+    }
     Ok(())
+}
+
+fn size(bytes: u64) -> String {
+    match bytes {
+        b if b >= 1 << 30 => format!("{:.1} GB", b as f64 / (1u64 << 30) as f64),
+        b => format!("{} MB", b >> 20),
+    }
 }
