@@ -74,7 +74,7 @@ In your repo:
 strata init
 ```
 
-This writes `strata.toml`, installs a per-user service (launchd on macOS, a systemd user unit on Linux) that runs the daemon, and creates Strata's base worktree next to your repo in `../.strata/<repo>/`. `strata init --no-service` starts the daemon directly instead.
+This writes `strata.toml`, installs a per-user service (launchd on macOS, a systemd user unit on Linux) that runs the daemon, and creates Strata's base worktree next to your repo in `../.strata/<repo>/` (for a repo directly in your home folder, `~/.strata/worktrees/<repo>/`, apart from Strata's own files). `strata init --no-service` starts the daemon directly instead.
 
 ```bash
 strata doctor

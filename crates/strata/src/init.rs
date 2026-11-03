@@ -20,7 +20,7 @@ pub fn run(no_service: bool) -> Result<()> {
         let base = strata_git::default_base(&root)?;
         let text = config::template(
             &base,
-            &format!("../.strata/{folder}"),
+            &config::default_worktree_dir(&root, &strata_core::strata_home()),
             found.dev_command.as_deref(),
             &to_dns_label(&folder),
         );

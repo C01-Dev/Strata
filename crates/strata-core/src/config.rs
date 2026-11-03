@@ -21,7 +21,7 @@ pub struct Config {
 pub struct Repo {
     /// Branch Strata's own base worktree follows.
     pub base: String,
-    /// Where agent worktrees live, relative to the repo root. Default `../.strata/<repo folder>`.
+    /// Where agent worktrees live, relative to the repo root. Default: see `default_worktree_dir`.
     pub worktree_dir: Option<PathBuf>,
 }
 
@@ -193,12 +193,24 @@ impl Config {
     pub fn worktree_dir(&self, root: &Path) -> PathBuf {
         match &self.repo.worktree_dir {
             Some(dir) => normalize(&root.join(dir)),
-            None => root
-                .parent()
-                .unwrap_or(root)
-                .join(".strata")
-                .join(root.file_name().unwrap_or_default()),
+            None => normalize(&root.join(default_worktree_dir(root, &crate::strata_home()))),
         }
+    }
+}
+
+/// The default `repo.worktree_dir`, relative to the repo root: `../.strata/<repo folder>`, or
+/// `../.strata/worktrees/<repo folder>` when that `.strata` is Strata's own home (`home`, for a
+/// repo in the home folder), so worktrees never land among its `logs/`, `shared/` and
+/// `tsbridge/`.
+pub fn default_worktree_dir(root: &Path, home: &Path) -> String {
+    let folder = root.file_name().unwrap_or_default().to_string_lossy();
+    let beside = root.parent().unwrap_or(root).join(".strata");
+    let same = beside == home
+        || matches!((beside.canonicalize(), home.canonicalize()), (Ok(a), Ok(b)) if a == b);
+    if same {
+        format!("../.strata/worktrees/{folder}")
+    } else {
+        format!("../.strata/{folder}")
     }
 }
 
@@ -409,6 +421,19 @@ mod tests {
                 .dev
                 .command
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn worktrees_beside_stratas_home_go_in_a_folder_of_their_own() {
+        let home = Path::new("/home/u/.strata");
+        assert_eq!(
+            default_worktree_dir(Path::new("/src/web"), home),
+            "../.strata/web"
+        );
+        assert_eq!(
+            default_worktree_dir(Path::new("/home/u/logs"), home),
+            "../.strata/worktrees/logs"
         );
     }
 

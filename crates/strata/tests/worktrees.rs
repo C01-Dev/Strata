@@ -353,3 +353,36 @@ fn rm_takes_the_worktree_path_or_dot() {
     let err = e.strata_err(&["rm", e.root.to_str().unwrap()]);
     assert!(err.contains("is not an agent's worktree"), "{err}");
 }
+
+#[test]
+fn a_repo_beside_stratas_home_keeps_its_worktrees_apart() {
+    // A repo in the home folder named like one of Strata's own folders: by the default rule its
+    // worktrees would go in ~/.strata/logs, which is where Strata keeps every agent's logs.
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let root = base.join("logs");
+    std::fs::create_dir(&root).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    std::fs::write(root.join("README.md"), "hi\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    let e = common::Env {
+        root: root.clone(),
+        home: base.join(".strata"),
+        tmp,
+    };
+    e.strata(&["init", "--no-service"]);
+    common::own_ports(&e);
+    let toml = std::fs::read_to_string(root.join("strata.toml")).unwrap();
+    assert!(
+        toml.contains(r#"worktree_dir = "../.strata/worktrees/logs""#),
+        "{toml}"
+    );
+    let wt = path_of(&e.strata(&["new", "a"]));
+    assert_eq!(wt, base.join(".strata/worktrees/logs/a"));
+    assert!(
+        !base.join(".strata/logs/a").join("README.md").exists(),
+        "not among the logs"
+    );
+    e.strata(&["rm", "a"]);
+}

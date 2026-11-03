@@ -835,4 +835,5 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - the benchmark is published with its scripts (bench/REPORT.md in the public repo, and strata.c01.dev);
   - CI is green on macOS and Linux, with no clippy warnings and `cargo deny` clean;
   - install to a working agent takes under 5 minutes on both platforms.
-- Still open, none blocking: a real reboot bringing the service back, Safari and `*.localhost`, and the `~/.strata` name clash above.
+- Still open, none blocking: a real reboot bringing the service back, and Safari with `*.localhost`.
+- **`~/.strata` clash fixed:** `config::default_worktree_dir` is now the one rule for `init` and the config default. It is `../.strata/<repo>`, or `../.strata/worktrees/<repo>` when that `.strata` is Strata's home (compared lexically and by real path). Test `a_repo_beside_stratas_home_keeps_its_worktrees_apart` (a repo named `logs` beside `STRATA_HOME`) failed before with `../.strata/logs` and passes now, plus a unit test. Repos already set up keep their `strata.toml`, which names its folder explicitly, so nothing moves for them (the owner's `~/strata-try` stays at `~/.strata/strata-try`). The fix ships in the next release.
