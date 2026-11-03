@@ -8,7 +8,7 @@ Strata is a local runtime for running several coding agents on one TypeScript re
 
 It is one binary: CLI, daemon and MCP server.
 
-> Status: v0.1, pre-release. The install commands below work once the first release is published.
+> Status: v0.1.1, the first release (2026-11-03).
 
 ## Requirements
 
