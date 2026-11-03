@@ -7,12 +7,14 @@
 // (site/menubar.png links to docs/menubar.png for local previews.)
 
 const RAW = "https://raw.githubusercontent.com/C01-Dev/Strata/main/";
+// Part of every upstream URL, so the edge caches them under it: bump it to drop the cache.
+const EPOCH = 2;
 const INSTALLER = "https://github.com/C01-Dev/Strata/releases/latest/download/strata-installer.sh";
 const FILES = {
   "/": { path: "site/index.html", type: "text/html; charset=utf-8", ttl: 300 },
-  "/menubar.png": { path: "docs/menubar.png", type: "image/png", ttl: 86400 },
-  "/strata-launch.mp4": { path: "docs/strata-launch.mp4", type: "video/mp4", ttl: 86400 },
-  "/strata-launch.jpg": { path: "docs/strata-launch.jpg", type: "image/jpeg", ttl: 86400 },
+  "/menubar.png": { path: "docs/menubar.png", type: "image/png", ttl: 300 },
+  "/strata-launch.mp4": { path: "docs/strata-launch.mp4", type: "video/mp4", ttl: 300 },
+  "/strata-launch.jpg": { path: "docs/strata-launch.jpg", type: "image/jpeg", ttl: 300 },
 };
 
 export default {
@@ -28,7 +30,7 @@ export default {
     }
     // Byte ranges pass through: Safari plays video only through them.
     const range = request.headers.get("range");
-    const upstream = await fetch(RAW + file.path, {
+    const upstream = await fetch(`${RAW}${file.path}?v=${EPOCH}`, {
       headers: range ? { range } : {},
       cf: { cacheTtl: file.ttl, cacheEverything: true },
     });
