@@ -738,3 +738,15 @@ Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon b
 - `bench/REPORT.md` opens with a v0.1 results table: checker memory both ways, parity, seeding times and disk on APFS and XFS, cal.com's tests in a seeded worktree, `rm`, the Next.js gate, and the 8-hour soak. Each row has its rerun command, and the claims match NOTES (break-even at about 2 agents is marked as not measured). The Phase 0 study follows unchanged.
 - `.github/ISSUE_TEMPLATE/bug.md` asks for what happened, the commands, `strata doctor --report` and logs.
 - Still open for the checklist: "benchmark published" and "CI green" need the public repo (owner's names), and "install in under 5 minutes" is Gate 5.
+
+## Names and license (owner decision, 2026-11-03)
+
+- **Owner:** C01 Developments, on its existing GitHub organization `C01-Dev`. GitHub would not release `C01` itself: its username policy does not release inactive names, only names covered by a trademark complaint. If the owner later gets `C01`, the organization can be renamed and GitHub redirects the repo.
+- **Names:**
+  - Repo `github.com/C01-Dev/strata`; Homebrew tap `C01-Dev/homebrew-tap` (`brew install c01-dev/tap/strata`).
+  - npm package `stratagents`, with platform packages `stratagents-darwin-arm64`, `-linux-x64` and `-linux-arm64`, all four free. These are plain names, not a scope, so they can change hands later.
+  - The command is still `strata`. The menu bar app's bundle id is `dev.c01.strata`.
+- **License:** MIT OR Apache-2.0, as PLAN's layout planned. `LICENSE-MIT` reads "Copyright (c) 2026 C01 Developments", the studio's name of record. `LICENSE-APACHE` is the standard text, copied from serde's. `license.workspace = true` is set in every crate and `"MIT OR Apache-2.0"` in the npm packages. `cargo deny` now checks the workspace crates too (`private = { ignore = true }` removed): clean.
+- `release.yml` got the tap name by hand. `dist generate` leaves it alone under `allow-dirty = ["ci"]`, so this is a second hand edit next to the `uses: ./` fix. `dist plan` now ships both LICENSE files and the README in every tarball.
+- Checked: the npm launcher test packs and installs `stratagents-0.1.0.tgz` with `stratagents-darwin-arm64-0.1.0.tgz` and runs the checked binary; 164 tests pass; the app builds and its Info.plist lints.
+- Not done (needs the owner): create `C01-Dev/strata` and `C01-Dev/homebrew-tap` on GitHub, push, and add the `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN` secrets. crates.io: `strata` is taken there, so `cargo install` from crates.io would need the package published under another name (the binary can stay `strata`). Not part of v0.1's install paths.

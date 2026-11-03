@@ -8,7 +8,7 @@ Strata is a local runtime for running several coding agents on one TypeScript re
 
 It is one binary: CLI, daemon and MCP server.
 
-> Status: v0.1, pre-release. The install commands below use placeholder names (`OWNER`, `@owner`) until the first release is published.
+> Status: v0.1, pre-release. The install commands below work once the first release is published.
 
 ## Requirements
 
@@ -49,15 +49,15 @@ npm install --save-dev typescript@7.1.0-beta
 ## Install
 
 ```bash
-brew install OWNER/tap/strata
+brew install c01-dev/tap/strata
 ```
 
 ```bash
-npm install -g @owner/strata
+npm install -g stratagents
 ```
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/OWNER/strata/releases/latest/download/strata-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/C01-Dev/strata/releases/latest/download/strata-installer.sh | sh
 ```
 
 From source (Rust 1.99):
@@ -296,4 +296,8 @@ The end-to-end tests make temporary repos and daemons; four heavy ones are ignor
 
 ### Releasing
 
-Releases are built by [cargo-dist](https://opensource.axo.dev/cargo-dist/) on a `v*` tag (`.github/workflows/release.yml`): binaries for macOS arm64 and Linux x86_64/arm64, a shell installer, a Homebrew formula pushed to the tap, and the npm packages (`npm/build.mjs`, published by `.github/workflows/publish-npm.yml`). Before the first release, replace the placeholders: `OWNER/strata` in `Cargo.toml`, `OWNER/homebrew-tap` in `dist-workspace.toml`, `@owner` in `npm/build.mjs`; add a license; and add the `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN` secrets. After `dist generate`, re-apply the one-line fix noted in `dist-workspace.toml`.
+Releases are built by [cargo-dist](https://opensource.axo.dev/cargo-dist/) on a `v*` tag (`.github/workflows/release.yml`): binaries for macOS arm64 and Linux x86_64/arm64, a shell installer, a Homebrew formula pushed to the tap, and the npm packages (`npm/build.mjs`, published by `.github/workflows/publish-npm.yml`). Before the first release, add the `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN` secrets to the repo. After `dist generate`, re-apply the one-line fix noted in `dist-workspace.toml`.
+
+## License
+
+Strata is made by [C01 Developments](https://c01.dev) and licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

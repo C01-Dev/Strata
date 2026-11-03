@@ -7,13 +7,13 @@ const { spawnSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 
-const SCOPE = "@@SCOPE@@";
+const NAME = "@@NAME@@";
 const SHA256 = /* @@SHA256@@ */ {};
 const platform = `${process.platform}-${process.arch}`;
 
 let bin;
 try {
-  bin = require.resolve(`${SCOPE}/strata-${platform}/bin/strata`);
+  bin = require.resolve(`${NAME}-${platform}/bin/strata`);
 } catch {
   console.error(
     `strata: no build for ${platform} (builds: ${Object.keys(SHA256).join(", ")}). ` +

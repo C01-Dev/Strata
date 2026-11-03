@@ -67,8 +67,8 @@ fn the_launcher_runs_the_checked_binary() {
             "--offline",
             "--no-audit",
             "--no-fund",
-            &format!("./owner-strata-{v}.tgz"),
-            &format!("./owner-strata-{platform}-{v}.tgz"),
+            &format!("./stratagents-{v}.tgz"),
+            &format!("./stratagents-{platform}-{v}.tgz"),
         ],
     );
     let strata = t.path().join("prefix/node_modules/.bin/strata");
@@ -88,7 +88,7 @@ fn the_launcher_runs_the_checked_binary() {
     );
 
     let binary = t.path().join(format!(
-        "prefix/node_modules/@owner/strata-{platform}/bin/strata"
+        "prefix/node_modules/stratagents-{platform}/bin/strata"
     ));
     let mut bytes = std::fs::read(&binary).unwrap();
     bytes.push(0);

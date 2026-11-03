@@ -113,7 +113,7 @@ struct Panel: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         if Strata.binary == nil {
-            Link("How to install Strata", destination: URL(string: "https://github.com/OWNER/strata#install")!)
+            Link("How to install Strata", destination: URL(string: "https://github.com/C01-Dev/strata#install")!)
         } else if model.problem != nil {
             Button("Start Strata") { Task { await model.act(["daemon", "start"]) } }
         }

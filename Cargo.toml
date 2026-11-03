@@ -7,8 +7,9 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
 publish = false
-repository = "https://github.com/OWNER/strata"
-homepage = "https://github.com/OWNER/strata"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/C01-Dev/strata"
+homepage = "https://github.com/C01-Dev/strata"
 
 [workspace.dependencies]
 strata-core = { path = "crates/strata-core" }

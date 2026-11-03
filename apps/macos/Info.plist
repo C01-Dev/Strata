@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>owner.strata.menubar</string>
+    <string>dev.c01.strata</string>
     <key>CFBundleName</key>
     <string>Strata</string>
     <key>CFBundleExecutable</key>
