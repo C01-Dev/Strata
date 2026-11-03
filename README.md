@@ -119,13 +119,26 @@ Stops its processes, removes the worktree and deletes the branch if it is merged
 | `strata check <name> [file] [--json]` | Diagnostics from the shared checker for one file or the whole project |
 | `strata dev <name> [--cmd <command>]` | Start the agent's dev server; print its URLs |
 | `strata run <name> [--timeout <s>] -- <command>` | Run a command in the worktree under supervision; exits with its code |
+| `strata stop <name> [process]` | Stop the agent's running processes (or one), with everything they started |
 | `strata logs <name> [process] [--lines <n>]` | The end of a process's output |
-| `strata status [--json]` | Repos, agents, processes, checker |
+| `strata status [--json \| --watch]` | Repos, agents, processes, checker; `--watch` redraws every 2 s |
 | `strata doctor [--report]` | Check the setup; `--report` prints a redacted summary to paste into an issue |
 | `strata gc` | Remove what nothing uses any more: orphaned agents, stale donors, leftovers, trash, old logs |
 | `strata mcp [--agent <name>]` | The MCP server for an agent, on stdio |
 | `strata daemon start\|stop\|status\|install\|uninstall` | Manage the daemon and its service |
 | `strata bench <fixture>` | The memory benchmark (see [Benchmarks](#benchmarks)) |
+
+## Menu bar app (macOS)
+
+![The menu bar app with two agents](docs/menubar.png)
+
+`apps/macos` is a small menu bar app over the same commands. The icon shows how many agents are running, and a crossed-out icon means the daemon is down. Click it to see each agent's state, memory, how its dependencies got there, its port and dev-server URL, and the shared checker. Each agent has actions to start or stop its dev server, open it in Terminal or Finder, copy its path, and remove it. It asks first, and asks again before discarding uncommitted changes. "Status in Terminal" opens `strata status --watch`.
+
+It runs the `strata` CLI, so it needs Strata installed (it looks in `~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin`, or `STRATA_BIN`). macOS 14 or later. Until releases ship it, build it yourself:
+
+```bash
+apps/macos/bundle.sh && open apps/macos/build/Strata.app
+```
 
 ## MCP tools
 

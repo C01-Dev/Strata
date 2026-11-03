@@ -113,6 +113,12 @@ enum Command {
         #[arg(last = true, required = true)]
         cmd: Vec<String>,
     },
+    /// Stop an agent's running processes (default: all of them), with everything they started
+    Stop {
+        name: String,
+        /// Process id from `strata status`
+        process: Option<i64>,
+    },
     /// Print the end of a process's log (default: the agent's newest process)
     Logs {
         name: String,
@@ -131,8 +137,11 @@ enum Command {
     },
     /// Show repos and agents
     Status {
-        #[arg(long)]
+        #[arg(long, conflicts_with = "watch")]
         json: bool,
+        /// Redraw every 2 seconds until Ctrl-C
+        #[arg(long)]
+        watch: bool,
     },
 }
 
@@ -202,6 +211,7 @@ fn main() {
         }
         Command::Dev { name, cmd } => dev(name, cmd),
         Command::Run { name, timeout, cmd } => run(name, timeout, cmd),
+        Command::Stop { name, process } => stop(name, process),
         Command::Logs {
             name,
             process,
@@ -209,7 +219,8 @@ fn main() {
         } => logs(name, process, lines),
         Command::Doctor { report } => doctor::run(report),
         Command::Gc => gc(),
-        Command::Status { json } => status(json),
+        Command::Status { watch: true, .. } => watch_status(),
+        Command::Status { json, .. } => status(json),
     };
     if let Err(e) = result {
         eprintln!("strata: {e}");
@@ -347,33 +358,58 @@ fn run(name: String, timeout: u64, cmd: Vec<String>) -> Result<()> {
     std::process::exit(out["exit_code"].as_i64().unwrap_or(1) as i32);
 }
 
+/// The agent's entry in `strata status` for the repo in the working directory.
+fn agent_status(name: &str) -> Result<Value> {
+    let status = client::get("/v1/status")?;
+    let root = repo()?;
+    let repo = status["repos"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|r| r["root"] == root.to_string_lossy().as_ref());
+    repo.and_then(|r| {
+        r["agents"]
+            .as_array()?
+            .iter()
+            .find(|a| a["name"] == name)
+            .cloned()
+    })
+    .ok_or_else(|| {
+        strata_core::Error::NotFound(format!("no agent named {name:?}; see `strata status`"))
+    })
+}
+
+fn stop(name: String, process: Option<i64>) -> Result<()> {
+    let ids: Vec<i64> = match process {
+        Some(id) => vec![id],
+        None => agent_status(&name)?["processes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|p| p["state"] == "running")
+            .filter_map(|p| p["id"].as_i64())
+            .collect(),
+    };
+    if ids.is_empty() {
+        println!("{name} has nothing running");
+    }
+    for id in ids {
+        client::request(
+            "DELETE",
+            &format!("/v1/procs/{id}"),
+            Some(json!({ "agent": name })),
+        )?;
+        println!("stopped process {id}");
+    }
+    Ok(())
+}
+
 fn logs(name: String, process: Option<i64>, lines: usize) -> Result<()> {
     let id = match process {
         Some(id) => id,
-        None => {
-            let status = client::get("/v1/status")?;
-            let root = repo()?;
-            let repo = status["repos"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .find(|r| r["root"] == root.to_string_lossy().as_ref());
-            let agent = repo.and_then(|r| {
-                r["agents"]
-                    .as_array()?
-                    .iter()
-                    .find(|a| a["name"] == name.as_str())
-                    .cloned()
-            });
-            let agent = agent.ok_or_else(|| {
-                strata_core::Error::NotFound(format!(
-                    "no agent named {name:?}; see `strata status`"
-                ))
-            })?;
-            agent["processes"][0]["id"].as_i64().ok_or_else(|| {
-                strata_core::Error::NotFound(format!("{name} has no processes yet"))
-            })?
-        }
+        None => agent_status(&name)?["processes"][0]["id"]
+            .as_i64()
+            .ok_or_else(|| strata_core::Error::NotFound(format!("{name} has no processes yet")))?,
     };
     let out = client::get(&format!("/v1/procs/{id}/logs?lines={lines}&agent={name}"))?;
     for line in out["lines"].as_array().into_iter().flatten() {
@@ -547,6 +583,18 @@ fn status(json: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// `status`, redrawn every 2 s. A daemon that goes away shows as an error line until it is back.
+fn watch_status() -> Result<()> {
+    loop {
+        print!("\x1b[H\x1b[2J");
+        println!("strata status, every 2 s (Ctrl-C to stop)\n");
+        if let Err(e) = status(false) {
+            println!("{e}");
+        }
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
 }
 
 fn size(bytes: u64) -> String {

@@ -68,3 +68,24 @@ fn socket_path_too_long_is_refused() {
         .unwrap();
     assert!(String::from_utf8_lossy(&out.stderr).contains("longer than 103 bytes"));
 }
+
+#[test]
+fn status_watch_redraws_until_stopped() {
+    let e = common::env(&[]);
+    e.strata(&["daemon", "start"]);
+    let mut watch = std::process::Command::new(env!("CARGO_BIN_EXE_strata"))
+        .args(["status", "--watch"])
+        .env("STRATA_HOME", &e.home)
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(3000));
+    watch.kill().unwrap();
+    let out = String::from_utf8(watch.wait_with_output().unwrap().stdout).unwrap();
+    assert!(out.matches("\x1b[2J").count() >= 2, "{out}");
+    assert!(out.matches("no repos").count() >= 2, "{out}");
+    assert!(
+        e.strata_err(&["status", "--watch", "--json"])
+            .contains("cannot be used with")
+    );
+}

@@ -237,3 +237,15 @@ fn an_orphaned_agent_loses_its_processes() {
     wait_until("process stopped", || !alive(pid));
     assert_eq!(e.agent("a").unwrap()["state"], "orphaned");
 }
+
+#[test]
+fn stop_from_the_cli() {
+    let e = initialized();
+    e.strata(&["new", "a"]);
+    let (id, pid) = dev(&e, "a", "sleep 300");
+    assert_eq!(e.strata(&["stop", "a"]), format!("stopped process {id}\n"));
+    assert!(!alive(pid));
+    assert_eq!(process(&e, "a", id)["state"], "stopped");
+    assert_eq!(e.strata(&["stop", "a"]), "a has nothing running\n");
+    assert!(e.strata_err(&["stop", "nobody"]).contains("no agent named"));
+}

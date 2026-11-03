@@ -652,3 +652,17 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
   - Recycles show in the samples at minutes 61, 121 and 182 (a fresh tsgo at 789 MB, the bridge stopped between queries at 6 MB, a fresh tsgo at 473 MB). Each came an hour or a little more after the last, depending on when every agent was idle.
   - No processes or worktrees were left after the script's cleanup.
   - Data in `bench/results/soak.csv`, `soak-checks.csv` and `soak.log`.
+
+## Menu bar app, `status --watch` and `stop` (owner request, 2026-11-03)
+
+- Not in PLAN. After Phase 5 the owner asked for a macOS menu bar app and `strata status --watch`. I had suggested a web dashboard, and the owner preferred the menu bar.
+- `strata status --watch` redraws the status every 2 s until Ctrl-C. If the daemon goes away, it shows the error line and keeps trying. `--json` conflicts with it. Test `status_watch_redraws_until_stopped`.
+- `strata stop <name> [process]` is new. The CLI had no way to stop a dev server short of `rm`, and the app needs one. It calls the same API as the `strata_stop` MCP tool, for all of the agent's running processes or one of them. The agent lookup is shared with `logs`. Test `stop_from_the_cli`.
+- `apps/macos` is a SwiftPM package (`StrataBar`, macOS 14+, SwiftUI `MenuBarExtra` with `.window` style, `LSUIElement`).
+  - It runs the `strata` CLI rather than speaking HTTP over the Unix socket, so it reuses the CLI's agent lookup, errors and refusals. It polls `status --json` every 2 s and runs actions in the repo's root.
+  - Remove asks first. If Strata refuses because of uncommitted changes, it shows Strata's message and asks again before `--force`.
+  - `bundle.sh` builds `build/Strata.app`, signed ad hoc. `STRATA_SNAPSHOT=<png>` renders the panel through an `NSHostingView` and quits; that is how `docs/menubar.png` was made (ImageRenderer draws placeholders for buttons and menus). CI builds it on macOS.
+  - Checked: built with no warnings, rendered with live data (a demo repo with two agents, a running dev server and the checker), and launched from the bundle (86 MB resident).
+  - Not checked: the clicks themselves. This session has no way to click the menu bar, so each action was tested only as the CLI command it runs.
+  - Open: shipping it. A downloadable app needs an Apple Developer ID and notarization (and a Homebrew cask), and the bundle id `owner.strata.menubar` is a placeholder like the 5.3 names.
+- **Bug found while setting up the demo, not fixed yet:** npm's `file:` dependencies (and `npm link`) are relative symlinks in `node_modules`. When one points outside the checkout (`../../../…/typescript`), the cloned copy in a worktree at another folder depth points nowhere, and nothing says so. Here it showed up as "TypeScript is not installed" in the worktree. pnpm's links stay inside `node_modules` and are not affected.
