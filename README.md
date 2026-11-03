@@ -138,11 +138,13 @@ Stops its processes, removes the worktree and deletes the branch if it is merged
 
 `apps/macos` is a small menu bar app over the same commands. The icon shows how many agents are running, and a crossed-out icon means the daemon is down. Click it to see each agent's state, memory, how its dependencies got there, its port and dev-server URL, and the shared checker. Each agent has actions to start or stop its dev server, open it in Terminal or Finder, copy its path, and remove it. It asks first, and asks again before discarding uncommitted changes. "Status in Terminal" opens `strata status --watch`.
 
-It runs the `strata` CLI, so it needs Strata installed (it looks in `~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin`, or `STRATA_BIN`). macOS 14 or later. Until releases ship it, build it yourself:
+It runs the `strata` CLI, so it needs Strata installed (it looks in `~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin`, or `STRATA_BIN`). macOS 14 or later, Apple silicon. Signed with C01's Developer ID and notarized by Apple:
 
 ```bash
-apps/macos/bundle.sh && open apps/macos/build/Strata.app
+brew install --cask c01-dev/tap/strata-menubar
 ```
+
+Or download [Strata-macOS.zip](https://github.com/C01-Dev/Strata/releases/latest/download/Strata-macOS.zip) from the latest release and move `Strata.app` to Applications. To build it yourself: `apps/macos/bundle.sh && open apps/macos/build/Strata.app`.
 
 ## MCP tools
 
@@ -302,7 +304,7 @@ The end-to-end tests make temporary repos and daemons; four heavy ones are ignor
 
 ### Releasing
 
-Releases are built by [cargo-dist](https://opensource.axo.dev/cargo-dist/) on a `v*` tag (`.github/workflows/release.yml`): binaries for macOS arm64 and Linux x86_64/arm64, a shell installer, a Homebrew formula pushed to the tap, and the npm packages (`npm/build.mjs`, published by `.github/workflows/publish-npm.yml`). Before the first release, add the `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN` secrets to the repo. After `dist generate`, re-apply the one-line fix noted in `dist-workspace.toml`.
+Releases are built by [cargo-dist](https://opensource.axo.dev/cargo-dist/) on a `v*` tag (`.github/workflows/release.yml`): binaries for macOS arm64 and Linux x86_64/arm64, a shell installer, a Homebrew formula pushed to the tap, and the npm packages (`npm/build.mjs`, published by `.github/workflows/publish-npm.yml`). npm publishes through trusted publishing (no token); the Homebrew tap needs the `HOMEBREW_TAP_TOKEN` secret. After `dist generate`, re-apply the hand edits listed in `dist-workspace.toml`. The menu bar app is signed on a Mac with the Developer ID certificate: after the tag's release exists, `apps/macos/publish.sh vX.Y.Z` builds, notarizes and uploads `Strata-macOS.zip` and updates the `strata-menubar` cask.
 
 ## License
 

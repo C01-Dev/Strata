@@ -874,3 +874,15 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 - **`docs/menubar.png` re-shot** on v0.1.2 with the video's five agents (fix-login, search-page, checkout, api-retry, docs-update), one dev server and the checker serving all five.
   - Setting it up found a stray `node server.js` from an earlier demo still holding port 4100, which Strata itself reported as "unmanaged". Stopped by its pid after checking its folder.
 - **Site:** a "Thirty seconds." section with the video; `og:image` and a `summary_large_image` card, so shared links show the poster. The Worker passes byte ranges through, which Safari needs to play video. The README has the poster linking to the site.
+
+## Menu bar app: signed, notarized, published (2026-11-03)
+
+- **Icon:** `apps/macos/icon.png`, 1024 px, rendered from C01's Remotion project (`src/strata/Icon.tsx`). It is the film's picture on Apple's 824 px tile: five layers with their edits over a base, plus one ember dot. Built into `AppIcon.icns`, with `CFBundleIconFile` set.
+- **Signing:** the owner created a Developer ID Application certificate (team 2YZ6YBP557) and saved an app-specific password as the notarytool profile `strata-notary`. The password never passed through this session.
+  - `bundle.sh --release` signs with the hardened runtime and a timestamp, verifies strictly, notarizes (Accepted after about a minute), staples, checks with `spctl` ("accepted, source=Notarized Developer ID"), and zips: `Strata-macOS.zip`, 197 KB.
+- **Publishing:** `publish.sh v0.1.2` uploads the zip to the release and writes `Casks/strata-menubar.rb` in the tap (arm64, macOS 14+, with a caveat to install the `strata` formula).
+  - This session's safety check blocked the first run as a new public download. The owner said "You run it".
+- **Checked as a user gets it:** a fresh download had the same SHA-256 (`ff3b6824…`). Marked quarantined the way a browser marks downloads, it passes Gatekeeper ("accepted, source=Notarized Developer ID"), and `stapler validate` works.
+  - Homebrew 6's tap trust refuses `brew info` on an untrusted tap's cask. Its docs say a fully qualified `brew install --cask c01-dev/tap/strata-menubar` trusts that one cask, which is the command the README and site give.
+  - The cask install itself was not run on this Mac, whose Homebrew refuses installs until the Command Line Tools match macOS 27.
+- README and site give the download link and the cask; README's releasing notes cover `publish.sh`.
