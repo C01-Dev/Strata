@@ -23,6 +23,8 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+      # Trusted publishing (OIDC, no token) needs npm 11.5.1 or later; Node 22 ships npm 10.
+      - run: npm install -g npm@11
       - name: Download the release's binaries
         run: |
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'strata-*.tar.xz' --dir dist

@@ -779,3 +779,15 @@ Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon b
 - `scripts/dev-setup.sh` (apt-based) installs build tools, Rust through rustup (then the pinned toolchain), Node 22 when Node is older than 20, and `packages/tsbridge`, then runs fmt, clippy and the tests. It refuses a checkout under `/mnt/*`, and on WSL without systemd it says how to turn systemd on or use `--no-service`.
 - Checked from scratch: `ubuntu:24.04` as a normal user with sudo, memory capped at 6 GB: installed everything, **161 passed, 0 failed** (macOS has 164; the other 3 are its APFS-image and clonefile tests), in 2 min 21 s. Not yet run on real WSL.
 - CI on GitHub: first fully green run (macOS, Ubuntu, `cargo deny`) after the three fixes above.
+
+## First release: v0.1.1 (2026-11-03)
+
+- **v0.1.0's release run failed at startup.** dist's npm publish job granted only `id-token` and `packages`, and the called `publish-npm.yml` asked for `contents: read`, more than its caller allowed. Fixed in `release.yml` (the third hand edit, listed in `dist-workspace.toml`). Moving the `v0.1.0` tag to the fix needed deleting a pushed tag, which this session's safety check blocks. So the first release is **v0.1.1**, and the `v0.1.0` tag stays with no release (the owner can delete it).
+- **Homebrew:** the formula job first failed because `C01-Dev/homebrew-tap` was empty (no branch to check out). A README commit gave it one, and the rerun pushed `Formula/strata.rb`.
+- **Result:** GitHub release v0.1.1 with the macOS arm64, Linux x86_64 and arm64 tarballs, checksums, `strata-installer.sh` and `strata.rb`; the tap has the formula.
+- **npm went to staging.** All four packages (`stratagents` and the three platform packages) were published with provenance, but npm staged them: the registry shows only the `0.0.0-stage` placeholder until a maintainer approves each one with 2FA (npmjs.com, Staged Packages).
+- **Install checks:**
+  - `curl -LsSf https://strata.c01.dev/install.sh | sh` into a scratch `CARGO_HOME`: `strata 0.1.1` in 5.2 s, and `strata doctor` runs.
+  - `brew install c01-dev/tap/strata`: the formula downloads and its checksum passes, but this Mac's Homebrew refuses every install ("Command Line Tools does not support macOS 27"). The full brew install is left for Gate 5's clean Mac. The tap was untapped again.
+  - npm waits for the approval.
+- **Ready for trusted publishing** (npm's OIDC publishing from GitHub, no token): `publish-npm.yml` upgrades to npm 11 (11.5.1+ is needed), and the npm packages and Cargo metadata use the repo's exact name `C01-Dev/Strata` (npm matches `repository.url` exactly). `NODE_AUTH_TOKEN` stays until the owner has configured it and deleted the token.

@@ -20,7 +20,7 @@ if (!version || !out || builds.length === 0) {
 const common = {
   version,
   description: "Shared type checker, dependency seeding and dev-server routing for parallel coding agents",
-  repository: "https://github.com/C01-Dev/strata",
+  repository: "https://github.com/C01-Dev/Strata",
   license: "MIT OR Apache-2.0",
 };
 const sums = {};
