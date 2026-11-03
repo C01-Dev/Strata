@@ -205,6 +205,7 @@ pub async fn run(args: Args) -> Result<()> {
         huge_diff_ratio: 1.0,
         group_memory_bytes: u64::MAX,
         base_rescan: Duration::from_secs(86_400),
+        recycle_after: Duration::from_secs(86_400),
     };
     // 20 hover targets: 2 identifiers in each of 10 source files no agent edited (as in Phase 0).
     let mut edited = vec![];

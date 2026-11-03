@@ -24,6 +24,7 @@ fn settings(tsconfigs: &[&str]) -> Settings {
         huge_diff_ratio: 1.0,
         group_memory_bytes: u64::MAX,
         base_rescan: Duration::from_secs(3600),
+        recycle_after: Duration::from_secs(86_400),
     }
 }
 

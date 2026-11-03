@@ -1,0 +1,19 @@
+kept /Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/base/strata.toml
+package manager: yarn
+typescript: 7.1.0-beta
+checker: on
+dev command: none (set dev.command in strata.toml)
+started (pid 94574)
+base worktree: /Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/.base (dependencies: clone from /Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/base)
+dependencies: clone from /Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/.base
+/Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/s1
+dependencies: clone from /Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/.base
+/Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/s2
+dependencies: clone from /Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/.base
+/Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/s3
+dependencies: clone from /Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/.base
+/Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/s4
+dependencies: clone from /Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/.base
+/Users/seifelkady/Documents/Projects/Strata/bench/fixtures/excalidraw/.strata/base/s5
+00:10:42 soak started: 5 agents, 8 h, daemon 94574
+08:10:59 soak done: 480 min, 7105 checks (0 failed); daemon tree median 1628 MB -> 1658 MB, growth 1.8%

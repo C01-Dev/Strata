@@ -8,7 +8,8 @@
 //!
 //! Before every query the agent's worktree is rescanned (cheap, see strata-overlay) and the
 //! snapshot updated if its layer changed; the base is rescanned at most every `base_rescan`.
-//! A dead bridge is restarted on the next query. Lock order: agent, then group.
+//! A dead bridge is restarted on the next query, and so is one recycled by `maintain` after
+//! `recycle_after`. Lock order: agent, then group.
 
 use crate::bridge::{Bridge, install_script, node};
 use crate::translate::Translator;
@@ -38,6 +39,10 @@ pub struct Settings {
     pub group_memory_bytes: u64,
     /// How often the base checkout is rescanned (the daemon moves it at most every 2 s).
     pub base_rescan: Duration,
+    /// tsgo is stopped once it has run this long and no query is running; the next query starts
+    /// it again. Its live heap stays flat, but the Go runtime's footprint keeps settling upward
+    /// for hours (+9% in the first 90 minutes of the PLAN 5.6 soak).
+    pub recycle_after: Duration,
 }
 
 impl Settings {
@@ -49,6 +54,7 @@ impl Settings {
             huge_diff_ratio: c.checker.huge_diff_ratio,
             group_memory_bytes: c.checker.group_memory_mb * 1024 * 1024,
             base_rescan: Duration::from_secs(2),
+            recycle_after: Duration::from_secs(3600),
         }
     }
 
@@ -131,6 +137,7 @@ struct GroupState {
     program_files: u64,
     version: u64,
     scanned: Option<Instant>,
+    started: Option<Instant>,
     restarts: u32,
 }
 
@@ -240,6 +247,7 @@ impl Broker {
                 program_files: 0,
                 version: 0,
                 scanned: None,
+                started: None,
                 restarts: 0,
             }),
             agents: Default::default(),
@@ -331,6 +339,7 @@ impl Broker {
 
     /// Disposes snapshots idle longer than `idle_dispose`, and, while a group's process tree is
     /// above `group_memory_bytes`, the least recently used one per call. Busy agents are skipped.
+    /// Then recycles groups whose tsgo has run `recycle_after`.
     // ponytail: one eviction per call, since Go returns freed memory to the OS only minutes later.
     pub async fn maintain(&self) {
         let groups: Vec<_> = self.groups.lock().await.values().cloned().collect();
@@ -369,6 +378,7 @@ impl Broker {
                     g.release(name, &mut a).await;
                 }
             }
+            g.recycle().await;
         }
     }
 
@@ -465,6 +475,28 @@ impl Group {
             .sum()
     }
 
+    /// Stops the bridge once it has run `recycle_after`, unless a query is running. Holding the
+    /// agents map and every agent keeps queries out until it is gone.
+    async fn recycle(&self) {
+        let agents = self.agents.lock().await;
+        let Ok(mut idle) = agents
+            .values()
+            .map(|(_, a)| a.try_lock())
+            .collect::<std::result::Result<Vec<_>, _>>()
+        else {
+            return;
+        };
+        let mut s = self.state.lock().await;
+        if s.started
+            .is_some_and(|t| t.elapsed() >= self.settings.recycle_after)
+            && let Some(old) = s.bridge.take()
+        {
+            tracing::info!(repo = %self.repo.display(), "recycling the checker after recycle_after");
+            old.shutdown().await;
+            idle.iter_mut().for_each(|a| a.held = None);
+        }
+    }
+
     /// Starts (or restarts) the bridge and opens the base.
     async fn start(&self, s: &mut GroupState, home: &Path, runtime: &str) -> Result<()> {
         if let Some(old) = s.bridge.take() {
@@ -486,6 +518,7 @@ impl Group {
             .unwrap_or(0);
         s.version += 1;
         s.bridge = Some(Arc::new(bridge));
+        s.started = Some(Instant::now());
         tracing::info!(repo = %self.repo.display(), typescript = s.typescript, files = s.program_files, "checker group started");
         Ok(())
     }

@@ -15,6 +15,7 @@ fn settings() -> Settings {
         huge_diff_ratio: 0.5,
         group_memory_bytes: u64::MAX,
         base_rescan: Duration::ZERO,
+        recycle_after: Duration::from_secs(3600),
     }
 }
 
@@ -286,6 +287,35 @@ async fn a_different_typescript_gets_its_own_process() {
         "TypeScript 7.1.0-other differs from the base's 7.1.0-beta"
     );
     assert_eq!(d["total"], 0);
+    f.broker.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_old_checker_is_recycled_between_queries() {
+    let f = fixture();
+    let s = Settings {
+        recycle_after: Duration::ZERO,
+        ..settings()
+    };
+    let all = || Op::Diagnostics {
+        file: None,
+        limit: None,
+    };
+    assert_eq!(f.check_with(all(), &s).await.unwrap()["total"], 0);
+    let pid = f.broker.status().await[0]["pid"].clone();
+    f.broker.maintain().await;
+    let status = f.broker.status().await;
+    assert_eq!(
+        status[0]["pid"],
+        Value::Null,
+        "stopped until the next query"
+    );
+    assert_eq!(status[0]["agents"][0]["snapshot"], false);
+    write(&f.wt, &[("src/b.ts", "export const x: string = 1;\n")]);
+    assert_eq!(f.check_with(all(), &s).await.unwrap()["total"], 1);
+    let status = f.broker.status().await;
+    assert_ne!(status[0]["pid"], pid);
+    assert_eq!(status[0]["restarts"], 0, "a recycle is not a crash");
     f.broker.shutdown().await;
 }
 

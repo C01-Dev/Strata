@@ -629,3 +629,26 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
   - Tart's VM images come from `ghcr.io`, so the roughly 25 GB macOS image was impractical over that route. The partial files were removed.
 - Owner discussion, same day: the shared checker's measured saving (20–30% for whole-project checks, 60–65% for per-file checks, Gate 2) is weaker than the README's first wording ("about one checker plus their diffs"), which is corrected; seeding and process cleanup are the strongest results.
 - **Owner decision (2026-11-02): Gate 5 is on hold until a release is published.** On real VMs it then tests what users will run (the GitHub release, the tap, npm) instead of a release served from this machine. `bench/gate5.sh` and the README prerequisites are ready for it.
+
+## Phase 5 — task 5.6 soak
+
+- `bench/soak.sh [hours]`: 5 agents on the excalidraw fixture. Each round, every ~20 s, an agent puts a type error into one of ten `packages/element/src` files or takes it out again, then checks that file; every 15th round it checks the whole project. bench/footprint samples the daemon's process tree (daemon, bridge, tsgo) every minute. Growth is the median of the last 30 minutes over the median of minutes 30–60.
+- **Run 1 (2026-11-02 19:06, stopped at 4 h 39 min): FAILED the under-10% target.**
+  - 4,116 checks, 0 failed. File checks averaged 0.14 s and project checks 2.3 s.
+  - Footprint, half-hour medians: 1586 MB at 0.5 h, 1663 at 1 h, 1730 at 1.5 h, 1699 at 2 h, 1728 at 3 h, 1770 at 4 h. Already +14.9% over minutes 30–60, and still rising, so the owner agreed to stop it and fix the cause.
+  - Deviation: run 1 shared the machine with 5.4/5.5 work (builds and tests). That does not change what the footprint measures (the daemon's own tree), but run 2 has the machine to itself.
+  - Data kept in `bench/results/soak-run1*`.
+- **Cause: not a leak in what tsgo keeps; the Go runtime's footprint settles upward.**
+  - The daemon was 8 MB and the bridge 29 MB; the growth was all tsgo.
+  - A tight-loop copy of the soak against `bridge.mjs` (same edits, no 20 s sleeps, `GODEBUG=gctrace=1`) did 3,000 checks in 10 minutes, about three quarters of run 1's count. tsgo's live heap after each GC had a median of 684–702 MB in every minute after the first, and a floor of 600–660 MB, with no trend. Whole-project checks of 5 agents push it to about 2.9 GB for a moment.
+  - Footprint is about twice the live heap (GOGC=100 lets the heap grow to twice what is live), and over hours its floor creeps up while its peaks fall (run 1's half-hour floors went 1489 → 1646 MB and its peaks 5.2 → 3.3 GB). Most of the rise is in the first 90 minutes (+9%), then about +2% over the next 2.5 hours. A plausible cause is Go heap fragmentation; nothing in Strata or the bridge accumulates.
+- **Fix: the broker recycles tsgo after an hour.** `maintain()` (every ~15 daemon ticks) stops a group's bridge once it has run `recycle_after` (1 h, not a config option). It does this only when no query is running: it holds the agents map and every agent's lock, and otherwise tries again next time. The next query starts tsgo again and rebuilds that agent's snapshot, as after a crash, but without counting as a restart. The query that restarts it waits for the base to open: under 2 s on excalidraw (run 2's slowest file check took 1 s, timed in whole seconds).
+  - The 1 h comes from run 1's curve: most of the settling happens in the first 90 minutes.
+  - Test `an_old_checker_is_recycled_between_queries`: with `recycle_after` 0, `maintain()` stops the bridge and drops the snapshot; the next query starts a new tsgo, sees the worktree's new error, and `restarts` stays 0.
+  - Agents running on their own TypeScript version keep their own process and are not recycled. They are disposed when idle like any snapshot.
+- **Run 2 (2026-11-03 00:10–08:11, with the fix, machine otherwise idle): PASSED, growth 1.8%.**
+  - 480 minutes, 7,105 checks, 0 failed. File checks averaged 0.12 s (slowest 1 s), project checks 1.8 s (slowest 5 s).
+  - Footprint medians: 1628 MB for minutes 30–60, 1658 MB for the last 30 minutes. Half-hour medians stayed between 1547 and 1735 MB from 0.5 h to 8 h, with no trend.
+  - Recycles show in the samples at minutes 61, 121 and 182 (a fresh tsgo at 789 MB, the bridge stopped between queries at 6 MB, a fresh tsgo at 473 MB). Each came an hour or a little more after the last, depending on when every agent was idle.
+  - No processes or worktrees were left after the script's cleanup.
+  - Data in `bench/results/soak.csv`, `soak-checks.csv` and `soak.log`.

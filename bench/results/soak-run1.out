@@ -1,0 +1,7 @@
+19:06:23 soak started: 5 agents, 8 h, daemon 73229
+bench/soak.sh: line 25: 73482 Terminated: 15          agent "${AGENTS[$k]}" "$k"
+bench/soak.sh: line 25: 73483 Terminated: 15          agent "${AGENTS[$k]}" "$k"
+bench/soak.sh: line 25: 73485 Terminated: 15          agent "${AGENTS[$k]}" "$k"
+bench/soak.sh: line 25: 73487 Terminated: 15          agent "${AGENTS[$k]}" "$k"
+bench/soak.sh: line 25: 73489 Terminated: 15          agent "${AGENTS[$k]}" "$k"
+bench/soak.sh: line 25: 73535 Terminated: 15          "$BENCH/footprint" "$DAEMON" 60000 > "$CSV"
