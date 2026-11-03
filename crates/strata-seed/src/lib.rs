@@ -93,7 +93,8 @@ pub fn seed_folders(
 /// What `fix_up` changed or found.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct FixUps {
-    /// State files and `.bin` shims whose donor paths now point at the worktree.
+    /// State files and `.bin` shims whose donor paths now point at the worktree, and links
+    /// out of the checkout that now point at their target by absolute path.
     pub rewritten: Vec<PathBuf>,
     /// Native addons built by node-gyp whose build files name the donor's folder.
     pub rebuild: Vec<String>,
@@ -102,13 +103,16 @@ pub struct FixUps {
 /// After seeding `folders` from `donor` into `target` (PLAN 4.4): points known state files
 /// that hold absolute paths at the worktree (pnpm's `.pnpm-workspace-state-v1.json` and
 /// `.modules.yaml`, old pnpm's `.bin` shims), resets pnpm's `lastValidatedTimestamp` to now, and
-/// lists node-gyp addons whose build files name the donor. A rewritten file is a new file
-/// renamed over the old one, so a hardlinked donor's copy is never touched.
+/// lists node-gyp addons whose build files name the donor. Relative links that leave the
+/// checkout get absolute targets (see `relink`). A rewritten file is a new file renamed over
+/// the old one, so a hardlinked donor's copy is never touched.
 pub fn fix_up(donor: &Path, target: &Path, folders: &[PathBuf]) -> io::Result<FixUps> {
     let (from, to) = (donor.to_string_lossy(), target.to_string_lossy());
+    let real_donor = fs::canonicalize(donor).unwrap_or_else(|_| donor.to_path_buf());
     let mut out = FixUps::default();
     for rel in folders {
         let dir = target.join(rel);
+        relink(&donor.join(rel), &dir, &real_donor, &mut out.rewritten)?;
         let mut files = vec![
             dir.join(".pnpm-workspace-state-v1.json"),
             dir.join(".modules.yaml"),
@@ -130,6 +134,53 @@ pub fn fix_up(donor: &Path, target: &Path, folders: &[PathBuf]) -> io::Result<Fi
     out.rebuild.sort();
     out.rebuild.dedup();
     Ok(out)
+}
+
+/// Links in `dir` (and its `@scope` folders) with a relative target outside the donor's
+/// checkout, such as npm's `file:` dependencies and `npm link`. At the worktree's folder depth
+/// they would point nowhere, so each gets the absolute path the donor's link resolves to.
+/// Links inside the checkout (workspace packages, pnpm's store) stay relative.
+// ponytail: top level and scopes only, where npm and yarn put such links; a nested
+// node_modules would need a walk.
+fn relink(
+    donor_dir: &Path,
+    dir: &Path,
+    real_donor: &Path,
+    out: &mut Vec<PathBuf>,
+) -> io::Result<()> {
+    // Relative targets resolve against the link's real folder, as the kernel does.
+    let Ok(base) = fs::canonicalize(donor_dir) else {
+        return Ok(());
+    };
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let (name, path) = (entry.file_name(), entry.path());
+        if name.to_string_lossy().starts_with('@') && entry.file_type()?.is_dir() {
+            relink(&donor_dir.join(&name), &path, real_donor, out)?;
+            continue;
+        }
+        let Ok(to) = fs::read_link(&path) else {
+            continue;
+        };
+        if to.is_absolute() {
+            continue;
+        }
+        let mut resolved = base.clone();
+        for c in to.components() {
+            match c {
+                std::path::Component::ParentDir => _ = resolved.pop(),
+                std::path::Component::Normal(n) => resolved.push(n),
+                _ => {}
+            }
+        }
+        if resolved.starts_with(real_donor) {
+            continue;
+        }
+        let tmp = dir.join(format!(".{}.strata-tmp", name.to_string_lossy()));
+        std::os::unix::fs::symlink(&resolved, &tmp)?;
+        fs::rename(&tmp, &path)?;
+        out.push(path);
+    }
+    Ok(())
 }
 
 fn rewrite(file: &Path, from: &str, to: &str) -> io::Result<bool> {
@@ -575,6 +626,51 @@ mod tests {
         fs::write(t.path().join("node_modules/y"), [0u8; 20]).unwrap();
         assert_eq!(size(t.path(), &["node_modules".into()]), 320);
         assert!(free_space(t.path()).unwrap() > 0);
+    }
+
+    #[test]
+    fn links_out_of_the_checkout_survive_another_depth() {
+        let t = tempfile::tempdir().unwrap();
+        let t = fs::canonicalize(t.path()).unwrap();
+        let (donor, target) = (t.join("a/donor"), t.join("b/c/d/target"));
+        let nm = donor.join("node_modules");
+        for d in [
+            "outside/pkg",
+            "a/donor/packages/ws",
+            "a/donor/node_modules/@s",
+            "b/c/d/target",
+        ] {
+            fs::create_dir_all(t.join(d)).unwrap();
+        }
+        let link = |to: &str, at: &str| std::os::unix::fs::symlink(to, nm.join(at)).unwrap();
+        link("../../../outside/pkg", "pkg"); // npm's file: and npm link
+        link("../../../../outside/pkg", "@s/pkg");
+        link("../packages/ws", "ws"); // a workspace package, inside the checkout
+        link("/usr", "abs");
+        let folders = ["node_modules".into()];
+        seed_folders(&donor, &target, &folders, Way::Copy).unwrap();
+        let tnm = target.join("node_modules");
+        assert!(
+            !tnm.join("pkg").exists(),
+            "the copied relative link points nowhere"
+        );
+
+        let fixed = fix_up(&donor, &target, &folders).unwrap();
+        for at in ["pkg", "@s/pkg"] {
+            assert_eq!(fs::read_link(tnm.join(at)).unwrap(), t.join("outside/pkg"));
+            assert!(fixed.rewritten.contains(&tnm.join(at)), "{fixed:?}");
+        }
+        assert_eq!(
+            fs::read_link(tnm.join("ws")).unwrap(),
+            Path::new("../packages/ws")
+        );
+        assert_eq!(fs::read_link(tnm.join("abs")).unwrap(), Path::new("/usr"));
+        assert_eq!(fixed.rewritten.len(), 2, "{fixed:?}");
+        assert_eq!(
+            fs::read_link(nm.join("pkg")).unwrap(),
+            Path::new("../../../outside/pkg"),
+            "the donor is untouched"
+        );
     }
 
     #[cfg(target_os = "macos")]
