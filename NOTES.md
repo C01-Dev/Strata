@@ -750,3 +750,14 @@ Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon b
 - `release.yml` got the tap name by hand. `dist generate` leaves it alone under `allow-dirty = ["ci"]`, so this is a second hand edit next to the `uses: ./` fix. `dist plan` now ships both LICENSE files and the README in every tarball.
 - Checked: the npm launcher test packs and installs `stratagents-0.1.0.tgz` with `stratagents-darwin-arm64-0.1.0.tgz` and runs the checked binary; 164 tests pass; the app builds and its Info.plist lints.
 - Not done (needs the owner): create `C01-Dev/strata` and `C01-Dev/homebrew-tap` on GitHub, push, and add the `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN` secrets. crates.io: `strata` is taken there, so `cargo install` from crates.io would need the package published under another name (the binary can stay `strata`). Not part of v0.1's install paths.
+
+## strata.c01.dev (owner request, 2026-11-03)
+
+- The owner asked for a real site at `strata.c01.dev` on the Cloudflare connection, not a redirect to GitHub. After the first draft, the owner asked for less text and more pictures, so the page is now visual-first:
+  - the layers drawing (the name's idea);
+  - "What changes": two diagrams side by side, five agents each with their own tsgo, install and port, against five thin layers on one tsgo, clones of one install, and URLs behind one proxy;
+  - three charts from measured data: memory 5.2 against 2.1 GiB (cal.com, 5 agents, per-file), a new worktree in 309 s (install) against 8 s (clone) against 0.9 s (warm pool), and the run-2 soak's 30-minute medians on a 0 to 2 GiB axis;
+  - the menu bar screenshot, three commands, and a footer.
+- `site/index.html` is one static page, in C01's tokens from `C01-Landing/app/globals.css`, with the C01 mark inline. `site/worker.js` serves it, proxies `/menubar.png` from the repo (cached at the edge), and redirects `/install.sh` to the latest release's installer. `site/wrangler.toml` sets the Worker `strata-site` with the custom domain `strata.c01.dev`, in the c01.dev zone on the owner's account. Cloudflare rather than Vercel (C01's default host) because the owner asked for the Cloudflare connection. A Worker is free, and its custom domain makes its own DNS record.
+- Checked in the browser at 1440 px and 375 px: no sideways scroll, the drawing readable at phone width (cropped, not shrunk), and ligatures off in code (JetBrains Mono drew `--` as a dash).
+- Not deployed yet: its GitHub links and screenshot need the public repo, so it goes live after the push.

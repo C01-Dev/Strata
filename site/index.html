@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Strata: one type checker for every coding agent</title>
+<title>Strata: five agents, one type checker</title>
 <meta name="description" content="Strata runs several coding agents on one TypeScript repo: one shared type checker, dependencies by clone, and dev servers with their own URL and cleanup. Open source, by C01 Developments.">
 <meta property="og:title" content="Strata">
 <meta property="og:description" content="Several coding agents on one TypeScript repo, sharing one type checker.">
@@ -20,6 +20,7 @@
   --ink: #f5f3ef;
   --ink-soft: #b8b5b0;
   --ink-dim: #85827d;
+  --ink-faint: #65625e;
   --ember: #d0643a;
   --rule: rgba(255, 255, 255, 0.11);
   --rule-strong: rgba(255, 255, 255, 0.2);
@@ -38,126 +39,92 @@ a:hover { text-decoration-color: var(--ink); }
 code, pre { font-family: var(--mono); font-size: 14px; font-variant-ligatures: none; }
 .end { color: var(--ember); }
 
-/* The frame: two gutter hairlines, as on c01.dev. */
 .rules { position: fixed; inset: 0 var(--gutter); border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); pointer-events: none; z-index: 0; }
 .wrap { position: relative; z-index: 1; padding: 0 var(--gutter); }
-.field { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: clamp(16px, 1.8vw, 32px); padding: 0 clamp(16px, 1.6vw, 32px); }
+.inner { padding: 0 clamp(16px, 1.6vw, 32px); }
 
 header { position: sticky; top: 0; z-index: 5; background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--rule); }
-header .field { height: 64px; align-items: center; }
-.brand { grid-column: 1 / span 6; display: flex; align-items: center; gap: 14px; text-decoration: none; font: 400 18px/1 var(--display); letter-spacing: -0.02em; }
-.brand svg { width: 38px; height: auto; color: var(--ink); }
+header .field { display: flex; justify-content: space-between; align-items: center; height: 64px; padding: 0 clamp(16px, 1.6vw, 32px); }
+.brand { display: flex; align-items: center; gap: 14px; text-decoration: none; font: 400 18px/1 var(--display); letter-spacing: -0.02em; }
+.brand svg { width: 38px; height: auto; }
 .brand span { padding-left: 14px; border-left: 1px solid var(--rule-strong); }
-nav { grid-column: 7 / span 6; display: flex; justify-content: flex-end; gap: clamp(14px, 2.4vw, 32px); font-size: 15px; }
+nav { display: flex; gap: clamp(14px, 2.4vw, 32px); font-size: 15px; }
 nav a { text-decoration: none; color: var(--ink-soft); }
 nav a:hover { color: var(--ink); }
 
-section { border-top: 1px solid var(--rule); padding: clamp(72px, 11vh, 150px) 0; }
-section:first-of-type { border-top: 0; }
+section { border-top: 1px solid var(--rule); padding: clamp(64px, 10vh, 128px) 0; }
+section.hero { border-top: 0; padding-top: clamp(56px, 9vh, 112px); }
 h1, h2 { font-family: var(--display); font-weight: 300; letter-spacing: -0.05em; line-height: 1.02; }
-h1 { font-size: clamp(46px, 7.4vw, 118px); }
-h2 { font-size: clamp(34px, 4.6vw, 68px); }
-h3 { font: 400 21px/1.3 var(--display); letter-spacing: -0.02em; margin-bottom: 12px; }
-p { color: var(--ink-soft); max-width: 62ch; }
-.meta { font: 400 12px/1.5 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
+h1 { font-size: clamp(48px, 7.6vw, 120px); }
+h2 { font-size: clamp(32px, 4vw, 56px); margin-bottom: clamp(36px, 5vh, 64px); }
+.lede { margin-top: 28px; font-size: clamp(18px, 1.6vw, 21px); color: var(--ink-soft); max-width: 46ch; }
 
-/* Hero */
-.hero { padding-top: clamp(56px, 9vh, 120px); }
-.hero h1 { grid-column: 1 / span 9; }
-.hero .lede { grid-column: 1 / span 6; margin-top: 36px; font-size: 19px; }
-.strata { grid-column: 1 / -1; margin-top: clamp(48px, 8vh, 96px); }
-.strata svg { width: 100%; height: auto; display: block; overflow: visible; }
-.strata text { font: 400 11px var(--mono); letter-spacing: 0.08em; fill: var(--ink-dim); }
-.strata .base-label { fill: var(--ink-soft); }
-.strata line { stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.strata .layer line { stroke-opacity: 0.45; }
-.strata .layer .edit { stroke-opacity: 1; stroke-width: 3; }
+/* SVG drawings share one look: hairlines in ink, labels in mono. */
+svg.draw { display: block; width: 100%; height: auto; overflow: visible; }
+svg.draw text { font: 400 11px var(--mono); letter-spacing: 0.06em; fill: var(--ink-dim); }
+svg.draw .hi { fill: var(--ink); }
+svg.draw .line { stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; fill: none; }
+svg.draw .dim { stroke-opacity: 0.4; }
+svg.draw .box { stroke: var(--ink); stroke-opacity: 0.5; stroke-width: 1; vector-effect: non-scaling-stroke; fill: none; }
+svg.draw .fill { fill: var(--ink); }
+svg.draw .wash { fill: var(--ink); fill-opacity: 0.08; }
+
+.hero .strata { margin-top: clamp(48px, 7vh, 88px); }
+.strata .edit { stroke-width: 3; }
 @media (prefers-reduced-motion: no-preference) {
-  .strata line { stroke-dasharray: 1600; stroke-dashoffset: 1600; animation: draw 1.6s var(--ease) forwards; }
-  .strata .layer line { animation-delay: calc(0.5s + var(--i) * 0.14s); }
-  .strata .layer .edit { animation-delay: calc(0.9s + var(--i) * 0.14s); }
-  .strata text { opacity: 0; animation: show 0.9s var(--ease) forwards; animation-delay: calc(0.8s + var(--i, 0) * 0.14s); }
+  .strata .line { stroke-dasharray: 1600; stroke-dashoffset: 1600; animation: draw 1.6s var(--ease) forwards; animation-delay: calc(0.3s + var(--i, 0) * 0.14s); }
+  .strata text { opacity: 0; animation: show 0.9s var(--ease) forwards; animation-delay: calc(0.7s + var(--i, 0) * 0.14s); }
   @keyframes draw { to { stroke-dashoffset: 0; } }
   @keyframes show { to { opacity: 1; } }
 }
-.caption { grid-column: 1 / span 7; margin-top: 22px; font-size: 15px; color: var(--ink-dim); }
-
-/* Install */
-.install { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: inherit; margin-top: clamp(56px, 8vh, 96px); border-top: 1px solid var(--rule); padding-top: 28px; }
-.install .meta { grid-column: 1 / span 3; padding-top: 6px; }
-.install .cmds { grid-column: 4 / span 9; display: grid; gap: 10px; }
-.cmd { background: var(--raised); border: 1px solid var(--rule); padding: 14px 18px; overflow-x: auto; white-space: nowrap; color: var(--ink); }
+.install { margin-top: clamp(40px, 6vh, 64px); display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; }
+.cmd { background: var(--raised); border: 1px solid var(--rule); padding: 14px 18px; color: var(--ink); white-space: nowrap; overflow-x: auto; max-width: 100%; }
 .cmd::before { content: "$ "; color: var(--ink-dim); }
-.status { font-size: 14px; color: var(--ink-dim); margin-top: 6px; }
-.status i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ember); margin-right: 10px; vertical-align: 1px; }
+.note { font-size: 14px; color: var(--ink-dim); }
+.note i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ember); margin-right: 10px; vertical-align: 1px; }
 
-/* What it shares: uneven spans, hairlines between. */
-.shares h2 { grid-column: 1 / span 8; margin-bottom: clamp(48px, 7vh, 88px); }
-.share { padding-top: 22px; border-top: 1px solid var(--rule-strong); }
-.share:nth-of-type(1) { grid-column: 1 / span 5; }
-.share:nth-of-type(2) { grid-column: 6 / span 4; }
-.share:nth-of-type(3) { grid-column: 10 / span 3; }
-.share p { font-size: 16px; }
-.share p + p { margin-top: 12px; }
-.share strong { font-weight: 400; color: var(--ink); }
+/* Without and with */
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 5vw, 96px); }
+.panel h3 { font: 400 20px/1.3 var(--display); letter-spacing: -0.02em; padding-bottom: 14px; margin-bottom: 26px; border-bottom: 1px solid var(--rule-strong); }
+.panel h3 span { color: var(--ink-dim); }
 
-/* Results table */
-.results h2 { grid-column: 1 / span 7; }
-.results .intro { grid-column: 1 / span 6; margin-top: 24px; }
-.table { grid-column: 1 / -1; margin-top: clamp(40px, 6vh, 72px); overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 640px; }
-th, td { text-align: left; vertical-align: top; padding: 16px 18px 16px 0; border-bottom: 1px solid var(--rule); }
-th { font: 400 12px/1.5 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); font-weight: 400; }
-td { color: var(--ink-soft); }
-td:first-child { color: var(--ink); width: 34%; }
-td:nth-child(2) { width: 40%; }
-.rerun { grid-column: 1 / span 8; margin-top: 22px; font-size: 15px; }
+/* Numbers */
+.charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(32px, 4vw, 72px); }
+.chart h3 { font: 400 16px/1.4 var(--body); color: var(--ink-soft); padding-bottom: 14px; margin-bottom: 22px; border-bottom: 1px solid var(--rule-strong); }
+.big { font: 300 clamp(40px, 4.4vw, 64px)/1 var(--display); letter-spacing: -0.05em; margin-top: 22px; }
+.big small { font: 400 15px var(--body); letter-spacing: 0; color: var(--ink-dim); margin-left: 6px; }
+.more { margin-top: clamp(40px, 6vh, 64px); font-size: 15px; color: var(--ink-dim); }
 
-/* Menu bar app */
-.app h2 { grid-column: 1 / span 5; }
-.app .text { grid-column: 1 / span 5; margin-top: 24px; }
-.app figure { grid-column: 7 / span 6; grid-row: 1 / span 2; align-self: start; }
-.app img { width: 100%; max-width: 560px; height: auto; display: block; border: 1px solid var(--rule); }
-.app figcaption { margin-top: 12px; font-size: 14px; color: var(--ink-dim); }
+/* Menu bar */
+.app { display: grid; grid-template-columns: 5fr 7fr; gap: clamp(32px, 5vw, 96px); align-items: center; }
+.app h2 { margin-bottom: 18px; }
+.app p { color: var(--ink-soft); max-width: 40ch; }
+.app img { width: 100%; max-width: 620px; height: auto; display: block; border: 1px solid var(--rule); }
 
 /* Start */
-.start h2 { grid-column: 1 / span 6; margin-bottom: clamp(40px, 6vh, 72px); }
-.steps { grid-column: 1 / -1; list-style: none; counter-reset: step; }
-.steps li { counter-increment: step; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: clamp(16px, 1.8vw, 32px); padding: 26px 0; border-top: 1px solid var(--rule); }
-.steps li::before { content: counter(step); grid-column: 1 / span 1; font: 300 32px/1 var(--display); color: var(--ink-dim); }
-.steps .what { grid-column: 2 / span 4; }
-.steps .what p { font-size: 15px; margin-top: 6px; }
-.steps pre { grid-column: 6 / span 7; background: var(--raised); border: 1px solid var(--rule); padding: 14px 18px; overflow-x: auto; color: var(--ink); }
-.works { grid-column: 1 / span 8; margin-top: 36px; font-size: 16px; }
+.steps { list-style: none; counter-reset: s; display: grid; gap: 12px; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 56px 240px 1fr; align-items: center; gap: 18px; padding: 18px 0; border-top: 1px solid var(--rule); }
+.steps li::before { content: counter(s); font: 300 28px/1 var(--display); color: var(--ink-dim); }
+.steps span { color: var(--ink-soft); }
+.steps pre { background: var(--raised); border: 1px solid var(--rule); padding: 12px 16px; overflow-x: auto; color: var(--ink); }
 
-footer { border-top: 1px solid var(--rule); padding: clamp(64px, 10vh, 120px) 0 40px; }
-footer .line { grid-column: 1 / span 8; font: 300 clamp(30px, 3.6vw, 52px)/1.08 var(--display); letter-spacing: -0.05em; }
-footer .small { grid-column: 1 / -1; margin-top: clamp(48px, 8vh, 96px); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 32px; font-size: 14px; color: var(--ink-dim); }
+footer { border-top: 1px solid var(--rule); padding: clamp(56px, 9vh, 104px) 0 40px; }
+footer .line { font: 300 clamp(28px, 3.4vw, 48px)/1.08 var(--display); letter-spacing: -0.05em; }
+footer .small { margin-top: clamp(40px, 7vh, 80px); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 32px; font-size: 14px; color: var(--ink-dim); }
 footer .small a { color: var(--ink-soft); }
 
 @media (max-width: 900px) {
-  .hero h1, .hero .lede, .caption, .shares h2, .results h2, .results .intro, .rerun, .app h2, .app .text, .start h2, .works, footer .line { grid-column: 1 / -1; }
-  .share:nth-of-type(n) { grid-column: 1 / -1; margin-top: 36px; }
-  .app figure { grid-column: 1 / -1; grid-row: auto; margin-top: 40px; }
-  .install .meta, .install .cmds { grid-column: 1 / -1; }
-  .install .cmds { margin-top: 16px; }
-  .steps .what { grid-column: 2 / -1; }
-  .steps pre { grid-column: 2 / -1; margin-top: 14px; }
+  .compare, .charts, .app { grid-template-columns: 1fr; }
+  .steps li { grid-template-columns: 40px 1fr; }
+  .steps pre { grid-column: 2; }
 }
 @media (max-width: 640px) {
   .rules { display: none; }
-  .field { padding: 0; }
+  .inner, header .field { padding: 0; }
   nav a.optional { display: none; }
-  /* A cross-section: the layers run off the right edge instead of shrinking to nothing. */
-  .strata { overflow: hidden; }
-  .strata svg { width: 640px; }
-  .strata text { font-size: 19px; }
-  table, tbody, tr, td { display: block; min-width: 0; }
-  thead { display: none; }
-  tr { padding: 16px 0; border-bottom: 1px solid var(--rule); }
-  td { border: 0; padding: 0; width: auto !important; }
-  td:first-child { margin-bottom: 6px; }
-  td:last-child { color: var(--ink-dim); font-size: 14px; margin-top: 4px; }
+  .hero .strata { overflow: hidden; }
+  .hero .strata svg { width: 640px; }
+  .hero .strata text { font-size: 19px; }
 }
 </style>
 </head>
@@ -171,7 +138,7 @@ footer .small a { color: var(--ink-soft); }
       <span>Strata</span>
     </a>
     <nav aria-label="Main">
-      <a class="optional" href="#results">Results</a>
+      <a class="optional" href="#numbers">Numbers</a>
       <a href="https://github.com/C01-Dev/strata#readme">Docs</a>
       <a href="https://github.com/C01-Dev/strata">GitHub</a>
     </nav>
@@ -179,113 +146,136 @@ footer .small a { color: var(--ink-soft); }
 </header>
 
 <main class="wrap">
-  <section class="hero" aria-labelledby="title">
-    <div class="field">
-      <h1 id="title">Five agents.<br>One type checker<span class="end">.</span></h1>
-      <p class="lede">Strata runs several coding agents on one TypeScript repo at once. Each agent gets its own git worktree, and the expensive parts are shared: one type checker for all of them, dependencies cloned in seconds, and dev servers that clean up after themselves.</p>
+  <section class="hero" aria-labelledby="title"><div class="inner">
+    <h1 id="title">Five agents.<br>One type checker<span class="end">.</span></h1>
+    <p class="lede">Run several coding agents on one TypeScript repo, sharing everything that is expensive.</p>
+    <div class="install">
+      <code class="cmd">curl -LsSf https://strata.c01.dev/install.sh | sh</code>
+      <span class="note"><i aria-hidden="true"></i>Pre-release. Also on Homebrew and npm. macOS and Linux.</span>
+    </div>
+    <figure class="strata">
+      <svg class="draw" viewBox="0 0 1200 290" role="img" aria-label="Five agent layers, each holding only the files that agent changed, stacked on one shared base">
+        <g style="--i:4"><line class="line dim" x1="0" y1="20" x2="1200" y2="20"/><line class="line edit" x1="300" y1="20" x2="336" y2="20"/><text x="0" y="12">docs-update, 1 file</text></g>
+        <g style="--i:3"><line class="line dim" x1="0" y1="68" x2="1200" y2="68"/><line class="line edit" x1="212" y1="68" x2="262" y2="68"/><line class="line edit" x1="880" y1="68" x2="902" y2="68"/><text x="0" y="60">api-retry, 3 files</text></g>
+        <g style="--i:2"><line class="line dim" x1="0" y1="116" x2="1200" y2="116"/><line class="line edit" x1="420" y1="116" x2="520" y2="116"/><text x="0" y="108">checkout, 6 files</text></g>
+        <g style="--i:1"><line class="line dim" x1="0" y1="164" x2="1200" y2="164"/><line class="line edit" x1="96" y1="164" x2="118" y2="164"/><line class="line edit" x1="760" y1="164" x2="812" y2="164"/><text x="0" y="156">search-page, 4 files</text></g>
+        <g style="--i:0"><line class="line dim" x1="0" y1="212" x2="1200" y2="212"/><line class="line edit" x1="170" y1="212" x2="206" y2="212"/><line class="line edit" x1="1010" y1="212" x2="1046" y2="212"/><text x="0" y="204">fix-login, 2 files</text></g>
+        <g style="--i:0"><line class="line" x1="0" y1="268" x2="1200" y2="268" style="stroke-width:2"/><text class="hi" x="0" y="290">base: the whole project, loaded once</text></g>
+      </svg>
+    </figure>
+  </div></section>
 
-      <figure class="strata" aria-labelledby="strata-caption">
-        <svg viewBox="0 0 1200 290" role="img" aria-label="Five agent layers stacked on one shared base layer">
-          <g class="layer" style="--i:4"><line x1="0" y1="20" x2="1200" y2="20"/><line class="edit" x1="300" y1="20" x2="336" y2="20"/><text x="0" y="12">docs-update, 1 file</text></g>
-          <g class="layer" style="--i:3"><line x1="0" y1="68" x2="1200" y2="68"/><line class="edit" x1="212" y1="68" x2="262" y2="68"/><line class="edit" x1="880" y1="68" x2="902" y2="68"/><text x="0" y="60">api-retry, 3 files</text></g>
-          <g class="layer" style="--i:2"><line x1="0" y1="116" x2="1200" y2="116"/><line class="edit" x1="420" y1="116" x2="520" y2="116"/><text x="0" y="108">checkout, 6 files</text></g>
-          <g class="layer" style="--i:1"><line x1="0" y1="164" x2="1200" y2="164"/><line class="edit" x1="96" y1="164" x2="118" y2="164"/><line class="edit" x1="760" y1="164" x2="812" y2="164"/><text x="0" y="156">search-page, 4 files</text></g>
-          <g class="layer" style="--i:0"><line x1="0" y1="212" x2="1200" y2="212"/><line class="edit" x1="170" y1="212" x2="206" y2="212"/><line class="edit" x1="1010" y1="212" x2="1046" y2="212"/><text x="0" y="204">fix-login, 2 files</text></g>
-          <g class="base" style="--i:0"><line x1="0" y1="268" x2="1200" y2="268" style="stroke-width:2"/><text class="base-label" x="0" y="290">base: the whole program, parsed and loaded once</text></g>
+  <section aria-labelledby="how-title"><div class="inner">
+    <h2 id="how-title">What changes<span class="end">.</span></h2>
+    <div class="compare">
+      <div class="panel">
+        <h3>Without Strata <span>every agent pays for everything</span></h3>
+        <svg class="draw" viewBox="0 0 520 300" role="img" aria-label="Five agents, each with its own type checker, its own installed dependencies and its own dev server">
+          <text x="0" y="14">agents</text>
+          <text x="0" y="74">type checker</text>
+          <text x="0" y="174">dependencies</text>
+          <text x="0" y="264">dev server</text>
+          <g>
+            <circle class="fill" cx="156" cy="10" r="3"/><circle class="fill" cx="228" cy="10" r="3"/><circle class="fill" cx="300" cy="10" r="3"/><circle class="fill" cx="372" cy="10" r="3"/><circle class="fill" cx="444" cy="10" r="3"/>
+            <rect class="box wash" x="124" y="34" width="64" height="76"/><rect class="box wash" x="196" y="34" width="64" height="76"/><rect class="box wash" x="268" y="34" width="64" height="76"/><rect class="box wash" x="340" y="34" width="64" height="76"/><rect class="box wash" x="412" y="34" width="64" height="76"/>
+            <text x="134" y="78">tsgo</text><text x="206" y="78">tsgo</text><text x="278" y="78">tsgo</text><text x="350" y="78">tsgo</text><text x="422" y="78">tsgo</text>
+            <rect class="box wash" x="124" y="140" width="64" height="60"/><rect class="box wash" x="196" y="140" width="64" height="60"/><rect class="box wash" x="268" y="140" width="64" height="60"/><rect class="box wash" x="340" y="140" width="64" height="60"/><rect class="box wash" x="412" y="140" width="64" height="60"/>
+            <text x="129" y="176">install</text><text x="201" y="176">install</text><text x="273" y="176">install</text><text x="345" y="176">install</text><text x="417" y="176">install</text>
+            <rect class="box" x="124" y="244" width="64" height="30"/><rect class="box" x="196" y="244" width="64" height="30"/><rect class="box" x="268" y="244" width="64" height="30"/><rect class="box" x="340" y="244" width="64" height="30"/><rect class="box" x="412" y="244" width="64" height="30"/>
+            <text x="137" y="264">:3000</text><text x="209" y="264">:3001</text><text x="281" y="264">:3002</text><text x="353" y="264">?</text><text x="425" y="264">?</text>
+          </g>
         </svg>
-      </figure>
-      <p class="caption" id="strata-caption">How it works, and where the name comes from. The type checker holds the project once, as a base. Each agent is a thin layer on top that holds only the files it changed.</p>
-
-      <div class="install">
-        <p class="meta">Install</p>
-        <div class="cmds">
-          <code class="cmd">brew install c01-dev/tap/strata</code>
-          <code class="cmd">npm install -g stratagents</code>
-          <code class="cmd">curl -LsSf https://strata.c01.dev/install.sh | sh</code>
-          <p class="status"><i aria-hidden="true"></i>Pre-release. These commands work once v0.1 is published. macOS (Apple silicon) and Linux.</p>
-        </div>
+      </div>
+      <div class="panel">
+        <h3>With Strata <span>the expensive parts are shared</span></h3>
+        <svg class="draw" viewBox="0 0 520 300" role="img" aria-label="Five agents as thin layers on one shared type checker, dependencies cloned from one base, and each dev server at its own URL behind one proxy">
+          <text x="0" y="14">agents</text>
+          <text x="0" y="74">type checker</text>
+          <text x="0" y="174">dependencies</text>
+          <text x="0" y="264">dev server</text>
+          <g>
+            <circle class="fill" cx="156" cy="10" r="3"/><circle class="fill" cx="228" cy="10" r="3"/><circle class="fill" cx="300" cy="10" r="3"/><circle class="fill" cx="372" cy="10" r="3"/><circle class="fill" cx="444" cy="10" r="3"/>
+            <rect class="fill" x="124" y="40" width="64" height="5"/><rect class="fill" x="196" y="40" width="64" height="5"/><rect class="fill" x="268" y="40" width="64" height="5"/><rect class="fill" x="340" y="40" width="64" height="5"/><rect class="fill" x="412" y="40" width="64" height="5"/>
+            <rect class="box wash" x="124" y="52" width="352" height="58"/>
+            <text class="hi" x="136" y="86">one tsgo, one base</text>
+            <rect class="box" x="124" y="140" width="64" height="12" style="stroke-dasharray:3 3"/><rect class="box" x="196" y="140" width="64" height="12" style="stroke-dasharray:3 3"/><rect class="box" x="268" y="140" width="64" height="12" style="stroke-dasharray:3 3"/><rect class="box" x="340" y="140" width="64" height="12" style="stroke-dasharray:3 3"/><rect class="box" x="412" y="140" width="64" height="12" style="stroke-dasharray:3 3"/>
+            <rect class="box wash" x="124" y="160" width="352" height="40"/>
+            <text class="hi" x="136" y="185">cloned from one install</text>
+            <line class="line dim" x1="124" y1="232" x2="476" y2="232"/>
+            <text x="124" y="226">one proxy, :7355</text>
+            <rect class="box" x="124" y="244" width="64" height="30"/><rect class="box" x="196" y="244" width="64" height="30"/><rect class="box" x="268" y="244" width="64" height="30"/><rect class="box" x="340" y="244" width="64" height="30"/><rect class="box" x="412" y="244" width="64" height="30"/>
+            <text x="138" y="264">URL</text><text x="210" y="264">URL</text><text x="282" y="264">URL</text><text x="354" y="264">URL</text><text x="426" y="264">URL</text>
+          </g>
+        </svg>
       </div>
     </div>
-  </section>
+  </div></section>
 
-  <section class="shares" aria-labelledby="shares-title">
-    <div class="field">
-      <h2 id="shares-title">What the agents share<span class="end">.</span></h2>
-      <div class="share">
-        <h3>One type checker</h3>
-        <p>A single <code>tsgo</code> (TypeScript 7.1) holds the base program, and each agent's changes are layered on top. Agents ask it over MCP for diagnostics, hover, definition, references and symbols.</p>
-        <p>With five agents that each check the files they edit, it uses <strong>61 to 65% less memory</strong> than one checker per worktree. When all five check the whole project at the same moment, the saving is 21 to 30%.</p>
+  <section id="numbers" aria-labelledby="numbers-title"><div class="inner">
+    <h2 id="numbers-title">Measured on real repos<span class="end">.</span></h2>
+    <div class="charts">
+      <div class="chart">
+        <h3>Type-checker memory, 5 agents on cal.com</h3>
+        <svg class="draw" viewBox="0 0 300 96" role="img" aria-label="One checker per agent: 5.2 GiB. Strata: 2.1 GiB.">
+          <text x="0" y="12">one checker per agent</text>
+          <rect class="wash box" x="0" y="20" width="300" height="20"/>
+          <text x="0" y="62">Strata</text>
+          <rect class="fill" x="0" y="70" width="118" height="20"/>
+        </svg>
+        <p class="big">61%<small>less, 5.2 to 2.1 GiB</small></p>
       </div>
-      <div class="share">
-        <h3>Dependencies by clone</h3>
-        <p><code>strata new</code> clones <code>node_modules</code> from a worktree with the same lockfile, instead of installing again.</p>
-        <p>On cal.com, a new worktree with 3.3 GB of dependencies is ready in <strong>5 to 8 seconds</strong>, or under one second from the warm pool. The install it replaces took 309 seconds.</p>
+      <div class="chart">
+        <h3>New worktree with its dependencies, cal.com</h3>
+        <svg class="draw" viewBox="0 0 300 146" role="img" aria-label="Fresh install: 309 seconds. Strata clone: about 8 seconds. Warm pool: under one second.">
+          <text x="0" y="12">fresh install, 309 s</text>
+          <rect class="wash box" x="0" y="20" width="300" height="20"/>
+          <text x="0" y="62">Strata clone, 8 s</text>
+          <rect class="fill" x="0" y="70" width="8" height="20"/>
+          <text x="0" y="112">warm pool, 0.9 s</text>
+          <rect class="fill" x="0" y="120" width="2" height="20"/>
+        </svg>
+        <p class="big">8 s<small>instead of 5 minutes</small></p>
       </div>
-      <div class="share">
-        <h3>Dev servers</h3>
-        <p>Each agent's server gets its own port and a URL such as <code>fix-login.app.localhost</code>, hot reload included.</p>
-        <p><code>strata rm</code> stops everything the agent started and frees its port.</p>
+      <div class="chart">
+        <h3>Memory over 8 hours, 5 agents editing</h3>
+        <svg class="draw" viewBox="0 0 300 146" role="img" aria-label="Memory stays flat at about 1.6 GiB for eight hours.">
+          <line class="line dim" x1="0" y1="140" x2="300" y2="140"/>
+          <text x="0" y="14">2 GiB</text>
+          <line class="line dim" x1="44" y1="20" x2="300" y2="20" style="stroke-dasharray:2 4"/>
+          <polyline class="line" points="0.0,44.6 21.4,45.4 42.9,45.6 64.3,47.0 85.7,46.1 107.1,47.6 128.6,45.1 150.0,47.1 171.4,43.3 192.9,46.5 214.3,38.3 235.7,46.4 257.1,42.4 278.6,49.4 300.0,42.9" style="stroke-width:1.5"/>
+          <text x="0" y="132">0</text><text x="262" y="132">8 h</text>
+        </svg>
+        <p class="big">+1.8%<small>7,105 checks, none failed</small></p>
       </div>
     </div>
-  </section>
+    <p class="more">How each number was measured, and how to rerun it: <a href="https://github.com/C01-Dev/strata/blob/main/bench/REPORT.md">the benchmark report</a>.</p>
+  </div></section>
 
-  <section class="results" id="results" aria-labelledby="results-title">
-    <div class="field">
-      <h2 id="results-title">Measured, with the scripts to check it<span class="end">.</span></h2>
-      <p class="intro">Every number on this page comes from a benchmark in the repo, on pinned commits of cal.com and excalidraw. You can rerun each one.</p>
-      <div class="table">
-        <table>
-          <thead><tr><th scope="col">What</th><th scope="col">Result</th><th scope="col">Setup</th></tr></thead>
-          <tbody>
-            <tr><td>Type-checker memory, 5 agents checking the files they edit</td><td>61 to 65% less than one checker per worktree; 74 to 75% less at 8 agents</td><td>cal.com and excalidraw</td></tr>
-            <tr><td>Type-checker memory, 5 agents checking the whole project at once</td><td>21 to 30% less</td><td>cal.com and excalidraw</td></tr>
-            <tr><td>Answers compared with a dedicated checker</td><td>0 mismatches at 1, 3, 5 and 8 agents</td><td>diagnostics and hover</td></tr>
-            <tr><td>New worktree with dependencies</td><td>7.6 to 8.0 s on APFS, 4.7 to 5.9 s on XFS, 0.87 s from the warm pool</td><td>cal.com, 272,000 entries in node_modules</td></tr>
-            <tr><td>Removing an agent</td><td>0.84 s</td><td>cal.com</td></tr>
-            <tr><td>Five Next.js dev servers behind the proxy</td><td>Hot reload in 0.04 to 0.06 s; nothing left running after removal</td><td>Next.js 16</td></tr>
-            <tr><td>Eight hours, five agents editing and checking</td><td>7,105 checks, none failed; memory grew 1.8%</td><td>excalidraw</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="rerun">The full report, with every caveat: <a href="https://github.com/C01-Dev/strata/blob/main/bench/REPORT.md">bench/REPORT.md</a>.</p>
-    </div>
-  </section>
-
-  <section class="app" aria-labelledby="app-title">
-    <div class="field">
+  <section aria-labelledby="app-title"><div class="inner app">
+    <div>
       <h2 id="app-title">Every agent, from the menu bar<span class="end">.</span></h2>
-      <div class="text">
-        <p>The macOS menu bar app shows each agent's state, memory, port and dev server, and the shared checker. Start or stop a dev server, open a worktree in Terminal, or remove an agent. It asks twice before discarding uncommitted work.</p>
-        <p style="margin-top:12px">Prefer the terminal? <code>strata status --watch</code> shows the same, live.</p>
-      </div>
-      <figure>
-        <img src="/menubar.png" alt="Strata's menu bar panel listing two agents, fix-login and search-page, with memory, ports and the shared checker." width="720" height="410" loading="lazy">
-        <figcaption>Two agents on a demo repo. One is running its dev server.</figcaption>
-      </figure>
+      <p>State, memory, port and dev server for each agent. Start, stop, open or remove in one click.</p>
     </div>
-  </section>
+    <img src="/menubar.png" alt="Strata's menu bar panel with two agents, fix-login and search-page, their memory and ports, and the shared checker." width="720" height="410" loading="lazy">
+  </div></section>
 
-  <section class="start" aria-labelledby="start-title">
-    <div class="field">
-      <h2 id="start-title">Three commands to start<span class="end">.</span></h2>
-      <ol class="steps">
-        <li><div class="what"><h3>Set up the repo</h3><p>Writes strata.toml, starts the background service and creates the shared base.</p></div><pre>strata init</pre></li>
-        <li><div class="what"><h3>Give an agent a worktree</h3><p>Its own branch, its dependencies and a port. Prints the path.</p></div><pre>cd "$(strata new fix-login)"</pre></li>
-        <li><div class="what"><h3>Connect the agent</h3><p>For Claude Code, add this to the repo's .mcp.json.</p></div><pre>{ "mcpServers": { "strata": { "command": "strata", "args": ["mcp"] } } }</pre></li>
-      </ol>
-      <p class="works">Recipes for Claude Code, Codex, Cursor and Conductor are in the <a href="https://github.com/C01-Dev/strata#recipes">docs</a>. Needs git 2.36, Node 20 and, for the shared checker, TypeScript 7.1 in the repo.</p>
-    </div>
-  </section>
+  <section aria-labelledby="start-title"><div class="inner">
+    <h2 id="start-title">Start in three commands<span class="end">.</span></h2>
+    <ol class="steps">
+      <li><span>Set up the repo</span><pre>strata init</pre></li>
+      <li><span>Give an agent a worktree</span><pre>strata new fix-login</pre></li>
+      <li><span>Connect the agent (MCP)</span><pre>strata mcp</pre></li>
+    </ol>
+    <p class="more">Setup for Claude Code, Codex, Cursor and Conductor is in the <a href="https://github.com/C01-Dev/strata#recipes">docs</a>.</p>
+  </div></section>
 </main>
 
-<footer class="wrap">
-  <div class="field">
-    <p class="line">Open source, made by C01 Developments<span class="end">.</span></p>
-    <div class="small">
-      <span>Built in Cairo. Shipped worldwide.</span>
-      <span><a href="https://github.com/C01-Dev/strata">GitHub</a>&nbsp;&nbsp; <a href="https://c01.dev">c01.dev</a>&nbsp;&nbsp; MIT or Apache-2.0</span>
-    </div>
+<footer class="wrap"><div class="inner">
+  <p class="line">Open source, made by C01 Developments<span class="end">.</span></p>
+  <div class="small">
+    <span>Built in Cairo. Shipped worldwide.</span>
+    <span><a href="https://github.com/C01-Dev/strata">GitHub</a>&nbsp;&nbsp; <a href="https://c01.dev">c01.dev</a>&nbsp;&nbsp; MIT or Apache-2.0</span>
   </div>
-</footer>
+</div></footer>
 </body>
 </html>
