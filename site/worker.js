@@ -11,6 +11,8 @@ const INSTALLER = "https://github.com/C01-Dev/Strata/releases/latest/download/st
 const FILES = {
   "/": { path: "site/index.html", type: "text/html; charset=utf-8", ttl: 300 },
   "/menubar.png": { path: "docs/menubar.png", type: "image/png", ttl: 86400 },
+  "/strata-launch.mp4": { path: "docs/strata-launch.mp4", type: "video/mp4", ttl: 86400 },
+  "/strata-launch.jpg": { path: "docs/strata-launch.jpg", type: "image/jpeg", ttl: 86400 },
 };
 
 export default {
@@ -24,10 +26,18 @@ export default {
         headers: { "content-type": "text/plain; charset=utf-8" },
       });
     }
-    const upstream = await fetch(RAW + file.path, { cf: { cacheTtl: file.ttl, cacheEverything: true } });
-    if (!upstream.ok) return new Response("Temporarily unavailable\n", { status: 502 });
-    return new Response(upstream.body, {
-      headers: { "content-type": file.type, "cache-control": `public, max-age=${file.ttl}` },
+    // Byte ranges pass through: Safari plays video only through them.
+    const range = request.headers.get("range");
+    const upstream = await fetch(RAW + file.path, {
+      headers: range ? { range } : {},
+      cf: { cacheTtl: file.ttl, cacheEverything: true },
     });
+    if (!upstream.ok) return new Response("Temporarily unavailable\n", { status: 502 });
+    const headers = { "content-type": file.type, "cache-control": `public, max-age=${file.ttl}`, "accept-ranges": "bytes" };
+    for (const h of ["content-range", "content-length"]) {
+      const v = upstream.headers.get(h);
+      if (v) headers[h] = v;
+    }
+    return new Response(upstream.body, { status: upstream.status, headers });
   },
 };

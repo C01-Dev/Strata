@@ -845,3 +845,29 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 - Homebrew formula at 0.1.2; GitHub release with 12 assets.
 - `npm install stratagents@0.1.2` and the `strata.c01.dev/install.sh` installer both give `strata 0.1.2`.
 - `npm/build.mjs` now writes `repository` as the object npm normalizes it to, which ends its "auto-corrected" warning from the next release on.
+
+## Launch video (2026-11-03)
+
+- 30 s, 1920×1080 at 60 fps, on C01's 120 BPM grid, built in C01's Remotion project. The sources are in `C01-Landing/design/launch-film-remotion`: `src/strata/` (own entry point) and `scripts/strata_score.py`. They are not committed there, because that repo has the owner's own work in progress.
+  - It reuses C01's `Logo`, `Reveal`, `Odometer`, `ShaderGround` (Dusk on the end card) and brand tokens. The ember appears only as full stops.
+  - The soundtrack is synthesised with C01's `synth.py`: -14.1 LUFS, -2.4 dBFS peak.
+- **Scenes:**
+  1. "Five coding agents. One TypeScript repo."
+  2. "Five type checkers.": five tsgo boxes rise, memory 5.2 GiB.
+  3. "Strata shares one.": the boxes flatten into bars, then stretch into five layers over one base; 2.1 GiB, 61% less.
+  4. "Dependencies by clone." / "5 s, not 5 minutes.": a 309 s install bar against a 5 s clone.
+  5. "Every agent, in your menu bar.": a new screenshot.
+  6. End card: "Strata.", `curl -LsSf strata.c01.dev/install.sh | sh`, "Open source by C01 Developments", with the mark drawn.
+- **Numbers, all from bench/REPORT.md:** cal.com, 5 agents, per-file checks, 5.22 → 2.05 GiB (61%); cal.com on Linux XFS, a 309 s install against a 4.7 to 5.9 s clone.
+  - The site said "8 s instead of 5 minutes", which put a macOS clone against a Linux install. It now says 5 s, both on Linux, matching the video.
+- **QA:**
+  - Stills at every scene.
+  - The fold redone: the first version slid wide see-through boxes over each other mid-move.
+  - A per-frame brightness scan of all 1800 frames: no single-frame spikes.
+- **Copies:**
+  - master (20 Mb/s): `~/Desktop/C01/Videos/Strata Launch (Nov 2026)/strata-launch-16x9.mp4`;
+  - web copy: `docs/strata-launch.mp4`, 2.2 MB, CRF 23, faststart;
+  - poster: `docs/strata-launch.jpg`, the frame at 12.5 s.
+- **`docs/menubar.png` re-shot** on v0.1.2 with the video's five agents (fix-login, search-page, checkout, api-retry, docs-update), one dev server and the checker serving all five.
+  - Setting it up found a stray `node server.js` from an earlier demo still holding port 4100, which Strata itself reported as "unmanaged". Stopped by its pid after checking its folder.
+- **Site:** a "Thirty seconds." section with the video; `og:image` and a `summary_large_image` card, so shared links show the poster. The Worker passes byte ranges through, which Safari needs to play video. The README has the poster linking to the site.

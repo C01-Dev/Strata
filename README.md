@@ -128,9 +128,13 @@ Stops its processes, removes the worktree and deletes the branch if it is merged
 | `strata daemon start\|stop\|status\|install\|uninstall` | Manage the daemon and its service |
 | `strata bench <fixture>` | The memory benchmark (see [Benchmarks](#benchmarks)) |
 
+## The 30-second version
+
+[![Strata in 30 seconds: five agents, one type checker](docs/strata-launch.jpg)](https://strata.c01.dev/#film-title)
+
 ## Menu bar app (macOS)
 
-![The menu bar app with two agents](docs/menubar.png)
+![The menu bar app with five agents](docs/menubar.png)
 
 `apps/macos` is a small menu bar app over the same commands. The icon shows how many agents are running, and a crossed-out icon means the daemon is down. Click it to see each agent's state, memory, how its dependencies got there, its port and dev-server URL, and the shared checker. Each agent has actions to start or stop its dev server, open it in Terminal or Finder, copy its path, and remove it. It asks first, and asks again before discarding uncommitted changes. "Status in Terminal" opens `strata status --watch`.
 
