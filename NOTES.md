@@ -795,7 +795,7 @@ Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon b
 - **Trusted publishing on (2026-11-03):** each of the four packages trusts `C01-Dev/Strata`'s `release.yml`, with `npm publish` allowed (the owner's choice: releases publish without an approval step) and `npm dist-tag` not allowed. `publish-npm.yml` no longer passes a token. The recommended next step for the owner is "disallow bypass 2fa tokens" in each package's publishing access, which trusted publishing still works with, and deleting the `NPM_TOKEN` secret and the npm token. Not yet proven: the first publish through OIDC happens at the next release.
 - **Locked down (2026-11-03):** all four packages now require 2FA and refuse bypass-2FA tokens, so only trusted publishing (or the owner with 2FA) can publish. The `NPM_TOKEN` secret is deleted; `HOMEBREW_TAP_TOKEN` (fine-grained, `homebrew-tap` contents only, expires 2027-11-04) is the only release secret left.
 
-## Gate 5 (2026-11-03): scripted run PASSED; waiting for the owner's run by hand
+## Gate 5 (2026-11-03): PASSED (scripted on fresh VMs, then by the owner)
 
 Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an agent using the shared checker in under 5 minutes, using only README commands. The owner then repeats it by hand."
 
@@ -824,3 +824,15 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 
 - **Edge cases this settles:** "Linux: cgroup.kill" now ran under real systemd delegation (it was only reachable through the system tests before), and launchd and systemd both ran the daemon as a service. Still manual: a real reboot bringing the service back, and a browser that cannot resolve `*.localhost`.
 - **Found in the logs:** a repo directly in the home folder (`~/gate5-app`) gets its worktrees in `~/.strata/gate5-app`, inside Strata's own home. That is harmless for most names, but a repo named `logs`, `shared` or `tsbridge` would put its worktrees among Strata's own folders (`logs/<agent>` is also that agent's log folder). Not fixed yet; proposed to the owner.
+- **The owner's run by hand (2026-11-03), on his own Mac (macOS 27, APFS), with the README's commands:**
+  - The installer put `strata 0.1.1` in `~/.cargo/bin`.
+  - A new repo with `typescript@7.1.0-beta` and one error. `strata init` installed the LaunchAgent and cloned the base's dependencies from the main checkout. `strata new try-it` cloned from the base.
+  - `strata check try-it` gave TS2322.
+  - Claude Code in the worktree with the README's `.mcp.json` called `strata_diagnostics` and reported the same TS2322: `claude -p --mcp-config .mcp.json --allowedTools mcp__strata__strata_diagnostics`, prompt on stdin (`--allowedTools` takes a list, so a prompt after it is read as a tool name).
+  - About a minute, mostly typing. **Gate 5 passed.**
+- **v0.1's definition of done is met:**
+  - every edge case has a test or a documented check;
+  - the benchmark is published with its scripts (bench/REPORT.md in the public repo, and strata.c01.dev);
+  - CI is green on macOS and Linux, with no clippy warnings and `cargo deny` clean;
+  - install to a working agent takes under 5 minutes on both platforms.
+- Still open, none blocking: a real reboot bringing the service back, Safari and `*.localhost`, and the `~/.strata` name clash above.
