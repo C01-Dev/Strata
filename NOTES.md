@@ -677,3 +677,54 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
 - Result: `strata` is taken on npm (an HTTP server, 0.20.1), on crates.io (0.1.1), and as a GitHub account (so are `getstrata`, `strata-dev` and `stratadev`). It is free in Homebrew core. Palo Alto Networks sells a security product called Strata.
 - `strataio`, `stratagents` and `strata-sh` are free on npm, crates.io and GitHub. npm organization names could not be checked automatically.
 - Open for the owner: keep Strata under an organization (the command stays `strata`, the packages are scoped, the crate needs another name) or rename before launch.
+
+## v0.1 checklist: every edge case has a test or a documented check (2026-11-03)
+
+The 11 Git rows were proven at Gate 1 (table above). This covers the other 42. **New** marks a test or change written for this review. Tests are in `crates/*/tests/` unless they are unit tests.
+
+| Case | Coverage |
+| --- | --- |
+| Seeding: filesystem cannot clone | `without_clones_the_configured_fallback_runs`: every clone fails (`STRATA_FAULT=no-clone`), and copy, hardlink and install each run as configured, with the tier printed by `new` and stored for `status`. Real ext4 behavior was seen in the Linux container. |
+| Seeding: no donor for the `dep_key` | `a_new_dep_key_installs_and_becomes_the_donor` |
+| Seeding: dependencies change mid-task | `unshared_when_dependencies_differ_or_the_diff_is_huge`: the agent moves to an unshared snapshot with the reason "dependencies differ". |
+| Seeding: pnpm global virtual store | `a_global_virtual_store_is_installed_and_reported_as_shared`, unit `a_virtual_store_outside_the_checkout_is_shared` |
+| Seeding: Yarn PnP | **New:** `init_turns_the_checker_off_for_yarn_pnp` now also runs `new`, `check` (which says why it is off), `run` and `rm`. Deviation: with no `node_modules` there is nothing to clone, so each worktree runs the package manager's install (tier `install`). PLAN's "seeding off" is read as "no clone". |
+| Seeding: state files with absolute paths | `pnpm_state_points_at_the_new_worktree`, unit `fix_up_points_state_at_the_worktree_and_finds_stale_addons` |
+| Seeding: native addons | `addons_built_in_the_donor_are_rebuilt` |
+| Seeding: disk fills (`ENOSPC`) | **New:** `a_disk_that_fills_while_cloning_stops_cleanly` (macOS). A 64 MB APFS image, 20,000 entries and 2 MB left: `new` makes the worktree with tier `clone-failed` and "disk full… MB free", and leaves no half-cloned or temporary folder. Ran 4 times, stable. |
+| Seeding: worktree folder on another volume (`EXDEV`) | **New:** `a_worktree_folder_on_another_volume_warns_and_installs` (macOS, APFS image as `worktree_dir`): `init` warns and the base installs, and `doctor` warns. |
+| Seeding: timestamp-validated caches | `folders_take_matching_ignored_entries`: the default `**/node_modules` does not take `.next/`, and `.tsbuildinfo` files are never seed folders. |
+| Checker: TypeScript older than 7.1 | Unit `typescript_version_gates_the_checker`. **New:** `typescript_older_than_7_1_turns_only_the_checker_off` (init says so; `new`, `run` and `rm` work; `check` gives the reason). |
+| Checker: a feature not per snapshot | Documented check: Phase 0 notes. Every v0.1 tool works per snapshot. |
+| Checker: two agents edit the same file | **New:** `two_agents_editing_the_same_file_each_see_their_own` (both shared, each gets its own error, b's edit never reaches a). |
+| Checker: files added, deleted, renamed | Overlay `edits_additions_and_deletions`, `shared_answers_follow_the_worktree`, bridge test "layered and unshared snapshots agree" |
+| Checker: generated or ignored files in tsconfig | Overlay `edits_additions_and_deletions` (an untracked generated `dist/gen.d.ts` is in the layer: content hash, not `git status`) |
+| Checker: per-worktree files under `node_modules` | `extra_paths_are_layered_inside_node_modules`. The "cannot be layered" half is not separately tested; a dependency change shows up through `dep_key`. |
+| Checker: huge diff | `unshared_when_dependencies_differ_or_the_diff_is_huge` |
+| Checker: tsconfig changed in a worktree | **New:** `a_worktree_tsconfig_change_applies_to_that_agent_only`: strict off in one worktree drops its TS7006, the other keeps it, and both stay shared. |
+| Checker: monorepo, several tsconfigs | Parity `monorepo` (plus `excalidraw` and `calcom`) |
+| Checker: tsgo crashes | `restarts_after_the_bridge_dies`, `a_dead_bridge_fails_later_calls` ("checker restarting, retry…") |
+| Checker: memory grows | `idle_snapshots_are_disposed_and_come_back`. **New:** `above_the_memory_limit_the_least_recently_used_snapshot_goes`. Also `an_old_checker_is_recycled_between_queries` and the 8-hour soak. |
+| Checker: paths in message text | Translator unit tests and properties (`text_replaces_every_whole_root`, `any_answer_is_translated`, …) |
+| Checker: symlinks and realpaths | `real_path_spelling_of_the_base_is_recognized` |
+| Checker: file outside every project | `errors_are_clear`, bridge test "errors carry codes" |
+| Checker: tools that filter through `git check-ignore` | `mcp_tools_answer_for_the_worktree_they_run_in` (paths relative to the agent's worktree) |
+| Checker: MCP cannot tell the agent | `mcp_finds_the_agent_from_roots_then_the_environment` ("cannot tell which agent is calling") |
+| Processes: dev server ignores `PORT` | `a_server_that_ignores_port_is_routed_where_it_listens`, unit `presets` (`--port` for Vite and Astro) |
+| Processes: port taken outside | `agents_get_distinct_free_ports_and_rm_frees_them` |
+| Processes: child escapes its group | `rm_stops_the_whole_tree_including_escaped_children`, unit `spawn_logs_and_terminate_reaches_escaped_children`. Linux `cgroup.kill` runs only in the system tests (`STRATA_SYSTEM_TESTS=1`, a systemd user session); still to run on the Gate 5 Ubuntu VM. |
+| Processes: daemon crashes or upgrades | `a_restarted_daemon_re_adopts_running_processes`, `processes_gone_after_a_restart_are_dead_unless_dev_restart`, `recovery.rs` |
+| Processes: sleep or reboot | Service files `plist_is_valid_and_escaped`, `unit_quotes_paths_and_delegates`; `dev.restart` in the test above. A real reboot is a manual check, still to do on the Gate 5 VMs. |
+| Processes: over budget | `memory_is_metered_and_over_budget_warns` (status, events), `over_budget_with_stop_stops_the_processes_not_the_agent`. **New:** `an_agent_over_budget_hears_it_in_every_mcp_answer`. |
+| Processes: dev server started outside Strata | `servers_started_outside_strata_are_listed` |
+| Daemon: a second daemon | `a_second_daemon_exits_with_a_message` |
+| Daemon: other users reach the socket or proxy | `start_status_stop` (socket mode 0600). The proxy binds 127.0.0.1 and ::1 only (`strata-proxy` `bind`): a code check, with no test from another machine. |
+| Daemon: socket path too long | `socket_path_too_long_is_refused`, doctor `a_socket_path_over_the_limit_fails` |
+| Routing: another program holds the proxy port | `a_held_proxy_port_fails_with_its_holder` (doctor), `a_held_proxy_port_fails_dev_with_the_holder_named`, `a_held_port_names_its_holder`. Deviation (Phase 3): the proxy starts with the first dev server, so `dev` fails, not daemon start. |
+| Routing: `*.localhost` not resolving (Safari) | `doctor` checks the system resolver. **New:** its warning now gives the `/etc/hosts` line (`127.0.0.1 <agent>.<app>.localhost`, one per agent, since hosts has no wildcards). The warning branch is untested because this Mac resolves `*.localhost`; it is a manual check. |
+| Routing: OAuth rejects `.localhost` | `strata_dev_prints_the_urls_and_serves_through_the_proxy` (direct `http://localhost:<port>` URL) |
+| Platform: Linux inotify limit | Deviation (Phase 2): there is no watcher, since layers come from a rescan, so Strata uses no inotify watches. `doctor` shows the user's inotify use on Linux. |
+| Platform: Linux without cgroup delegation | The Linux container (`cgroup 0::/`, no delegation): the process and budget tests pass through the PSS and descendant-walk path, and `doctor` reports it. |
+| Platform: Windows | **New:** `compile_error!` in `strata-core` with the reason. The npm launcher says "no build for win32-x64". Not built on Windows here. |
+
+Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon back), `cgroup.kill` under systemd, and `*.localhost` failing in a browser.

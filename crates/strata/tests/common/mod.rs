@@ -3,6 +3,8 @@
 
 #![allow(dead_code)]
 
+pub mod mcp;
+
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -127,7 +129,7 @@ pub fn set_ports(e: &Env, lo: u16, hi: u16, proxy: u16) {
 /// Each initialized test repo gets its own port range and proxy port: tests in one binary run
 /// in parallel, each with its own daemon (binaries run one after another). The warm pool is
 /// off, so other tests always see the same worktrees.
-fn own_ports(e: &Env) {
+pub fn own_ports(e: &Env) {
     static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(30000);
     let lo = NEXT.fetch_add(100, std::sync::atomic::Ordering::SeqCst);
     set_ports(e, lo, lo + 49, lo + 50);

@@ -262,9 +262,9 @@ fn localhost(cfg: &Config) -> Check {
             Level::Warn,
             format!("{name} does not resolve here; browsers resolve it anyway"),
         )
-        .hint(
-            "for curl or scripts use the direct URL `strata dev` prints (http://localhost:<port>)",
-        )
+        .hint(format!(
+            "for curl or scripts use the direct URL `strata dev` prints (http://localhost:<port>), or add a line per agent to /etc/hosts, which has no wildcards: `127.0.0.1 <agent>.{app}.localhost`"
+        ))
     }
 }
 

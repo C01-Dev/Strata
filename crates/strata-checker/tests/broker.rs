@@ -409,3 +409,94 @@ async fn errors_are_clear() {
     );
     f.broker.shutdown().await;
 }
+
+async fn diagnostics_as(f: &Fixture, agent: &str, wt: &std::path::Path, s: &Settings) -> Value {
+    let req = Request {
+        repo: f.base.clone(),
+        base: f.base.clone(),
+        agent: agent.into(),
+        worktree: wt.to_path_buf(),
+        op: Op::Diagnostics {
+            file: None,
+            limit: None,
+        },
+    };
+    f.broker.check(req, s).await.unwrap()
+}
+
+async fn has_snapshot(f: &Fixture, agent: &str) -> bool {
+    let status = f.broker.status().await;
+    let agents = status[0]["agents"].as_array().unwrap();
+    agents.iter().find(|a| a["name"] == agent).unwrap()["snapshot"] == true
+}
+
+#[tokio::test]
+async fn two_agents_editing_the_same_file_each_see_their_own() {
+    let f = fixture();
+    let wt2 = common::project(f.tmp.path(), "wt2");
+    write(&f.wt, &[("src/b.ts", "export const total: string = 1;\n")]);
+    write(
+        &wt2,
+        &[("src/b.ts", "\n\nexport const total: boolean = \"x\";\n")],
+    );
+    let a = diagnostics_as(&f, "a", &f.wt, &settings()).await;
+    let b = diagnostics_as(&f, "b", &wt2, &settings()).await;
+    assert_eq!(codes(&a), [("src/b.ts".into(), 1, 14, 2322)]);
+    assert_eq!(codes(&b), [("src/b.ts".into(), 3, 14, 2322)]);
+    assert!(
+        b["items"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("'boolean'")
+    );
+    assert_eq!(
+        (&a["sharing"]["mode"], &b["sharing"]["mode"]),
+        (&"shared".into(), &"shared".into())
+    );
+    let again = diagnostics_as(&f, "a", &f.wt, &settings()).await;
+    assert_eq!(
+        codes(&again),
+        [("src/b.ts".into(), 1, 14, 2322)],
+        "b's edit never reaches a"
+    );
+    f.broker.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_worktree_tsconfig_change_applies_to_that_agent_only() {
+    let f = fixture();
+    let wt2 = common::project(f.tmp.path(), "wt2");
+    // An untyped parameter is an error (TS7006) only under strict.
+    for wt in [&f.wt, &wt2] {
+        write(wt, &[("src/c.ts", "export function f(x) { return x; }\n")]);
+    }
+    let loose = common::TSCONFIG.replace("\"strict\": true", "\"strict\": false");
+    write(&f.wt, &[("tsconfig.json", &loose)]);
+    let a = diagnostics_as(&f, "a", &f.wt, &settings()).await;
+    let b = diagnostics_as(&f, "b", &wt2, &settings()).await;
+    assert!(codes(&a).is_empty(), "{a}");
+    assert_eq!(codes(&b), [("src/c.ts".into(), 1, 19, 7006)]);
+    assert_eq!(a["sharing"]["mode"], "shared");
+    f.broker.shutdown().await;
+}
+
+#[tokio::test]
+async fn above_the_memory_limit_the_least_recently_used_snapshot_goes() {
+    let f = fixture();
+    let wt2 = common::project(f.tmp.path(), "wt2");
+    let s = Settings {
+        group_memory_bytes: 1,
+        ..settings()
+    };
+    diagnostics_as(&f, "a", &f.wt, &s).await;
+    diagnostics_as(&f, "b", &wt2, &s).await;
+    f.broker.maintain().await;
+    assert!(!has_snapshot(&f, "a").await, "a was used least recently");
+    assert!(has_snapshot(&f, "b").await, "one eviction per pass");
+    assert_eq!(diagnostics_as(&f, "a", &f.wt, &s).await["total"], 0);
+    assert!(
+        has_snapshot(&f, "a").await,
+        "and it comes back on the next query"
+    );
+    f.broker.shutdown().await;
+}

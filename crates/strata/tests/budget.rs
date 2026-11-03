@@ -85,3 +85,20 @@ fn over_budget_with_stop_stops_the_processes_not_the_agent() {
     });
     assert_eq!(e.agent("a").unwrap()["state"], "ready");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_over_budget_hears_it_in_every_mcp_answer() {
+    use rmcp::ServiceExt;
+    let e = with_budget("warn");
+    let p = start_dev(&e, "a", HUNGRY);
+    wait_until("over budget", || e.agent("a").unwrap()["budget"] == "over");
+    let wt = std::path::PathBuf::from(e.agent("a").unwrap()["path"].as_str().unwrap());
+    let cmd = common::mcp::mcp(&e, &wt);
+    let client = ().serve(rmcp::transport::TokioChildProcess::new(cmd).unwrap()).await.unwrap();
+    let (err, text) = common::mcp::call(&client, "strata_run", json!({ "command": "true" })).await;
+    assert!(
+        !err && text.contains("over this agent's memory budget"),
+        "{text}"
+    );
+    common::kill_group(&p["pid"]);
+}

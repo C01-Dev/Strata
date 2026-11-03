@@ -2,12 +2,12 @@
 
 mod common;
 
+use common::mcp::{call, mcp};
 use common::{Env, initialized, node_server, wait_until};
 use rmcp::ServiceExt;
-use rmcp::model::CallToolRequestParams;
 use rmcp::transport::TokioChildProcess;
 use serde_json::json;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn proxy_port(e: &Env) -> String {
     let config = std::fs::read_to_string(e.root.join("strata.toml")).unwrap();
@@ -51,35 +51,6 @@ fn strata_dev_prints_the_urls_and_serves_through_the_proxy() {
     });
     assert!(e.strata(&["dev", "a"]).contains("(already running)"));
     e.strata(&["rm", "a", "--force"]);
-}
-
-async fn call(
-    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
-    tool: &'static str,
-    args: serde_json::Value,
-) -> (bool, String) {
-    let r = client
-        .call_tool(
-            CallToolRequestParams::new(tool).with_arguments(args.as_object().cloned().unwrap()),
-        )
-        .await
-        .unwrap();
-    (
-        r.is_error == Some(true),
-        r.content[0]
-            .as_text()
-            .map(|t| t.text.clone())
-            .unwrap_or_default(),
-    )
-}
-
-fn mcp(e: &Env, cwd: &Path) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_strata"));
-    cmd.arg("mcp")
-        .current_dir(cwd)
-        .env("STRATA_HOME", &e.home)
-        .env_remove("STRATA_AGENT");
-    cmd
 }
 
 #[tokio::test(flavor = "multi_thread")]

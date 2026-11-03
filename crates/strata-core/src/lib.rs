@@ -1,5 +1,11 @@
 //! Config, shared types, errors and the state store.
 
+// PLAN's edge cases: Windows is not supported in v0.1. A Windows build of `strata` stops
+// here with the reason (crates that do not depend on this one may also report their Unix
+// APIs).
+#[cfg(windows)]
+compile_error!("Strata runs on macOS and Linux; Windows is not supported in v0.1");
+
 pub mod client;
 pub mod config;
 pub mod detect;
