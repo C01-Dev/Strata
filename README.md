@@ -128,9 +128,9 @@ Stops its processes, removes the worktree and deletes the branch if it is merged
 | `strata daemon start\|stop\|status\|install\|uninstall` | Manage the daemon and its service |
 | `strata bench <fixture>` | The memory benchmark (see [Benchmarks](#benchmarks)) |
 
-## The 30-second version
+## The 18-second version
 
-[![Strata in 30 seconds: five agents, one type checker](docs/strata-launch.jpg)](https://strata.c01.dev/#film-title)
+[![Strata in 18 seconds: five agents, one type checker](docs/strata-launch.jpg)](https://strata.c01.dev/#film-title)
 
 ## Menu bar app (macOS)
 

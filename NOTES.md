@@ -848,6 +848,9 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 
 ## Launch video (2026-11-03)
 
+- **Second cut, owner feedback: "so slow" and the sound "always AI".** The same timeline now plays at `SPEED` 5/3 (18 s), the way the C01 film was approved at 1.5x. The synthesised score is gone. In its place are recorded effects, Kenney's CC0 interface and impact packs and Remotion's whoosh, whip, switch and mouse click, mixed by `scripts/strata_sfx.py` (-13.9 LUFS): a select click per checker, ticks for the counters, minimize and a soft thud for the fold, a confirmation on "61% less", a scroll texture under the install bar, a mouse click and window-open for the menu bar, and keystrokes as the install command now types itself out. 1080 frames, no brightness spikes. The site section is "Eighteen seconds."
+- First cut, kept below for the record:
+
 - 30 s, 1920×1080 at 60 fps, on C01's 120 BPM grid, built in C01's Remotion project. The sources are in `C01-Landing/design/launch-film-remotion`: `src/strata/` (own entry point) and `scripts/strata_score.py`. They are not committed there, because that repo has the owner's own work in progress.
   - It reuses C01's `Logo`, `Reveal`, `Odometer`, `ShaderGround` (Dusk on the end card) and brand tokens. The ember appears only as full stops.
   - The soundtrack is synthesised with C01's `synth.py`: -14.1 LUFS, -2.4 dBFS peak.
