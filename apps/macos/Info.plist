@@ -6,6 +6,8 @@
     <string>dev.c01.strata</string>
     <key>CFBundleName</key>
     <string>Strata</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleExecutable</key>
     <string>Strata</string>
     <key>CFBundlePackageType</key>
