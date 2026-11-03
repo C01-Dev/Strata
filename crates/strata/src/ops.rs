@@ -513,7 +513,9 @@ pub fn seed_base(d: &Daemon, repo: &Repo) -> Result<Seeded> {
             strata_seed::remove(&base.join(rel))?;
         }
         let s = seed(d, repo, &cfg, &base, ".base", Some(&repo.root), true);
-        if s.tier == "clone"
+        // A copy or hardlink is the configured fallback where clones fail (ext4): the base
+        // still has the key's dependencies, so agents seed from it the same way.
+        if matches!(s.tier, "clone" | "copy" | "hardlink")
             && let Some(key) = &s.dep_key
         {
             d.store().set_donor(repo.id, key, &base)?;

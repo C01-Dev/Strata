@@ -764,3 +764,10 @@ Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon b
   - The owner created `C01-Dev/Strata` and `C01-Dev/homebrew-tap`, both public and empty. GitHub's canonical name has a capital S, and the lowercase links resolve too. `main` was pushed.
   - The Worker now fetches `site/index.html` and `docs/menubar.png` from `main` on raw.githubusercontent.com, cached at the edge for 5 minutes and 1 day. A push to `main` updates the site, and the Worker itself only needs redeploying when `worker.js` changes. Deployed through the Cloudflare connection: the script `strata-site`, then the custom domain `strata.c01.dev` (Cloudflare made the DNS record and certificate; no other c01.dev record changed).
   - Checked live: `/` is 200 with the page; `/menubar.png` is 200 image/png, 44,513 bytes; `/install.sh` is a 302 to the latest release's installer (404 until v0.1.0 exists); other paths 404. In the browser, the fonts and screenshot load.
+
+## First CI runs on GitHub (2026-11-03)
+
+- `deny` passed at once. Ubuntu found two problems the macOS and XFS runs had hidden, because GitHub's Linux runners use ext4, where clones fail:
+  1. **Test bug:** `typescript_older_than_7_1_turns_only_the_checker_off` planted a fake `node_modules/typescript` by hand. On ext4 the base installs instead of cloning, so the fake was not there, and `check` rightly said "not installed" rather than "older than 7.1". The test now asserts what both reasons say ("the shared checker is off"); `init` still checks the exact 5.9.3 message.
+  2. **Real bug, fixed:** `seed_base` registered the base as its key's donor only when it was seeded by clone. Where clones fail, the base gets the configured `seed.fallback` (copy or hardlink) and so never donated, and every new agent then ran a full install, ignoring the fallback. Copy and hardlink now donate too. `without_clones_the_configured_fallback_runs` now makes clones fail before `init`, so it covers this on every filesystem. It failed without the fix with CI's own error, "dependencies: install".
+- CI runs `cargo test --no-fail-fast`, so one run shows every failing test binary.

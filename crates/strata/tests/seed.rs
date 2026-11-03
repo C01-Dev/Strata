@@ -162,18 +162,18 @@ fn without_clones_the_configured_fallback_runs() {
     ]);
     std::fs::create_dir_all(e.root.join("node_modules/pkg")).unwrap();
     std::fs::write(e.root.join("node_modules/pkg/index.js"), "main's").unwrap();
-    e.strata(&["init", "--no-service"]);
-    let base = e.root.parent().unwrap().join(".strata/app/.base");
-    let file = |p: &Path| p.join("node_modules/pkg/index.js");
-    assert!(file(&base).exists(), "cloned, or copied where clones fail");
-    // From here every clone fails, as on ext4.
-    e.strata(&["daemon", "stop"]);
+    // Every clone fails from the start, as on ext4: the base is copied too, and still donates.
     let out = e.strata_with(
         &e.root,
         &["daemon", "start"],
         &[("STRATA_FAULT", "no-clone")],
     );
     assert!(out.status.success());
+    let init = e.strata(&["init", "--no-service"]);
+    assert!(init.contains("dependencies: copy from"), "{init}");
+    let base = e.root.parent().unwrap().join(".strata/app/.base");
+    let file = |p: &Path| p.join("node_modules/pkg/index.js");
+    assert!(file(&base).exists());
     let ino = |p: &Path| std::os::unix::fs::MetadataExt::ino(&std::fs::metadata(p).unwrap());
     let set_fallback = |tier: &str| {
         let toml = std::fs::read_to_string(e.root.join("strata.toml")).unwrap();
