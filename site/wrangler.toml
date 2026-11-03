@@ -4,6 +4,3 @@ compatibility_date = "2026-11-01"
 account_id = "a0294a47a080f4cbbccb6819a0296e62"
 routes = [{ pattern = "strata.c01.dev", custom_domain = true }]
 
-[[rules]]
-type = "Text"
-globs = ["**/*.html"]
