@@ -30,6 +30,15 @@ jobs:
       - name: The README's prerequisites, already on the runner
         run: git --version && node --version
       - run: bash bench/gate5.sh
+      # Edge case on a real service: a timed-out command and the child it left behind both go
+      # (Linux: cgroup.kill in the systemd-delegated cgroup; macOS: the descendant walk).
+      - name: Nothing outlives a timed-out command
+        run: |
+          cd ~/gate5-app
+          ~/.cargo/bin/strata run fix-login --timeout 3 -- sh -c 'sleep 301 & sleep 302' || true
+          sleep 2
+          if pgrep -f 'sleep 30[12]'; then echo "left behind"; exit 1; fi
+          echo "no process left"
       - name: The environment, for the record
         if: always()
         run: cd ~/gate5-app && ~/.cargo/bin/strata doctor --report || true
