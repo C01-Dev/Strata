@@ -20,7 +20,8 @@ if (!version || !out || builds.length === 0) {
 const common = {
   version,
   description: "Shared type checker, dependency seeding and dev-server routing for parallel coding agents",
-  repository: "https://github.com/C01-Dev/Strata",
+  // The form npm itself normalizes to (it warned on a plain string).
+  repository: { type: "git", url: "git+https://github.com/C01-Dev/Strata.git" },
   license: "MIT OR Apache-2.0",
 };
 const sums = {};

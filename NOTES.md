@@ -837,3 +837,11 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - install to a working agent takes under 5 minutes on both platforms.
 - Still open, none blocking: a real reboot bringing the service back, and Safari with `*.localhost`.
 - **`~/.strata` clash fixed:** `config::default_worktree_dir` is now the one rule for `init` and the config default. It is `../.strata/<repo>`, or `../.strata/worktrees/<repo>` when that `.strata` is Strata's home (compared lexically and by real path). Test `a_repo_beside_stratas_home_keeps_its_worktrees_apart` (a repo named `logs` beside `STRATA_HOME`) failed before with `../.strata/logs` and passes now, plus a unit test. Repos already set up keep their `strata.toml`, which names its folder explicitly, so nothing moves for them (the owner's `~/strata-try` stays at `~/.strata/strata-try`). The fix ships in the next release.
+
+## v0.1.2 (2026-11-03)
+
+- Ships the `~/.strata` worktree-folder fix. CI was green on the release commit before tagging.
+- **First release through npm trusted publishing: it works.** The publish job has no token; all four packages went out over OIDC with provenance and no staging. The registry showed 0.1.1 for about a minute, then `latest: 0.1.2` for all four.
+- Homebrew formula at 0.1.2; GitHub release with 12 assets.
+- `npm install stratagents@0.1.2` and the `strata.c01.dev/install.sh` installer both give `strata 0.1.2`.
+- `npm/build.mjs` now writes `repository` as the object npm normalizes it to, which ends its "auto-corrected" warning from the next release on.
