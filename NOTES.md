@@ -728,3 +728,13 @@ The 11 Git rows were proven at Gate 1 (table above). This covers the other 42. *
 | Platform: Windows | **New:** `compile_error!` in `strata-core` with the reason. The npm launcher says "no build for win32-x64". Not built on Windows here. |
 
 Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon back), `cgroup.kill` under systemd, and `*.localhost` failing in a browser.
+
+## v0.1 checklist: `cargo deny`, benchmark report, issue template (2026-11-03)
+
+- `cargo deny check` (cargo-deny 0.20.2): advisories, bans, licenses and sources are all OK, with no warnings now.
+  - The allow list lost two licenses no dependency uses (BSD-2-Clause, ISC).
+  - `syn` 2 is skipped with a reason: `tracing-attributes` 0.1 is the last crate on it, and everything else is on `syn` 3.
+  - Workspace crates are still unlicensed (`private = { ignore = true }`) until the owner confirms PLAN's MIT + Apache-2.0.
+- `bench/REPORT.md` opens with a v0.1 results table: checker memory both ways, parity, seeding times and disk on APFS and XFS, cal.com's tests in a seeded worktree, `rm`, the Next.js gate, and the 8-hour soak. Each row has its rerun command, and the claims match NOTES (break-even at about 2 agents is marked as not measured). The Phase 0 study follows unchanged.
+- `.github/ISSUE_TEMPLATE/bug.md` asks for what happened, the commands, `strata doctor --report` and logs.
+- Still open for the checklist: "benchmark published" and "CI green" need the public repo (owner's names), and "install in under 5 minutes" is Gate 5.

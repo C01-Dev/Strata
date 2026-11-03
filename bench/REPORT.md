@@ -1,15 +1,39 @@
-# Phase 0 report: one tsgo process vs many
+# Strata benchmarks
+
+Every number Strata claims, how it was measured, and the command that measures it again. Machine for all macOS runs: Apple M5 Pro, 24 GB, macOS (Darwin 27.0.0), APFS. Linux runs: Docker 29.8.1, kernel 7.0.14-linuxkit, aarch64, an XFS volume with `reflink=1`. TypeScript `7.1.0-beta`. Fixtures are pinned commits of cal.com and excalidraw (`bench/setup.sh`).
+
+## v0.1 results (2026-11-03)
+
+| What | Result | How to rerun |
+| --- | --- | --- |
+| Type-checker memory, 5 agents, each checking the files it edited | **61–65% less** than one tsgo per worktree (cal.com 5.22 → 2.05 GiB, excalidraw 1.41 → 0.50 GiB); 74–75% less at 8 agents | `AGENTS=8 bench/setup.sh`, then `bench/agents.sh`; Strata's own checker: `bench/strata-bench.sh` |
+| Type-checker memory, 5 agents all checking the whole project at once | **21–30% less** (cal.com 10.24 → 7.18 GiB, excalidraw 3.61 → 2.83 GiB) | `bench/phase0.sh` |
+| Same diagnostics as a dedicated checker | 0 mismatches in diagnostics and hovers at 1, 3, 5 and 8 agents; definition, references and document symbols match at every sampled position | parity tests: `cargo test -p strata-checker --test parity` |
+| New agent worktree with dependencies, cal.com (272k entries, 3.3 GB of `node_modules`) | **7.6–8.0 s** on APFS and **4.7–5.9 s** on XFS by clone; **0.87–0.93 s** from the warm pool. The install it replaces took 309 s in the Linux container (warm Yarn cache). | Gate 4 steps in NOTES.md (`strata new` on `bench/fixtures/calcom`) |
+| Disk per cloned cal.com worktree | +326 to +551 MB on XFS (a full copy would be about 3.5 GB) | as above, `df` before and after |
+| cal.com's own tests in a cloned worktree | identical to the main checkout (364 files pass, the same 49 fail on a fixture Prisma path), on APFS and XFS | `yarn test` in both checkouts |
+| `strata rm` on cal.com | **0.84 s** | `time strata rm <agent> --force` |
+| 5 Next.js dev servers behind the proxy | hot reload over the proxy in 0.04–0.06 s; after `rm`, **0 processes and 0 ports left** | `cargo test -p strata --test nextjs -- --ignored --nocapture` |
+| 8-hour soak, 5 agents editing and checking excalidraw | 7,105 checks, 0 failed; daemon and checker memory **+1.8%** over 8 h (1628 → 1658 MB) | `cargo build --release -p strata && caffeinate -i bench/soak.sh 8` |
+
+Read the two memory rows together. Sharing saves most when agents check what they edit, which is how coding agents work. When every agent checks the whole project at the same moment, each still needs its own type checker's state, which tsgo does not share. That case saves about a quarter. One agent alone costs 16–28% more with sharing. The break-even should be about 2 agents, but that point was not measured.
+
+The rest of this report is the Phase 0 study that produced the memory numbers.
+
+---
+
+## Phase 0 report: one tsgo process vs many
 
 2026-11-02 · Apple M5 Pro, 24 GB, macOS (Darwin 27.0.0), APFS · TypeScript `7.1.0-beta` · Go GC defaults on both sides
 
-## Summary
+### Summary
 
 - **Gate 0 is not passed.** Under PLAN's protocol (all 5 agents run whole-project diagnostics at the same moment), one shared tsgo saves **30% (cal.com) and 21–22% (excalidraw)** at peak and warm, against a 40% target. Both fall in the 20–40% band, where the owner decides. These numbers are corrected for a harness bug found in the follow-up (it had shown 26% and 18%).
 - **With a realistic agent workload, sharing saves 40–75%.** Each agent checks only the files it edited (the owner-requested follow-up). Sharing saves **42–49% at 3 agents, 61–65% at 5 and 74–75% at 8**, against separate API processes and against separate `tsc --lsp` servers alike. With 1 agent, sharing costs 16–28% more.
 - **Correctness held:** 0 mismatches in every run.
 - **The difference is checker state.** A whole-project check builds a full type checker for every snapshot, and tsgo does not share checkers. A per-file check builds a small one, so the shared parsed and bound files dominate.
 
-## Gate 0: not passed (corrected)
+### Gate 0: not passed (corrected)
 
 S = 1 − shared ÷ baseline, at 5 worktrees. Memory is `phys_footprint` summed over the whole process tree, with the Node client counted on both sides.
 
@@ -26,7 +50,7 @@ S = 1 − shared ÷ baseline, at 5 worktrees. Memory is `phys_footprint` summed 
 
 **Correction.** The harness computed each agent's layer by reading every file in the repo from Node, and the footprint counted that memory against the shared side. On cal.com that was about 590 MiB: in one trace, memory went from 899 MiB after the base load to 1,492 MiB after the layers were computed, with tsgo idle. The harness now reads layers from `git diff` (changed files only), which is how the overlay tracker will work. The layers are the same (6 files plus 1 deletion per agent). Baseline runs compute no layers, so only the shared whole-project runs were repeated. The first runs are kept as `*-shared-5-walklayer*`; they measured 26% (cal.com) and 18% (excalidraw).
 
-## Follow-up: per-file agent workload
+### Follow-up: per-file agent workload
 
 This is the measurement the owner asked for after Gate 0.
 
@@ -59,14 +83,14 @@ This is the measurement the owner asked for after Gate 0.
   - At 8 agents on cal.com: 1.0 s shared vs 0.56 s for separate processes, because one process serves all 8.
   - Hovers took about 0.1 s throughout.
 
-## Why the whole-project saving is small
+### Why the whole-project saving is small
 
 - tsgo shares parsed and bound files across snapshots, as expected. It does not share checker state, and whole-project diagnostics build a full checker per snapshot.
 - Marginal cost of one more agent, from the scaling runs (one process, every snapshot running whole-project diagnostics): excalidraw ~516 MB per snapshot vs ~738 MB per dedicated process (30% saved); cal.com ~1.29 GB vs ~2.10 GB (38% saved). That is the ceiling on peak saving as N grows. On these fixtures, checker state is ~60–70% of a dedicated process's peak.
 - Gate 0's protocol is the worst case for sharing: all 5 agents run whole-project diagnostics at the same moment.
 - At rest, after tsgo's idle checker cleanup and Go's periodic GC and scavenger (about 6 min in), memory drops to the shareable part: **63–68% saved**. That reading is not part of Gate 0.
 
-## Phase 2 check: `strata bench` (Gate 2)
+### Phase 2 check: `strata bench` (Gate 2)
 
 The same protocol, run on Strata's own checker (`strata bench`, `bench/strata-bench.sh`, results in `results/strata.csv`), reproduces the Phase 0 savings within 5 points at 5 agents:
 
@@ -79,7 +103,7 @@ The same protocol, run on Strata's own checker (`strata bench`, `bench/strata-be
 
 Baselines match Phase 0's absolute numbers within ~1% (cal.com whole: 10.19 vs 10.24 GiB). The shared side now carries the Node bridge (~50 MB), which is most of the excalidraw per-file gap.
 
-## Correctness and features (tasks 0.5, 0.6)
+### Correctness and features (tasks 0.5, 0.6)
 
 Layered snapshot (base paths, translated back) vs a dedicated snapshot at the worktree's own paths, agent 1, 5 positions:
 
@@ -97,7 +121,7 @@ Scaling in one process: no errors up to 32 snapshots (excalidraw, 16.6 GB) and 1
 
 Timing at 5 agents: concurrent whole-project diagnostics took 2.2 s with separate processes vs 6.3 s shared (excalidraw), and 10.6 s vs 17.9 s (cal.com).
 
-## Caveats
+### Caveats
 
 - **One run per configuration.** Go GC timing moves peaks by a few hundred MB between runs: the excalidraw whole-project shared peak was 2.75 GB in a smoke run and 2.90–3.03 GB in protocol runs. Excalidraw's 21% is within that noise of the 20% line.
 - **The per-file workload is one edit-and-check cycle with 6 files per agent.** Each edit creates a new snapshot, so the checker starts fresh, but a long run of checks without an edit grows a snapshot's checker toward the whole-project cost. An agent that runs a whole-project check pays about 0.5 GB (excalidraw) to 1.3 GB (cal.com) in the shared process too. Eight concurrent whole-project checks fall back to the Gate 0 picture.
@@ -106,13 +130,13 @@ Timing at 5 agents: concurrent whole-project diagnostics took 2.2 s with separat
 - **The first cal.com shared run carried 22 MB of junk per layer** from a seeding bug (see NOTES.md). It is kept as `calcom-shared-5-junklayer*`.
 - **The whole-project LSP numbers are not like-for-like.** That comparison (5 × `tsc --lsp`, 10 open files each: 1.06 GiB and 5.64 GiB) checks only the open files. The per-file LSP comparison is like-for-like.
 
-## Options for the owner
+### Options for the owner
 
 1. **Pivot** (PLAN Risks): build a per-agent memory governor with budgets, eviction and process ownership, without the shared checker.
 2. **Go to Phase 1 with the claim the data supports:** "about 60% less type-checker memory at 5 agents when agents check the files they edit (75% at 8), about 20–30% when all of them run whole-project checks at once." Add governor features that only a single process makes possible: limit concurrent whole-project checks across agents, and dispose idle snapshots' checkers. This means accepting the per-file workload as the go criterion in place of Gate 0's whole-project protocol.
 3. **Measure a mixed workload first** (about 1 hour): several edit-and-check cycles per agent, plus one agent at a time running a whole-project check, at 5 and 8 agents. This would show what the Option 2 governor buys before it is built.
 
-## Data
+### Data
 
 - `results/phase0.csv`: every run summary in MiB, with a `workload` column (`whole` = Gate 0 protocol, `files` = per-file follow-up).
 - `results/strata.csv`, `results/strata-bench.log`: `strata bench` (Phase 2), same columns.
@@ -123,3 +147,4 @@ Timing at 5 agents: concurrent whole-project diagnostics took 2.2 s with separat
   - Per-file follow-up: `bench/agents.sh`
   - Features and scaling: `node bench/features.mjs <fixture>`
   - Tables: `node bench/report.mjs`
+  - Soak: `bench/soak.sh [hours]`; results in `results/soak*.csv` and `results/soak.log`, run 1 (before the hourly tsgo recycle) in `results/soak-run1*`
