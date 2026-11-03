@@ -13,9 +13,10 @@ formula = "strata"
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 install-path = "CARGO_HOME"
 install-updater = false
-# release.yml is generated, then one line fixed by hand: dist 0.34.0 writes a user publish job
-# as `uses: $/.github/workflows/<job>.yml`, which GitHub rejects; it must be `./`. Re-apply
-# after `dist generate`.
+# release.yml is generated, then fixed by hand in three places; re-apply after `dist generate`:
+# dist 0.34.0 writes a user publish job as `uses: $/.github/workflows/<job>.yml`, which GitHub
+# rejects (it must be `./`); that job also needs `"contents": "read"`, since a called workflow
+# cannot ask for more than its caller grants; and the tap is C01-Dev/homebrew-tap.
 allow-dirty = ["ci"]
 
 [dist.github-custom-runners]
