@@ -794,3 +794,33 @@ Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon b
 - **npm approved (2026-11-03):** the owner approved the four staged packages; each shows `latest: 0.1.1`. `npm install stratagents` into a scratch prefix took 1.8 s and installed only `stratagents-darwin-arm64` beside the launcher. Its checksum check passed, `strata 0.1.1` ran, and npm shows SLSA provenance. `npx stratagents@0.1.1 --version` works too. The site and README no longer say pre-release.
 - **Trusted publishing on (2026-11-03):** each of the four packages trusts `C01-Dev/Strata`'s `release.yml`, with `npm publish` allowed (the owner's choice: releases publish without an approval step) and `npm dist-tag` not allowed. `publish-npm.yml` no longer passes a token. The recommended next step for the owner is "disallow bypass 2fa tokens" in each package's publishing access, which trusted publishing still works with, and deleting the `NPM_TOKEN` secret and the npm token. Not yet proven: the first publish through OIDC happens at the next release.
 - **Locked down (2026-11-03):** all four packages now require 2FA and refuse bypass-2FA tokens, so only trusted publishing (or the owner with 2FA) can publish. The `NPM_TOKEN` secret is deleted; `HOMEBREW_TAP_TOKEN` (fine-grained, `homebrew-tap` contents only, expires 2027-11-04) is the only release secret left.
+
+## Gate 5 (2026-11-03): scripted run PASSED; waiting for the owner's run by hand
+
+Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an agent using the shared checker in under 5 minutes, using only README commands. The owner then repeats it by hand."
+
+- **Machines:** fresh GitHub Actions VMs, `macos-latest` (Apple silicon, Darwin 25.6) and `ubuntu-latest` (x86_64, Azure kernel 7.0), through `.github/workflows/gate5.yml` (`gh workflow run gate5.yml`).
+  - **Deviation:** not the Tart VMs planned in Gate 5 preparation. Tart's download crawled from GitHub and this session may not fetch the binary, and this Mac's Homebrew refuses every install until its Command Line Tools match macOS 27.
+  - The runners are new VMs for each run, with launchd and systemd. They are not bare: they ship git and Node (22 on Ubuntu, 24 on macOS), which are exactly the README's prerequisites. They also ship tools the gate does not use.
+  - On Ubuntu, the job first does what a login does: `loginctl enable-linger`, plus `XDG_RUNTIME_DIR` and the user bus, so the job has a systemd user manager like any desktop or SSH session.
+- **Script:** `bench/gate5.sh`, now against the published v0.1.1. It runs:
+  1. the README's `curl … strata-installer.sh | sh`;
+  2. a TypeScript 7.1 repo with one error;
+  3. `strata init`, with the service;
+  4. `strata doctor` and `strata new fix-login`;
+  5. a Node MCP client calling `strata_diagnostics` through `strata mcp`.
+
+  It fails if it takes 300 s or more.
+- **Results, two runs each:**
+
+| | Ubuntu x86_64 | macOS arm64 |
+| --- | --- | --- |
+| Install to TS2322 over MCP | 5 s, 6 s | 5 s, 5 s |
+| Service | systemd user unit `~/.config/systemd/user/strata.service` | LaunchAgent `dev.strata.daemon` |
+| Dependencies | ext4: install (clone not supported, warned) | APFS: clone |
+| `doctor` | all ok but clone (warn) | all ok |
+| cgroups | delegated: per-agent cgroups under `…/app.slice/strata.service` | n/a |
+| `strata run --timeout 3 -- sh -c 'sleep 301 & sleep 302'`, then `pgrep` | nothing left | nothing left |
+
+- **Edge cases this settles:** "Linux: cgroup.kill" now ran under real systemd delegation (it was only reachable through the system tests before), and launchd and systemd both ran the daemon as a service. Still manual: a real reboot bringing the service back, and a browser that cannot resolve `*.localhost`.
+- **Found in the logs:** a repo directly in the home folder (`~/gate5-app`) gets its worktrees in `~/.strata/gate5-app`, inside Strata's own home. That is harmless for most names, but a repo named `logs`, `shared` or `tsbridge` would put its worktrees among Strata's own folders (`logs/<agent>` is also that agent's log folder). Not fixed yet; proposed to the owner.
