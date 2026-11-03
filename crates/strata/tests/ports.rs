@@ -160,3 +160,26 @@ fn a_held_proxy_port_fails_dev_with_the_holder_named() {
         "nothing started"
     );
 }
+
+#[test]
+fn a_port_taken_after_new_moves_the_dev_server() {
+    // Another tool that picks ports in the same range (Portless uses 4000-4999) can take an
+    // agent's reserved port between `strata new` and `strata dev`.
+    let e = initialized();
+    set_ports(&e, 46700, 46799, 46007);
+    e.strata(&["new", "a"]);
+    assert_eq!(port_of(&e, "a"), 46700);
+    let _outsider = TcpListener::bind("127.0.0.1:46700").unwrap();
+    let out = start_dev(&e, "a", &node_server("moved", None));
+    assert_eq!(out["port"], 46701, "{out}");
+    assert_eq!(out["direct_url"], "http://localhost:46701");
+    assert_eq!(port_of(&e, "a"), 46701);
+    wait_until("served on the new port", || {
+        let body = std::process::Command::new("curl")
+            .args(["-s", "http://127.0.0.1:46701"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&body.stdout) == "moved"
+    });
+    e.strata(&["rm", "a", "--force"]);
+}

@@ -71,6 +71,23 @@ pub fn ensure(d: &Daemon, agent: &Agent, cfg: &Config) -> Result<u16> {
     )))
 }
 
+/// The port for a dev server the agent is about to start: its reservation, unless another
+/// program took that port after it was reserved (a tool picking ports from the same range, such
+/// as Portless's 4000-4999), in which case the agent moves to the next free port.
+pub fn ensure_free(d: &Daemon, agent: &Agent, cfg: &Config) -> Result<u16> {
+    let port = ensure(d, agent, cfg)?;
+    if free(port) {
+        return Ok(port);
+    }
+    tracing::info!(
+        agent = agent.name,
+        port,
+        "reserved port taken by another program; moving"
+    );
+    d.store().free_ports(agent.id)?;
+    ensure(d, agent, cfg)
+}
+
 /// `dev.app`, or the repo folder as a hostname label.
 pub fn app(repo: &Repo, cfg: &Config) -> String {
     cfg.dev.app.clone().unwrap_or_else(|| {
