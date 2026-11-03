@@ -34,11 +34,13 @@ pub fn request(method: &str, path: &str, body: Option<Value>) -> Result<Value> {
         Err(e) => return Err(e.into()),
     };
     let body = body.map(|b| b.to_string()).unwrap_or_default();
-    write!(
-        stream,
+    // One write: `write!` sends the pieces separately, and a handler that reads no body (such
+    // as /v1/shutdown) can answer and close after the headers, failing the rest with EPIPE.
+    let request = format!(
         "{method} {path} HTTP/1.1\r\nHost: strata\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
         body.len()
-    )?;
+    );
+    stream.write_all(request.as_bytes())?;
     let mut raw = String::new();
     stream.read_to_string(&mut raw)?;
     let bad = || {
