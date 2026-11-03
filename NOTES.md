@@ -670,3 +670,10 @@ APFS half: passed (7.6–8.0 s by clone, 0.87 s warm; tests identical to the mai
   - Not covered: links inside nested `node_modules`, which npm and yarn do not create for `file:` dependencies (a `ponytail:` note marks it).
   - Test `links_out_of_the_checkout_survive_another_depth`: copies at a different depth, shows the link is broken, then after `fix_up` checks that both the plain and the scoped link resolve, the workspace and absolute links are unchanged, and the donor is untouched. It fails without the fix. Passes on macOS and in the Linux container.
   - End to end: the demo rebuilt from scratch. `.base`, `fix-login` and `search-page` all point `node_modules/typescript` at its absolute path, and the checker reports the agent's TS2322 with no hand fixes.
+
+## Name check (2026-11-03), a missed PLAN step
+
+- PLAN says "Before Phase 1, check crates.io, npm, Homebrew, the GitHub organization and the domain." That was not done until the owner asked about naming after Phase 5.
+- Result: `strata` is taken on npm (an HTTP server, 0.20.1), on crates.io (0.1.1), and as a GitHub account (so are `getstrata`, `strata-dev` and `stratadev`). It is free in Homebrew core. Palo Alto Networks sells a security product called Strata.
+- `strataio`, `stratagents` and `strata-sh` are free on npm, crates.io and GitHub. npm organization names could not be checked automatically.
+- Open for the owner: keep Strata under an organization (the command stays `strata`, the packages are scoped, the crate needs another name) or rename before launch.
