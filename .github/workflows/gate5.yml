@@ -1,0 +1,35 @@
+# Gate 5 (PLAN): bench/gate5.sh on fresh GitHub macOS and Ubuntu VMs, from the published
+# release, with the README's commands only. Run it by hand: gh workflow run gate5.yml
+name: gate5
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  gate5:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: bench/gate5.sh
+          sparse-checkout-cone-mode: false
+      # A desktop or SSH login gets a systemd user manager; a runner's job does not, so give it
+      # one, the way a login would, for `strata init` to install its user service.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          uid=$(id -u)
+          for _ in $(seq 1 30); do [ -S "/run/user/$uid/bus" ] && break; sleep 1; done
+          echo "XDG_RUNTIME_DIR=/run/user/$uid" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" >> "$GITHUB_ENV"
+      - name: The README's prerequisites, already on the runner
+        run: git --version && node --version
+      - run: bash bench/gate5.sh
+      - name: The environment, for the record
+        if: always()
+        run: cd ~/gate5-app && ~/.cargo/bin/strata doctor --report || true

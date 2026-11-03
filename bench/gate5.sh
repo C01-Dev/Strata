@@ -1,19 +1,16 @@
 #!/usr/bin/env bash
-# Gate 5, run inside a clean VM: from install to an agent using the shared checker, using the
-# README's commands, timed. The README's prerequisites (git, Node 20+) must already be in place.
+# Gate 5 (PLAN): on a clean machine that has the README's prerequisites (git, Node 20+), go from
+# the README's install command to an agent getting a type error from the shared checker over
+# MCP, using only README commands, timed; under 5 minutes passes. .github/workflows/gate5.yml
+# runs it on fresh GitHub macOS and Ubuntu VMs; the owner then repeats it by hand.
 #
-#   RELEASE=http://<host>:<port> bash gate5.sh
-#
-# RELEASE serves a release directory (strata-installer.sh plus the tarballs and their
-# .sha256). It stands in for GitHub releases until the first one is published; the installer
-# command is the README's, with its URL pointed there (STRATA_DOWNLOAD_URL).
+#   bash bench/gate5.sh
 set -euo pipefail
-: "${RELEASE:?set RELEASE to the release URL}"
 start=$(date +%s)
 step() { echo "[$(( $(date +%s) - start )) s] $*"; }
 
 step "install (README: shell installer)"
-curl --proto '=http,https' -LsSf "$RELEASE/strata-installer.sh" | STRATA_DOWNLOAD_URL="$RELEASE" sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/C01-Dev/strata/releases/latest/download/strata-installer.sh | sh
 export PATH="$HOME/.cargo/bin:$PATH"
 strata --version
 
@@ -71,4 +68,6 @@ const send = (method, params) =>
 })();
 EOF
 step "done: install to an agent using the shared checker"
-echo "GATE5_SECONDS=$(( $(date +%s) - start ))"
+took=$(( $(date +%s) - start ))
+echo "GATE5_SECONDS=$took"
+[ "$took" -lt 300 ] || { echo "gate5: over 5 minutes"; exit 1; }
