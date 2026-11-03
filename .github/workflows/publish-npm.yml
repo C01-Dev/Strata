@@ -1,6 +1,8 @@
 # npm packages for a release (PLAN 5.3): called by release.yml (dist's `publish-jobs`) with the
 # dist plan once the GitHub release exists. Builds the per-platform packages and the launcher
 # (checksums inside) from the release's own tarballs, then publishes the platforms first.
+# No npm token: each package trusts this repo's release.yml (npm trusted publishing, OIDC,
+# with `npm publish` allowed), set up by the owner on npmjs.com.
 name: publish-npm
 
 on:
@@ -15,7 +17,6 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       TAG: ${{ fromJson(inputs.plan).announcement_tag }}
     steps:
       - uses: actions/checkout@v5
