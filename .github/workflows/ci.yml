@@ -18,7 +18,7 @@ jobs:
       - run: npm test --prefix packages/tsbridge
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+      - run: cargo test --no-fail-fast
       - if: runner.os == 'macOS'
         run: swift build --package-path apps/macos # the menu bar app
 
