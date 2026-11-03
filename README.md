@@ -288,6 +288,8 @@ Run `strata doctor` first. When filing an issue, include `strata doctor --report
 
 ## Development
 
+New here, or on Windows? [CONTRIBUTING.md](CONTRIBUTING.md) sets you up in one command (`scripts/dev-setup.sh`, also under WSL2) and shows how to send a change.
+
 ```bash
 cargo test
 ```
