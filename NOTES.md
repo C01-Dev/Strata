@@ -896,7 +896,7 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 ## Link previews (2026-11-09)
 
 - A link to the GitHub repo showed GitHub's generated card (repo name, avatar, stars), because the repo had no social preview. GitHub takes that image only through Settings > General > Social preview; there is no API for it, so the owner uploads it.
-- **Image:** rendered from C01's Remotion project (`src/strata/OG.tsx`, Stills `StrataOG` 1280x640 and `StrataOG-1200` 1200x630): "Strata." with the ember dot, "Five agents. One type checker.", "61% less memory" (5.2 to 2.1 GiB, five agents on cal.com), the layers drawing, the C01 mark and strata.c01.dev.
+- **Image:** rendered from C01's Remotion project (`src/strata/OG.tsx`, Stills `StrataOG` 1280x640 and `StrataOG-1200` 1200x630): "Strata." with the ember dot, "Five agents. One type checker.", "61% less memory" (5.2 to 2.1 GiB, "five agents on a 10,000-file Next.js repo": the owner chose not to name cal.com on the card, so it cannot read as a partner), the layers drawing, the C01 mark and strata.c01.dev.
   - `docs/social-preview.png` (1280x640) is the GitHub upload.
-  - `docs/strata-og.png` (1200x630) is now the site's `og:image`, with width, height and alt, replacing the video frame. The Worker serves it at `/strata-og.png` (EPOCH 3).
+  - `docs/strata-og.png` (1200x630) is now the site's `og:image`, with width, height and alt, replacing the video frame. The Worker serves it at `/strata-og.png` (EPOCH 4).
 - X, Slack and LinkedIn cache previews per URL, so a link already shared may keep the old card for a while.

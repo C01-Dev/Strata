@@ -8,7 +8,7 @@
 
 const RAW = "https://raw.githubusercontent.com/C01-Dev/Strata/main/";
 // Part of every upstream URL, so the edge caches them under it: bump it to drop the cache.
-const EPOCH = 3;
+const EPOCH = 4;
 const INSTALLER = "https://github.com/C01-Dev/Strata/releases/latest/download/strata-installer.sh";
 const FILES = {
   "/": { path: "site/index.html", type: "text/html; charset=utf-8", ttl: 300 },
