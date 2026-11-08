@@ -23,6 +23,7 @@ const DETACHED: &str = "(detached)";
 /// `info/exclude` keeps the file out of `git status`, so no tracked file changes and `strata rm`
 /// still sees a clean tree. Sonnet ran its own `tsc` in 2 of 3 sessions with only Strata's MCP
 /// instructions and in none with this note (NOTES, "Do agents use Strata on their own?").
+/// `repo.agent_note = false` in strata.toml turns it off.
 pub const NOTE: &str = ".claude/rules/strata.md";
 
 pub fn write_note(root: &Path, path: &Path) -> Result<()> {
@@ -235,7 +236,9 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
     };
     let mut warnings = warnings;
     warnings.extend(seeded.warnings.iter().cloned());
-    if let Err(e) = write_note(root, &path) {
+    if cfg.repo.agent_note
+        && let Err(e) = write_note(root, &path)
+    {
         warnings.push(format!("could not write {NOTE}: {e}"));
     }
     d.store()
@@ -664,8 +667,11 @@ pub fn adopt(d: &Daemon, req: Adopt) -> Result<Value> {
     d.store()
         .event(Some(agent.id), "agent.adopted", &path.to_string_lossy())?;
     let port = crate::ports::ensure(d, &agent, &cfg)?;
-    let warnings: Vec<String> = write_note(&root, &path)
-        .err()
+    let warnings: Vec<String> = cfg
+        .repo
+        .agent_note
+        .then(|| write_note(&root, &path).err())
+        .flatten()
         .map(|e| format!("could not write {NOTE}: {e}"))
         .into_iter()
         .collect();

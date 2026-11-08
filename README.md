@@ -165,7 +165,7 @@ Or download [Strata-macOS.zip](https://github.com/C01-Dev/Strata/releases/latest
 
 An agent can only stop or read its own processes. Every answer carries a warning when the agent is near or over its memory budget.
 
-**The note in each worktree.** `strata new` and `strata adopt` write `.claude/rules/strata.md` in the worktree. Claude Code reads it, and it tells the agent to check types with `strata_diagnostics` instead of running `tsc` or the repo's type-check script, and to start the dev server through Strata. The file is listed in the repo's `.git/info/exclude`, so it never shows as a change and never gets committed.
+**The note in each worktree.** `strata new` and `strata adopt` write `.claude/rules/strata.md` in the worktree. Claude Code reads it, and it tells the agent to check types with `strata_diagnostics` instead of running `tsc` or the repo's type-check script, and to start the dev server through Strata. The file is listed in the repo's `.git/info/exclude`, so it never shows as a change and never gets committed. To stop it, set `agent_note = false` under `[repo]` in `strata.toml`. Worktrees created after that get no note, and existing notes stay until you delete them.
 
 It matters when a repo's own instructions name a type-check command. In a test on excalidraw, whose `CLAUDE.md` says to run `yarn test:typecheck`:
 - Sonnet ran its own `tsc` in 2 of 3 sessions without the note, and in none with it.
@@ -242,6 +242,7 @@ Adopted worktrees keep the dependencies Conductor gave them. Add the MCP server 
 [repo]
 base = "main"                     # branch Strata's base worktree follows
 worktree_dir = "../.strata/myapp" # where agent worktrees live
+agent_note = true                 # write .claude/rules/strata.md in each agent's worktree
 
 [seed]
 paths = ["**/node_modules"]       # ignored folders (or files) cloned from a donor; `*` = one folder, `**` = any depth

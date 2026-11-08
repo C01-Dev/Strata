@@ -54,6 +54,21 @@ fn new_creates_a_locked_worktree_and_rm_removes_it() {
 }
 
 #[test]
+fn agent_note_false_writes_no_note() {
+    let e = initialized();
+    let toml = e.root.join("strata.toml");
+    let config = std::fs::read_to_string(&toml).unwrap();
+    assert!(config.contains("agent_note = true"));
+    std::fs::write(
+        &toml,
+        config.replace("agent_note = true", "agent_note = false"),
+    )
+    .unwrap();
+    let path = path_of(&e.strata(&["new", "quiet"]));
+    assert!(path.exists() && !path.join(".claude/rules/strata.md").exists());
+}
+
+#[test]
 fn new_from_a_ref_and_on_an_existing_branch() {
     let e = initialized();
     git(&e.root, &["branch", "old-work"]);

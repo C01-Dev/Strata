@@ -23,6 +23,9 @@ pub struct Repo {
     pub base: String,
     /// Where agent worktrees live, relative to the repo root. Default: see `default_worktree_dir`.
     pub worktree_dir: Option<PathBuf>,
+    /// Write `.claude/rules/strata.md` in each agent's worktree, telling the agent to use
+    /// Strata's tools instead of its own `tsc` and dev server.
+    pub agent_note: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -82,6 +85,7 @@ impl Default for Repo {
         Self {
             base: "main".into(),
             worktree_dir: None,
+            agent_note: true,
         }
     }
 }
@@ -270,6 +274,7 @@ pub fn template(base: &str, worktree_dir: &str, dev_command: Option<&str>, app: 
         r#"[repo]
 base = {base}                     # branch Strata's own base worktree follows
 worktree_dir = {worktree_dir} # where agent worktrees live
+agent_note = true                 # .claude/rules/strata.md in each worktree: use Strata, not tsc
 
 [seed]
 paths = ["**/node_modules"]       # ignored folders cloned from a donor (`*` = one folder, `**` = any depth)
@@ -392,6 +397,13 @@ mod tests {
     fn empty_file_gives_plan_defaults() {
         let c = Config::parse("").unwrap();
         assert_eq!(c.repo.base, "main");
+        assert!(c.repo.agent_note);
+        assert!(
+            !Config::parse("[repo]\nagent_note = false")
+                .unwrap()
+                .repo
+                .agent_note
+        );
         assert_eq!(c.dev.proxy_port, 7355);
         assert_eq!(c.dev.port_range, [4100, 4999]);
         assert_eq!(c.checker.idle_dispose_secs, 900);
@@ -409,6 +421,7 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(c.repo.base, "trunk");
+        assert!(c.repo.agent_note);
         assert_eq!(c.dev.command.as_deref(), Some("pnpm dev"));
         assert_eq!(c.dev.app.as_deref(), Some("web"));
         assert_eq!(
