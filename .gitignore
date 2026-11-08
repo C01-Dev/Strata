@@ -3,3 +3,4 @@ node_modules/
 target/
 bench/fixtures/
 footprint
+bench/results/agent-usage/

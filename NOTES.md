@@ -900,3 +900,33 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - `docs/social-preview.png` (1280x640) is the GitHub upload.
   - `docs/strata-og.png` (1200x630) is now the site's `og:image`, with width, height and alt, replacing the video frame. The Worker serves it at `/strata-og.png` (EPOCH 4).
 - X, Slack and LinkedIn cache previews per URL, so a link already shared may keep the old card for a while.
+
+## Do agents use Strata on their own? (2026-11-09)
+
+- PLAN's open question: "Do agents use MCP code-intelligence tools willingly, or do they prefer reading files and running `tsc`?" Tested on excalidraw (TypeScript 7.1 beta).
+  - Three real tasks: add a `description` field to every element, rename `hasBoundTextElement` across 17 files, and turn `newElementWith`'s boolean argument into an options object.
+  - Three agents at once, each in its own Strata worktree, headless Claude Code with Strata as its only MCP server.
+  - Excalidraw's own `CLAUDE.md` says "Use `yarn test:typecheck` to verify TypeScript". That makes this the hard case.
+
+| Run | Used a Strata tool | Ran its own `tsc` |
+| --- | --- | --- |
+| Opus 5.5, repo as it is | 3 of 3 | 0 of 3 |
+| Sonnet 5.5, repo as it is | 2 of 3 | 2 of 3 (one did both) |
+| Sonnet 5.5, Strata section added to `CLAUDE.md` | 3 of 3 | 0 of 3 |
+
+- **Every session's code type-checks with 0 errors**, checked afterwards with the repo's own `tsc`. Agents that relied on Strata's answers alone did not ship type errors.
+- **What a miss costs:** each `yarn test:typecheck` an agent ran peaked at 1.44 GB and took 14 s. The shared checker serving every agent sat at 0.4 to 0.75 GB.
+- **What decides it:**
+  - Strata's MCP server instructions ("Prefer these tools to running tsc") were enough for Opus.
+  - Sonnet followed the repo's `CLAUDE.md` instead, on the task that said "make sure nothing is broken".
+  - A four-line Strata section next to the repo's instructions fixed that in this run.
+- **Setup:**
+  - Isolated daemon (`STRATA_HOME=~/.strata-usage`, `init --no-service`), so nothing was installed.
+  - Sessions were limited to edits, Strata's tools and check or read commands. The session's safety check refused agents with unrestricted shells. A refused command would still show in the log.
+  - Claude Code hides MCP tools behind a tool search until an agent asks for them, which adds a step before the first Strata call.
+- **Harness:** `bench/agent-usage.sh` (conditions `asis`, `hint`, `bare`; `MODEL=`, `AGENT=codex`) and `bench/agent-usage.mjs` for the tally. Summary in `bench/results/agent-usage.md`. The raw logs stay local.
+- **Not covered:**
+  - Codex: its sign-in had expired, and the harness supports it.
+  - Cursor, and other repos.
+  - Three sessions per run is a small sample: read it as direction, not rates.
+- **Follow-up:** Strata should put that section where agents read it without changing tracked files in every worktree, for example a local, git-excluded instructions file in each worktree.
