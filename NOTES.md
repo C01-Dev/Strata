@@ -913,6 +913,7 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 | Opus 5.5, repo as it is | 3 of 3 | 0 of 3 |
 | Sonnet 5.5, repo as it is | 2 of 3 | 2 of 3 (one did both) |
 | Sonnet 5.5, Strata section added to `CLAUDE.md` | 3 of 3 | 0 of 3 |
+| Sonnet 5.5, repo as it is, with the note `strata new` now writes | 3 of 3 | 0 of 3 |
 
 - **Every session's code type-checks with 0 errors**, checked afterwards with the repo's own `tsc`. Agents that relied on Strata's answers alone did not ship type errors.
 - **What a miss costs:** each `yarn test:typecheck` an agent ran peaked at 1.44 GB and took 14 s. The shared checker serving every agent sat at 0.4 to 0.75 GB.
@@ -929,4 +930,9 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - Codex: its sign-in had expired, and the harness supports it.
   - Cursor, and other repos.
   - Three sessions per run is a small sample: read it as direction, not rates.
-- **Follow-up:** Strata should put that section where agents read it without changing tracked files in every worktree, for example a local, git-excluded instructions file in each worktree.
+- **Shipped: the note in each worktree.** `strata new` and `strata adopt` write `.claude/rules/strata.md` and add `/.claude/rules/strata.md` to the repo's shared `info/exclude` (`git::exclude`, via `git rev-parse --git-path info/exclude`, so one entry covers every worktree).
+  - **Why this file:** a probe session confirmed Claude Code reads both `.claude/rules/*.md` and `CLAUDE.local.md` in a worktree. The rules file has its own name, so it never overwrites someone's personal `CLAUDE.local.md` in an adopted worktree.
+  - **What it says:** the checker lines appear only when the checker is on (`checker_off_reason()` for the worktree); the dev server line always. It says to ignore the file if Strata's tools are not available, for agents without the MCP server.
+  - **Failure handling:** a failed write is a warning on `new`/`adopt`, never a failure. Tests: `exclude_from_a_worktree_hides_the_file_in_every_checkout_once`, plus the note assertions in `worktrees.rs` (clean `git status`, and `rm` still works).
+  - **Measured:** the `note` condition ran three Sonnet sessions with nothing added by hand: 3 of 3 used Strata, none ran `tsc`, and all type-check clean. The note never appeared in `git status`.
+  - **Not covered:** Codex reads only `AGENTS.md`, and there is no untracked equivalent short of `AGENTS.override.md`, which replaces the repo's file. Cursor reads `.cursor/rules/*.mdc`, but Cursor is not installed here to test. No config switch to turn the note off; add `instructions = false` if someone asks.

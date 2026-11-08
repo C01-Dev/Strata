@@ -35,6 +35,11 @@ fn new_creates_a_locked_worktree_and_rm_removes_it() {
         (agent["state"].as_str(), agent["branch"].as_str()),
         (Some("ready"), Some("fix-login"))
     );
+    // The note for the agent: dev server only (no TypeScript here), invisible to git, and no
+    // obstacle to `rm`.
+    let note = std::fs::read_to_string(path.join(".claude/rules/strata.md")).unwrap();
+    assert!(note.contains("strata_start_dev_server") && !note.contains("strata_diagnostics"));
+    assert_eq!(git(&path, &["status", "--porcelain"]), "");
 
     assert!(e.strata(&["rm", "fix-login"]).contains("removed fix-login"));
     assert!(!path.exists() && !e.is_worktree(&path));
@@ -266,8 +271,13 @@ fn adopt_a_worktree_made_by_plain_git() {
         &e.root,
         &["worktree", "add", "-q", "--detach", other.to_str().unwrap()],
     );
+    let ts = other.join("node_modules/typescript");
+    std::fs::create_dir_all(&ts).unwrap();
+    std::fs::write(ts.join("package.json"), r#"{"version":"7.1.0-beta"}"#).unwrap();
     let out = e.strata(&["adopt", other.to_str().unwrap()]);
     assert!(out.contains("as other-tool"), "{out}");
+    let note = std::fs::read_to_string(other.join(".claude/rules/strata.md")).unwrap();
+    assert!(note.contains("instead of running `tsc`"), "{note}");
     assert_eq!(e.agent("other-tool").unwrap()["branch"], "(detached)");
     assert!(
         e.strata_err(&["adopt", other.to_str().unwrap()])

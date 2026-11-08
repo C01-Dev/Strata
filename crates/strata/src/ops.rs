@@ -18,6 +18,33 @@ use strata_seed::Way;
 
 const DETACHED: &str = "(detached)";
 
+/// A note in each agent's worktree, telling the agent to ask Strata instead of starting its own
+/// checker or dev server. Claude Code reads `.claude/rules/*.md`, and the repo's shared
+/// `info/exclude` keeps the file out of `git status`, so no tracked file changes and `strata rm`
+/// still sees a clean tree. Sonnet ran its own `tsc` in 2 of 3 sessions with only Strata's MCP
+/// instructions and in none with this note (NOTES, "Do agents use Strata on their own?").
+pub const NOTE: &str = ".claude/rules/strata.md";
+
+pub fn write_note(root: &Path, path: &Path) -> Result<()> {
+    git::exclude(root, &format!("/{NOTE}"))?;
+    let mut text = String::from(
+        "# Strata\n\nThis worktree is managed by Strata, which shares one TypeScript checker and a dev server supervisor between every agent working on this repo. If the Strata tools named here are not available to you, ignore this file.\n\n",
+    );
+    if detect::detect(path).checker_off_reason().is_none() {
+        text.push_str(
+            "- Check types with the `strata_diagnostics` tool (one file, or the whole project when `file` is omitted) instead of running `tsc`, `tsgo` or the repo's type-check script. It answers from the shared checker in about a second and does not start another checker.\n\
+             - `strata_references`, `strata_definition`, `strata_hover` and `strata_symbols` answer questions about the code from the same checker.\n",
+        );
+    }
+    text.push_str(
+        "- Start the dev server with `strata_start_dev_server`, which gives this worktree its own port and URL, instead of running the dev command yourself.\n",
+    );
+    let file = path.join(NOTE);
+    fs::create_dir_all(file.parent().expect("NOTE has a parent"))?;
+    fs::write(file, text)?;
+    Ok(())
+}
+
 /// Test hooks, debug builds only: with `STRATA_FAULT=<point>` the daemon stalls at that point
 /// so a test can SIGKILL it mid-operation (task 1.7); `no-clone` makes every clone fail as on a
 /// filesystem without clones (task 4.3).
@@ -208,6 +235,9 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
     };
     let mut warnings = warnings;
     warnings.extend(seeded.warnings.iter().cloned());
+    if let Err(e) = write_note(root, &path) {
+        warnings.push(format!("could not write {NOTE}: {e}"));
+    }
     d.store()
         .set_agent_seed(agent.id, seeded.tier, seeded.dep_key.as_deref())?;
     let port = crate::ports::ensure(d, &agent, &cfg)?;
@@ -634,7 +664,12 @@ pub fn adopt(d: &Daemon, req: Adopt) -> Result<Value> {
     d.store()
         .event(Some(agent.id), "agent.adopted", &path.to_string_lossy())?;
     let port = crate::ports::ensure(d, &agent, &cfg)?;
-    Ok(json!({ "agent": agent, "port": port }))
+    let warnings: Vec<String> = write_note(&root, &path)
+        .err()
+        .map(|e| format!("could not write {NOTE}: {e}"))
+        .into_iter()
+        .collect();
+    Ok(json!({ "agent": agent, "port": port, "warnings": warnings }))
 }
 
 #[derive(Deserialize)]

@@ -256,6 +256,27 @@ pub fn changes(path: &Path) -> Result<usize> {
     Ok(git(path, &["status", "--porcelain"])?.lines().count())
 }
 
+/// Adds `pattern` to the repo's shared `info/exclude`, which every worktree reads, unless it is
+/// there already.
+pub fn exclude(dir: &Path, pattern: &str) -> Result<()> {
+    let file = PathBuf::from(git(dir, &["rev-parse", "--git-path", "info/exclude"])?);
+    let file = dir.join(file); // relative to `dir` unless git printed an absolute path
+    let old = std::fs::read_to_string(&file).unwrap_or_default();
+    if old.lines().any(|l| l.trim() == pattern) {
+        return Ok(());
+    }
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let sep = if old.is_empty() || old.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    std::fs::write(&file, format!("{old}{sep}{pattern}\n"))?;
+    Ok(())
+}
+
 pub fn branch_exists(root: &Path, branch: &str) -> bool {
     git(
         root,
@@ -500,5 +521,23 @@ mod tests {
         forget(&root, &wt).unwrap();
         assert_eq!(list(&root).unwrap().len(), 1);
         forget(&root, &wt).unwrap(); // already gone is fine
+    }
+
+    #[test]
+    fn exclude_from_a_worktree_hides_the_file_in_every_checkout_once() {
+        let (dir, root) = repo();
+        let wt = dir.path().join("wt");
+        add(&root, &wt, "feat", Some("main")).unwrap();
+        for d in [&root, &wt] {
+            std::fs::create_dir_all(d.join(".claude/rules")).unwrap();
+            std::fs::write(d.join(".claude/rules/strata.md"), "note\n").unwrap();
+        }
+        assert_eq!(changes(&wt).unwrap(), 1);
+        exclude(&wt, "/.claude/rules/strata.md").unwrap();
+        exclude(&wt, "/.claude/rules/strata.md").unwrap();
+        assert_eq!(changes(&wt).unwrap(), 0);
+        assert_eq!(changes(&root).unwrap(), 0);
+        let shared = std::fs::read_to_string(root.join(".git/info/exclude")).unwrap();
+        assert_eq!(shared.matches("/.claude/rules/strata.md").count(), 1);
     }
 }

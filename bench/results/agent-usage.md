@@ -75,6 +75,25 @@ Sessions: 3. Used a Strata tool: 2. Ran their own type check: 2.
 Sessions: 3. Used a Strata tool: 3. Ran their own type check: 0.
 ```
 
+## note-sonnet (the repo as it is, with the note `strata new` now writes)
+```
+## desc  (claude-sonnet-5-5, strata connected, 21 tool calls, 22 turns, 98s)
+  Strata tools: strata_diagnostics x2
+  Own type checks: 0
+  Tests/lint/build: 2
+    $ cat >> packages/element/src/__tests__/description.test.ts <<'EOF'
+    $ yarn vitest run packages/element packages/excalidraw/tests/data packages/excalidraw/tests/export.test.tsx packages/excalidraw/tests/onDuplic
+## opts  (claude-sonnet-5-5, strata connected, 13 tool calls, 14 turns, 33s)
+  Strata tools: strata_references x1, strata_diagnostics x2
+  Own type checks: 0
+  Tests/lint/build: 0
+## rename  (claude-sonnet-5-5, strata connected, 44 tool calls, 45 turns, 62s)
+  Strata tools: strata_diagnostics x2
+  Own type checks: 0
+  Tests/lint/build: 0
+Sessions: 3. Used a Strata tool: 3. Ran their own type check: 0.
+```
+
 ## Own tsc memory (sampled every 2 s during asis and asis-sonnet; Opus ran none)
 ```
 01:29:56 own_tsc=1 own_rss_mb=313 shared_mb=4

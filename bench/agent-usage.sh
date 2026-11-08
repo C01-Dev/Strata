@@ -7,6 +7,7 @@
 #     asis   the repo as it is (its CLAUDE.md says `yarn test:typecheck`), Strata connected over MCP
 #     hint   the same, plus a Strata section appended to CLAUDE.md
 #     bare   no CLAUDE.md or AGENTS.md, so nothing in the repo points at tsc
+#     note   the repo as it is, relying on the note `strata new` writes (.claude/rules/strata.md)
 #
 # MODEL picks the model (Claude Code's default otherwise). AGENT=codex runs Codex instead, with
 # its workspace-write sandbox, which keeps it to its worktree.
@@ -14,7 +15,7 @@
 # Needs `AGENTS=0 bench/setup.sh excalidraw`, `strata init --no-service` in its base, and a
 # logged-in `claude`. Each session is one real task on your Claude plan.
 set -euo pipefail
-cond=${1:?usage: agent-usage.sh asis|hint|bare}
+cond=${1:?usage: agent-usage.sh asis|hint|bare|note}
 : "${STRATA_HOME:?set STRATA_HOME to the folder the daemon uses}"
 BENCH=$(cd "$(dirname "$0")" && pwd)
 BASE=$BENCH/fixtures/excalidraw/base

@@ -251,6 +251,9 @@ fn adopt(path: PathBuf) -> Result<()> {
         "/v1/agents/adopt",
         json!({ "path": std::path::absolute(path)? }),
     )?;
+    for w in out["warnings"].as_array().into_iter().flatten() {
+        eprintln!("warning: {}", w.as_str().unwrap_or_default());
+    }
     println!(
         "adopted {} as {}",
         out["agent"]["path"].as_str().unwrap_or("?"),
