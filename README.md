@@ -308,4 +308,4 @@ Releases are built by [cargo-dist](https://opensource.axo.dev/cargo-dist/) on a 
 
 ## License
 
-Strata is made by [C01 Developments](https://c01.dev) and licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
+Strata is made by [C01](https://c01.dev) and licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

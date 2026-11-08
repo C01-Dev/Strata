@@ -741,12 +741,12 @@ Still manual, for the Gate 5 VMs: a real reboot (the service brings the daemon b
 
 ## Names and license (owner decision, 2026-11-03)
 
-- **Owner:** C01 Developments, on its existing GitHub organization `C01-Dev`. GitHub would not release `C01` itself: its username policy does not release inactive names, only names covered by a trademark complaint. If the owner later gets `C01`, the organization can be renamed and GitHub redirects the repo.
+- **Owner:** C01, on its existing GitHub organization `C01-Dev`. GitHub would not release `C01` itself: its username policy does not release inactive names, only names covered by a trademark complaint. If the owner later gets `C01`, the organization can be renamed and GitHub redirects the repo.
 - **Names:**
   - Repo `github.com/C01-Dev/strata`; Homebrew tap `C01-Dev/homebrew-tap` (`brew install c01-dev/tap/strata`).
   - npm package `stratagents`, with platform packages `stratagents-darwin-arm64`, `-linux-x64` and `-linux-arm64`, all four free. These are plain names, not a scope, so they can change hands later.
   - The command is still `strata`. The menu bar app's bundle id is `dev.c01.strata`.
-- **License:** MIT OR Apache-2.0, as PLAN's layout planned. `LICENSE-MIT` reads "Copyright (c) 2026 C01 Developments", the studio's name of record. `LICENSE-APACHE` is the standard text, copied from serde's. `license.workspace = true` is set in every crate and `"MIT OR Apache-2.0"` in the npm packages. `cargo deny` now checks the workspace crates too (`private = { ignore = true }` removed): clean.
+- **License:** MIT OR Apache-2.0, as PLAN's layout planned. `LICENSE-MIT` reads "Copyright (c) 2026 C01", the studio's name of record. `LICENSE-APACHE` is the standard text, copied from serde's. `license.workspace = true` is set in every crate and `"MIT OR Apache-2.0"` in the npm packages. `cargo deny` now checks the workspace crates too (`private = { ignore = true }` removed): clean.
 - `release.yml` got the tap name by hand. `dist generate` leaves it alone under `allow-dirty = ["ci"]`, so this is a second hand edit next to the `uses: ./` fix. `dist plan` now ships both LICENSE files and the README in every tarball.
 - Checked: the npm launcher test packs and installs `stratagents-0.1.0.tgz` with `stratagents-darwin-arm64-0.1.0.tgz` and runs the checked binary; 164 tests pass; the app builds and its Info.plist lints.
 - Not done (needs the owner): create `C01-Dev/strata` and `C01-Dev/homebrew-tap` on GitHub, push, and add the `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN` secrets. crates.io: `strata` is taken there, so `cargo install` from crates.io would need the package published under another name (the binary can stay `strata`). Not part of v0.1's install paths.
@@ -860,7 +860,7 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   3. "Strata shares one.": the boxes flatten into bars, then stretch into five layers over one base; 2.1 GiB, 61% less.
   4. "Dependencies by clone." / "5 s, not 5 minutes.": a 309 s install bar against a 5 s clone.
   5. "Every agent, in your menu bar.": a new screenshot.
-  6. End card: "Strata.", `curl -LsSf strata.c01.dev/install.sh | sh`, "Open source by C01 Developments", with the mark drawn.
+  6. End card: "Strata.", `curl -LsSf strata.c01.dev/install.sh | sh`, "Open source by C01", with the mark drawn.
 - **Numbers, all from bench/REPORT.md:** cal.com, 5 agents, per-file checks, 5.22 → 2.05 GiB (61%); cal.com on Linux XFS, a 309 s install against a 4.7 to 5.9 s clone.
   - The site said "8 s instead of 5 minutes", which put a macOS clone against a Linux install. It now says 5 s, both on Linux, matching the video.
 - **QA:**
