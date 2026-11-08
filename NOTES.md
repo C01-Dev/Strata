@@ -892,3 +892,11 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 - PLAN: "make sure Strata's proxy never collides with Portless's port." Portless's README (vercel-labs/portless): its proxy listens on 443 (HTTPS, using sudo), 80 with `--no-tls` or `--unprivileged`, or a port of the user's choice (`-p`, `PORTLESS_PORT`; its own example is 1355). Its URLs are `https://<name>.localhost`. Strata's proxy is on 7355, so the proxies never collide, and the hostnames cannot clash because the ports differ.
 - **Found:** Portless gives apps a random port from **4000-4999**, and Strata's default `dev.port_range` is **4100-4999**. Strata reserves an agent's port at `strata new` and used it unchecked at `strata dev`. A port Portless (or anything else) took in between would make the dev server fail to bind.
 - **Fixed:** `ports::ensure_free`. Before a dev server starts, a reserved port that another program now holds is released and the agent gets the next free one, the rule `strata new` already followed. Test `a_port_taken_after_new_moves_the_dev_server`: an outside listener on the reserved 46700, then `strata dev` serves on 46701, and the reservation moves with it. It failed before the fix (46700). Its first version shared port numbers with two other tests and failed in parallel; it now has its own range.
+
+## Link previews (2026-11-09)
+
+- A link to the GitHub repo showed GitHub's generated card (repo name, avatar, stars), because the repo had no social preview. GitHub takes that image only through Settings > General > Social preview; there is no API for it, so the owner uploads it.
+- **Image:** rendered from C01's Remotion project (`src/strata/OG.tsx`, Stills `StrataOG` 1280x640 and `StrataOG-1200` 1200x630): "Strata." with the ember dot, "Five agents. One type checker.", "61% less memory" (5.2 to 2.1 GiB, five agents on cal.com), the layers drawing, the C01 mark and strata.c01.dev.
+  - `docs/social-preview.png` (1280x640) is the GitHub upload.
+  - `docs/strata-og.png` (1200x630) is now the site's `og:image`, with width, height and alt, replacing the video frame. The Worker serves it at `/strata-og.png` (EPOCH 3).
+- X, Slack and LinkedIn cache previews per URL, so a link already shared may keep the old card for a while.
