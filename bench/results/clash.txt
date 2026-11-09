@@ -1,0 +1,58 @@
+base: 1519 program files, opened in 124 ms, checker 342 MB
+asis-rename: 17 changed, 0 removed; 0 errors alone (1604 ms, checker 844 MB)
+asis-opts: 3 changed, 0 removed; 0 errors alone (1610 ms, checker 1285 MB)
+asis-desc: 7 changed, 0 removed; 0 errors alone (1611 ms, checker 1837 MB)
+clash-oldname: 1 changed, 0 removed; 0 errors alone (1572 ms, checker 2282 MB)
+clash-oldsig: 1 changed, 0 removed; 0 errors alone (1667 ms, checker 2700 MB)
+
+## asis-rename+asis-opts
+  files both edited: 1
+  whole project: 0 new errors (1623 ms, checker 2703 -> 3132 MB)
+  changed files only: 0 new errors (624 ms, 19 files)
+
+## asis-rename+asis-desc
+  files both edited: 0
+  whole project: 0 new errors (1596 ms, checker 3789 -> 3568 MB)
+  changed files only: 0 new errors (787 ms, 23 files)
+
+## asis-rename+clash-oldname
+  files both edited: 0
+  whole project: 1 new errors (1709 ms, checker 3646 -> 3713 MB)
+  changed files only: 1 new errors (642 ms, 18 files)
+    packages/element/src/groups.ts:8:10 TS2305 Module '"./typeChecks"' has no exported member 'hasBoundTextElement'.
+
+## asis-rename+clash-oldsig
+  files both edited: 0
+  whole project: 0 new errors (1839 ms, checker 3587 -> 3543 MB)
+  changed files only: 0 new errors (630 ms, 18 files)
+
+## asis-opts+asis-desc
+  files both edited: 0
+  whole project: 0 new errors (1959 ms, checker 3586 -> 3733 MB)
+  changed files only: 0 new errors (553 ms, 9 files)
+
+## asis-opts+clash-oldname
+  files both edited: 0
+  whole project: 0 new errors (1574 ms, checker 3738 -> 3758 MB)
+  changed files only: 0 new errors (99 ms, 4 files)
+
+## asis-opts+clash-oldsig
+  files both edited: 0
+  whole project: 1 new errors (1670 ms, checker 3746 -> 3734 MB)
+  changed files only: 1 new errors (96 ms, 4 files)
+    packages/element/src/nudge.ts:11:69 TS2559 Type 'true' has no properties in common with type '{ force?: boolean | undefined; }'.
+
+## asis-desc+clash-oldname
+  files both edited: 0
+  whole project: 0 new errors (1550 ms, checker 3724 -> 3677 MB)
+  changed files only: 0 new errors (424 ms, 7 files)
+
+## asis-desc+clash-oldsig
+  files both edited: 0
+  whole project: 0 new errors (1581 ms, checker 3671 -> 3617 MB)
+  changed files only: 0 new errors (464 ms, 7 files)
+
+## clash-oldname+clash-oldsig
+  files both edited: 0
+  whole project: 0 new errors (1703 ms, checker 3550 -> 3296 MB)
+  changed files only: 0 new errors (111 ms, 2 files)

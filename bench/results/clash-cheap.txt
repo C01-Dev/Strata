@@ -1,0 +1,48 @@
+base: 1519 program files, opened in 128 ms, checker 338 MB
+asis-rename: 17 changed, 0 removed; 0 errors alone (0 ms, checker 338 MB)
+asis-opts: 3 changed, 0 removed; 0 errors alone (0 ms, checker 338 MB)
+asis-desc: 7 changed, 0 removed; 0 errors alone (0 ms, checker 338 MB)
+clash-oldname: 1 changed, 0 removed; 0 errors alone (0 ms, checker 338 MB)
+clash-oldsig: 1 changed, 0 removed; 0 errors alone (0 ms, checker 338 MB)
+
+## asis-rename+asis-opts
+  files both edited: 1
+  changed files only: 0 new errors (635 ms, 19 files, checker 1103 MB)
+
+## asis-rename+asis-desc
+  files both edited: 0
+  changed files only: 0 new errors (670 ms, 23 files, checker 1522 MB)
+
+## asis-rename+clash-oldname
+  files both edited: 0
+  changed files only: 1 new errors (623 ms, 18 files, checker 1960 MB)
+    packages/element/src/groups.ts:8:10 TS2305 Module '"./typeChecks"' has no exported member 'hasBoundTextElement'.
+
+## asis-rename+clash-oldsig
+  files both edited: 0
+  changed files only: 0 new errors (557 ms, 18 files, checker 2230 MB)
+
+## asis-opts+asis-desc
+  files both edited: 0
+  changed files only: 0 new errors (422 ms, 9 files, checker 2363 MB)
+
+## asis-opts+clash-oldname
+  files both edited: 0
+  changed files only: 0 new errors (99 ms, 4 files, checker 2578 MB)
+
+## asis-opts+clash-oldsig
+  files both edited: 0
+  changed files only: 1 new errors (96 ms, 4 files, checker 2642 MB)
+    packages/element/src/nudge.ts:11:69 TS2559 Type 'true' has no properties in common with type '{ force?: boolean | undefined; }'.
+
+## asis-desc+clash-oldname
+  files both edited: 0
+  changed files only: 0 new errors (401 ms, 7 files, checker 2647 MB)
+
+## asis-desc+clash-oldsig
+  files both edited: 0
+  changed files only: 0 new errors (392 ms, 7 files, checker 2630 MB)
+
+## clash-oldname+clash-oldsig
+  files both edited: 0
+  changed files only: 0 new errors (52 ms, 2 files, checker 2629 MB)

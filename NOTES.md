@@ -936,3 +936,32 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - **Failure handling:** a failed write is a warning on `new`/`adopt`, never a failure. Tests: `exclude_from_a_worktree_hides_the_file_in_every_checkout_once`, plus the note assertions in `worktrees.rs` (clean `git status`, and `rm` still works).
   - **Measured:** the `note` condition ran three Sonnet sessions with nothing added by hand: 3 of 3 used Strata, none ran `tsc`, and all type-check clean. The note never appeared in `git status`.
   - **Not covered:** Codex reads only `AGENTS.md`, and there is no untracked equivalent short of `AGENTS.override.md`, which replaces the repo's file. Cursor reads `.cursor/rules/*.mdc`, but Cursor is not installed here to test. The off switch is `repo.agent_note = false` (default true, in the `strata init` template). It stops new notes and leaves existing ones; test `agent_note_false_writes_no_note`.
+
+## Clash detection experiment (2026-11-09): go
+
+- **Question:** can the shared checker tell agents that their changes break each other before anything is merged? For example, one agent renames a function that another agent's new code still calls. Only Strata can check this cheaply, because it already holds every agent's changes as layers on one base.
+- **Method:** `bench/clash.mjs` drives tsbridge directly. It opens the base once, makes one snapshot per agent, and makes one snapshot holding both agents' changes for every pair.
+  - A file both agents edited gets `git merge-file` (three-way, against the base) first. A conflicted merge is reported as a conflict.
+  - A "clash" is an error the combined snapshot has beyond those either agent has alone, matched by file, code and message, since positions move.
+  - Each pair is checked twice: the whole project, and only the files either agent changed.
+- **Setup:** excalidraw (1,519 program files).
+  - Three real agent worktrees from the agent-usage test: the rename of `hasBoundTextElement` (17 files), the `newElementWith` options object (3 files), and the `description` field (7 files).
+  - Two worktrees that each clash with one of them: `clash-oldname` adds a call to `hasBoundTextElement` in `groups.ts`, and `clash-oldsig` adds `nudge.ts` calling `newElementWith(el, {...}, true)`.
+  - Each type-checks clean on its own.
+- **Results** (`bench/results/clash.txt`, `bench/results/clash-cheap.txt`):
+  - Both clashes were found, in both modes:
+    - `groups.ts:8 TS2305 Module './typeChecks' has no exported member 'hasBoundTextElement'`
+    - `nudge.ts:11 TS2559 Type 'true' has no properties in common with type '{ force?: boolean }'`
+  - **No false alarms** in the other 8 pairs. That includes rename + options object, which both edited `delta.ts` and merged cleanly.
+  - **Speed:** a whole-project check of a combined snapshot took 1.6 to 2.0 s. A changed-files-only check took 0.05 to 0.7 s and found the same clashes.
+  - **Memory, the open risk:** the whole-project mode put about 440 MB of checker state on each snapshot (tsgo at about 3.7 GB with 5 agents plus pairs). The changed-files mode still climbed to about 2.6 GB over 10 pairs, because each per-file check builds types for that file's dependencies and Go returns memory slowly (see the soak notes). The real cost per pair needs measuring in the daemon, with one combined snapshot at a time, disposed after.
+  - First version of `clash-oldsig` had a type error of its own (a generic `T` cannot take a plain `{x, y}`), which hid the clash. The script prints each agent's own error count, which caught it.
+- **Verdict: build it**, in the changed-files mode:
+  - **When:** when an agent's layer changes (debounced, low priority, never ahead of agents' own queries), check the pairs that include that agent, one combined snapshot at a time.
+  - **What agents see:** a `strata_conflicts` MCP tool, and a line on `strata_diagnostics` answers when the agent has a clash ("your changes and fix-login's break `groups.ts:8`: …"), in the agent's own paths.
+  - **Where people see it:** a column in `strata status` and in the menu bar.
+  - **Textual conflicts:** git's three-way merge already finds files both agents edited on the same lines, so report those too.
+- **Limits:**
+  - Type-level clashes only, not behaviour.
+  - The changed-files mode misses an error that lands in a file neither agent touched (the whole-project mode would catch it, at its memory cost).
+  - n agents make n(n-1)/2 pairs: 10 at 5 agents, 28 at 8. Checking only the pairs of the agent that just changed keeps it to n-1 per change.
