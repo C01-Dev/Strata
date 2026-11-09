@@ -14,7 +14,7 @@ Underneath, Strata makes the expensive parts of running several agents shared or
 
 It is one binary: CLI, daemon and MCP server.
 
-> Status: v0.1.3 (2026-11-09). The first release was v0.1.1 (2026-11-03).
+> Status: v0.1.4 (2026-11-09). The first release was v0.1.1 (2026-11-03).
 
 ## Requirements
 

@@ -1324,7 +1324,7 @@ dependencies = [
 
 [[package]]
 name = "strata"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "axum",
  "clap",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "strata-checker"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "proptest",
  "serde",
@@ -1365,7 +1365,7 @@ dependencies = [
 
 [[package]]
 name = "strata-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "proptest",
  "rusqlite",
@@ -1378,7 +1378,7 @@ dependencies = [
 
 [[package]]
 name = "strata-git"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "strata-core",
  "tempfile",
@@ -1386,7 +1386,7 @@ dependencies = [
 
 [[package]]
 name = "strata-mcp"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "rmcp",
  "serde",
@@ -1397,7 +1397,7 @@ dependencies = [
 
 [[package]]
 name = "strata-overlay"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "tempfile",
  "xxhash-rust",
@@ -1405,7 +1405,7 @@ dependencies = [
 
 [[package]]
 name = "strata-proc"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "libc",
  "listeners",
@@ -1414,7 +1414,7 @@ dependencies = [
 
 [[package]]
 name = "strata-proxy"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "bytes",
  "futures-util",
@@ -1429,7 +1429,7 @@ dependencies = [
 
 [[package]]
 name = "strata-seed"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "libc",
  "rayon",
