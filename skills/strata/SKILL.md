@@ -35,7 +35,7 @@ Requirements:
    - `curl -fsSL https://strata.c01.dev/install.sh | sh`
 2. In the repo, run `strata init`. It registers the repo and starts the background daemon.
 3. Connect the MCP server for the agent:
-   - **Claude Code:** `claude mcp add --transport stdio --scope project strata -- strata mcp`
+   - **Claude Code:** `claude plugin install strata --marketplace C01-Dev/strata` connects it and adds this skill. Or, for this repo only: `claude mcp add --transport stdio --scope project strata -- strata mcp`
    - **Codex:** `codex mcp add strata -- strata mcp`
    - **Cursor:** put `{ "mcpServers": { "strata": { "command": "strata", "args": ["mcp"] } } }` in `.cursor/mcp.json`.
 4. Give each agent its own worktree: `strata new <name>` prints the worktree's path. Start the agent inside it, for example `cd "$(strata new fix-login)" && codex`.

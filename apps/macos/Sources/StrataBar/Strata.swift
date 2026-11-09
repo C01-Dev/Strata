@@ -36,33 +36,61 @@ struct Proc: Decodable {
     var state: String
 }
 
-struct Checker: Decodable {
+struct Checker: Decodable, Identifiable {
+    var repo: String
     var typescript: String
     var memoryBytes: UInt64
     var agents: [CheckerAgent]
-    /// Pairs of agents whose changes clash (absent from older daemons).
+    /// Absent from daemons older than 0.1.3.
+    var pairsChecked: Int?
     var conflicts: [Conflict]?
+
+    var id: String { repo }
 }
 
-struct Conflict: Decodable {
+/// A pair of agents whose changes clash, or that could not be checked together.
+struct Conflict: Decodable, Identifiable {
     var agents: [String]
     var clashes: [Clash]
     var unmerged: [String]
     var skipped: String?
 
+    var id: String { agents.joined(separator: "+") }
+    var title: String { agents.joined(separator: " and ") }
+    /// Type errors, counting each place a grouped error happens.
+    var errorCount: Int { clashes.reduce(0) { $0 + 1 + ($1.also?.count ?? 0) } }
+
     var summary: String {
+        if let skipped { return "Not checked together: \(skipped)" }
         var parts: [String] = []
-        if !clashes.isEmpty { parts.append("\(clashes.count) type error\(clashes.count == 1 ? "" : "s") once combined") }
+        if errorCount > 0 { parts.append("\(errorCount) type error\(errorCount == 1 ? "" : "s") once combined") }
         if !unmerged.isEmpty { parts.append("\(unmerged.count) file\(unmerged.count == 1 ? "" : "s") git cannot merge") }
-        return "\(agents.joined(separator: " + ")): " + (skipped.map { "not checked (\($0))" } ?? parts.joined(separator: ", "))
+        return parts.joined(separator: ", ")
+    }
+
+    /// The notification's text: what breaks, and where.
+    var detail: String {
+        if let c = clashes.first {
+            let files = Set(clashes.map(\.name)).sorted().joined(separator: ", ")
+            return "\(errorCount == 1 ? "A type error" : "\(errorCount) type errors") once both are combined, in \(files): \(c.message) Neither is merged yet."
+        }
+        return "Both changed \(unmerged.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")), and git cannot merge the two versions."
     }
 }
 
-struct Clash: Decodable {
+struct Clash: Decodable, Identifiable {
     var file: String
     var line: Int
+    var column: Int
     var code: Int
     var message: String
+    /// Other places in the file with the same error, as [line, column].
+    var also: [[Int]]?
+
+    var id: String { "\(file):\(line):\(column)" }
+    var name: String { URL(fileURLWithPath: file).lastPathComponent }
+    /// "actionBoundText.tsx:160, 168"
+    var place: String { "\(name):" + ([line] + (also ?? []).compactMap(\.first)).map(String.init).joined(separator: ", ") }
 }
 
 struct CheckerAgent: Decodable {}
@@ -122,6 +150,9 @@ final class Model {
     var agentCount: Int { status?.repos.reduce(0) { $0 + $1.agents.count } ?? 0 }
     /// Pairs of agents whose changes break each other.
     var clashing: [Conflict] { status?.checker.flatMap { $0.conflicts ?? [] }.filter { $0.skipped == nil } ?? [] }
+    /// Pairs already clashing at the last refresh; nil until the first, so clashes that were
+    /// there when the app started do not notify.
+    private var known: Set<String>?
 
     func poll() async {
         while !Task.isCancelled {
@@ -137,6 +168,11 @@ final class Model {
         if r.code == 0, let s = try? decoder.decode(Status.self, from: r.out) {
             status = s
             problem = nil
+            let now = clashing
+            if let known {
+                for c in now where !known.contains(c.id) { await Notifier.shared.post(c) }
+            }
+            known = Set(now.map(\.id))
         } else {
             status = nil
             problem = r.err.isEmpty ? "Strata is not running" : r.err

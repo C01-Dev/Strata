@@ -140,9 +140,13 @@ Stops its processes, removes the worktree and deletes the branch if it is merged
 
 ## Menu bar app (macOS)
 
-![The menu bar app with five agents](docs/menubar.png)
+![The menu bar app with five agents, two of whose changes clash](docs/menubar.png)
 
-`apps/macos` is a small menu bar app over the same commands. The icon shows how many agents are running, a crossed-out icon means the daemon is down, and a warning triangle means two agents' changes clash. Click it to see each agent's state, memory, how its dependencies got there, its port and dev-server URL, the shared checker, and each pair of agents whose changes clash. Each agent has actions to start or stop its dev server, open it in Terminal or Finder, copy its path, and remove it. It asks first, and asks again before discarding uncommitted changes. "Status in Terminal" opens `strata status --watch`.
+`apps/macos` is a small menu bar app over the same commands. The icon shows how many agents are running, a crossed-out icon means the daemon is down, and a warning triangle means two agents' changes clash.
+- **Clashes** come first: a card per pair of agents whose changes break each other, with the file, lines and error, or the files git cannot merge. Both agents' rows carry a warning sign.
+- **A notification** arrives when a pair starts clashing. macOS asks for permission at the first one; clashes already there when the app starts do not notify.
+- **Each agent** shows its state, memory, how its dependencies got there, and its port. Hovering a row shows a button to start its dev server; a running one has buttons to open its URL and stop it. The "…" menu opens it in Terminal or Finder, copies its path, or removes it. Removing asks first, and asks again before discarding uncommitted changes.
+- **The shared checker** line shows TypeScript's version, its memory and how many pairs of agents it has checked. "Status in Terminal" opens `strata status --watch`.
 
 It runs the `strata` CLI, so it needs Strata installed (it looks in `~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin`, or `STRATA_BIN`). macOS 14 or later, Apple silicon. Signed with C01's Developer ID and notarized by Apple:
 
@@ -185,7 +189,7 @@ Details are in [`bench/results/agent-usage.md`](bench/results/agent-usage.md).
 - Files both agents changed are merged with `git merge-file` first. When git cannot merge them, Strata reports those files and skips the type check, since the combination does not exist until someone resolves the merge.
 - A pair is checked once both agents' changes have held still for a round, and again only when one of them, or the base branch, changes.
 
-Clashes show up in four places: `strata_diagnostics` answers, `strata_conflicts` (which checks the calling agent's pairs on the spot), `strata status` and the menu bar. On the excalidraw fixture:
+Clashes show up in four places: `strata_diagnostics` answers, `strata_conflicts` (which checks the calling agent's pairs on the spot), `strata status` and the menu bar. The same error in several places of one file is one line, with the other places after it: `src/cart.ts:11:9 (and 12:10) error TS2304: Cannot find name 'fetchJson'.` When TypeScript's "Did you mean" guess differs between those places, the line keeps only the first sentence. On the excalidraw fixture:
 - 14 agents with changes made 91 pairs. The daemon found all 8 planted clashes and reported no type clash that was not real.
 - The first pass took 48 s. The checker stayed under 760 MB, because each combination is checked and freed before the next.
 - Idle, the rounds cost the daemon about 1.6 s of CPU a minute with 18 agents.
@@ -210,7 +214,15 @@ It does not install Strata or connect the MCP server; the recipes below do that.
 
 ### Claude Code
 
-MCP: add `.mcp.json` to the repo (or run `claude mcp add --transport stdio --scope project strata -- strata mcp`):
+The plugin connects the MCP server and adds the skill in one step:
+
+```text
+/plugin install strata --marketplace C01-Dev/strata
+```
+
+From a terminal: `claude plugin install strata --marketplace C01-Dev/strata` (add `--scope project` to share it through the repo's `.claude/settings.json`). The one-step form needs Claude Code 2.1.275 or later in a session, 2.1.292 in a terminal; on older versions run `/plugin marketplace add C01-Dev/strata`, then `/plugin install strata@strata`. The plugin runs `strata mcp` from your `PATH`, so install Strata first. Outside a Strata worktree its tools answer with an error saying so.
+
+Without the plugin, add `.mcp.json` to the repo (or run `claude mcp add --transport stdio --scope project strata -- strata mcp`):
 
 ```json
 { "mcpServers": { "strata": { "command": "strata", "args": ["mcp"] } } }
@@ -347,7 +359,7 @@ The end-to-end tests make temporary repos and daemons; four heavy ones are ignor
 
 ### Releasing
 
-Releases are built by [cargo-dist](https://opensource.axo.dev/cargo-dist/) on a `v*` tag (`.github/workflows/release.yml`): binaries for macOS arm64 and Linux x86_64/arm64, a shell installer, a Homebrew formula pushed to the tap, and the npm packages (`npm/build.mjs`, published by `.github/workflows/publish-npm.yml`). npm publishes through trusted publishing (no token); the Homebrew tap needs the `HOMEBREW_TAP_TOKEN` secret. After `dist generate`, re-apply the hand edits listed in `dist-workspace.toml`. The menu bar app is signed on a Mac with the Developer ID certificate: after the tag's release exists, `apps/macos/publish.sh vX.Y.Z` builds, notarizes and uploads `Strata-macOS.zip` and updates the `strata-menubar` cask.
+Releases are built by [cargo-dist](https://opensource.axo.dev/cargo-dist/) on a `v*` tag (`.github/workflows/release.yml`): binaries for macOS arm64 and Linux x86_64/arm64, a shell installer, a Homebrew formula pushed to the tap, and the npm packages (`npm/build.mjs`, published by `.github/workflows/publish-npm.yml`). npm publishes through trusted publishing (no token); the Homebrew tap needs the `HOMEBREW_TAP_TOKEN` secret. After `dist generate`, re-apply the hand edits listed in `dist-workspace.toml`. The menu bar app is signed on a Mac with the Developer ID certificate: after the tag's release exists, `apps/macos/publish.sh vX.Y.Z` builds, notarizes and uploads `Strata-macOS.zip` and updates the `strata-menubar` cask (delete an old `apps/macos/build/Strata-macOS.zip` first, since the script reuses it). Bump the version in `Cargo.toml`, `apps/macos/Info.plist` and `.claude-plugin/plugin.json` together: Claude Code keeps plugin users on the version in `plugin.json` until it changes.
 
 ## License
 

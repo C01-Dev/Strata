@@ -1059,3 +1059,31 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 - **New site section, "Clean alone. Broken together.":** the real `strata_conflicts` answer the clear agent got in run 2, with paths shortened to `actions/...`, and its own words to the user, quoted as written. Three numbers: 4 of 4 caught, 0 false alarms in 103 pairs (12 real, 91 planted), 2 of 2 agents in a clash named it with the note.
 - **Also fixed:** the install line still said v0.1.1. The start section now offers `npx skills add C01-Dev/strata`, and the menu bar blurb mentions the clash warning.
 - **Left as is:** the 18-second film, the OG image ("61% less memory") and the menu bar screenshot are about the shared checker. They are still true; new ones would need a clash on screen.
+
+## Clash polish: grouped lines, notifications, the Claude Code plugin, a new menu bar panel (owner request, 2026-11-09)
+
+- **Grouped clash lines.** In run 2 one rename broke two calls in one file, and the agent saw two lines with the same error.
+  - Clashes are now grouped in the broker, so the MCP answers, `strata status` and the menu bar all get it from one place.
+  - A group is one file, one error code and the message's first sentence. The other places go in a new `also` field (`[line, column]`). It is left out when empty, so older clients see the same JSON as before.
+  - When the messages in a group differ, only the first sentence is kept. TypeScript's "Did you mean" guesses come from what is in scope at each place, so they differ even when the cause is the same.
+- **Claude Code plugin.** `.claude-plugin/marketplace.json` and `plugin.json` sit at the repo root, with `"source": "./"`, so the plugin reuses `skills/strata`.
+  - The MCP server is declared inline in `plugin.json`, not in a root `.mcp.json`. A root `.mcp.json` would also act as project MCP config for anyone working on Strata itself.
+  - `version` is 0.1.3, and is bumped with each release, because Claude Code keeps users on that version until it changes. `claude plugin validate --strict` passes on a clean checkout. It warned about the missing version and icon, and the icon is the menu bar app's.
+  - Checked with a throwaway `CLAUDE_CONFIG_DIR`, so the owner's own Claude Code config was not touched: marketplace add, install, `claude plugin details` (1 skill, 1 MCP server), and `claude mcp list` shows `plugin:strata:strata` as connected. A bare `strata` command resolves through `PATH`, which the docs do not say.
+- **Menu bar app, redesigned:**
+  - a header with the version, uptime, and an agent-count pill that turns orange on a clash;
+  - per repo, a card for each clashing pair (file, lines, error), then the agents in one rounded group;
+  - rows highlight on hover and show start or stop dev server buttons; the actions moved into a "…" menu with icons;
+  - a shared-checker line with the number of pairs checked;
+  - designed empty and not-running states.
+  - Error codes go through `Text(verbatim:)`. A literal `Text` localizes numbers, so it showed "TS2,304".
+  - Liquid Glass was not adopted on purpose: on macOS 26 and later the system already draws the panel's material.
+- **Notifications** when a pair starts clashing, through UserNotifications.
+  - Permission is asked at the first clash, not at launch.
+  - The first refresh only records the clashes already there, so a restart does not repeat old warnings.
+  - An identifier per pair means a newer notification replaces the older one.
+  - The notifier is skipped without an app bundle (`swift run`), since UNUserNotificationCenter traps there.
+- **Checked:** a demo repo in the scratchpad with a real clash: api-retry renames `fetchJson`, and checkout adds two calls to it in `cart.ts`. The daemon used `STRATA_HOME=~/.strata-demo`, since the scratchpad path is too long for a Unix socket.
+  - The CLI shows `src/cart.ts:11:9 (and 12:10) TS2304`.
+  - The panel was rendered with `STRATA_SNAPSHOT` in dark, light and daemon-down states, and is the new `docs/menubar.png`.
+  - **Not checked live:** the notification banner. macOS's permission prompt is the owner's to answer.

@@ -1,0 +1,12 @@
+{
+  "name": "strata",
+  "owner": { "name": "C01", "url": "https://c01.dev" },
+  "description": "Strata, by C01: several coding agents on one TypeScript repo.",
+  "plugins": [
+    {
+      "name": "strata",
+      "source": "./",
+      "description": "Connects Strata's MCP server and adds the Strata skill. Needs the strata CLI: brew install c01-dev/tap/strata, or npm install -g stratagents."
+    }
+  ]
+}

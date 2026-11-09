@@ -35,6 +35,9 @@ pub struct Clash {
     pub column: u64,
     pub code: u64,
     pub message: String,
+    /// Other places in the same file with the same error, as `[line, column]`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<[u64; 2]>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -344,10 +347,11 @@ impl Broker {
                 column: d.character + 1,
                 code: d.code,
                 message: d.message,
+                also: vec![],
             })
             .collect();
         clashes.sort_by(|x, y| (&x.file, x.line, x.column).cmp(&(&y.file, y.line, y.column)));
-        Ok(pair(clashes, unmerged))
+        Ok(pair(grouped(clashes), unmerged))
     }
 
     /// Every pair including `agent`, from its side (see `Group::pairs_of`).
@@ -500,6 +504,32 @@ fn only_together(both: &[Diag], own: &[&Diag]) -> Vec<Diag> {
         .collect()
 }
 
+/// One entry per file, error code and first sentence of the message, with the other places in
+/// `also`: a rename breaks every use of the old name the same way. TypeScript's "Did you mean"
+/// guesses differ from place to place, so when the messages differ only that sentence is kept.
+fn grouped(clashes: Vec<Clash>) -> Vec<Clash> {
+    fn head(m: &str) -> &str {
+        let first = m.lines().next().unwrap_or_default();
+        first.find(". ").map_or(first, |i| &first[..=i])
+    }
+    let mut out: Vec<Clash> = vec![];
+    for c in clashes {
+        let same = |g: &&mut Clash| {
+            g.file == c.file && g.code == c.code && head(&g.message) == head(&c.message)
+        };
+        match out.iter_mut().find(same) {
+            Some(g) => {
+                if g.message != c.message {
+                    g.message = head(&c.message).to_string();
+                }
+                g.also.push([c.line, c.column]);
+            }
+            None => out.push(c),
+        }
+    }
+    out
+}
+
 /// Writes the three-way merge of `a` and `b` to `out`; false when git cannot merge them.
 async fn merge(a: &Path, base: &Path, b: &Path, out: &Path) -> Result<bool> {
     let base = if base.exists() {
@@ -561,6 +591,48 @@ mod tests {
                 d("b.ts", 4, 2304, "Cannot find name 'x'."),
                 d("c.ts", 2, 2305, "Module has no exported member 'y'.")
             ]
+        );
+    }
+
+    #[test]
+    fn the_same_error_in_one_file_is_one_clash() {
+        let c = |file: &str, line, code, message: &str| Clash {
+            file: file.into(),
+            line,
+            column: 3,
+            code,
+            message: message.into(),
+            also: vec![],
+        };
+        let name = "Cannot find name 'getBoundTextElement'.";
+        let g = grouped(vec![
+            c(
+                "a.tsx",
+                160,
+                2552,
+                &format!("{name} Did you mean 'hasBoundTextElement'?"),
+            ),
+            c(
+                "a.tsx",
+                168,
+                2552,
+                &format!("{name} Did you mean 'boundTextElement'?"),
+            ),
+            c("a.tsx", 170, 2304, name),
+            c(
+                "b.ts",
+                1,
+                2552,
+                &format!("{name} Did you mean 'hasBoundTextElement'?"),
+            ),
+        ]);
+        assert_eq!(g.len(), 3);
+        assert_eq!((g[0].line, g[0].message.as_str()), (160, name));
+        assert_eq!(g[0].also, [[168, 3]]);
+        assert!(g[1].also.is_empty() && g[2].also.is_empty());
+        assert!(
+            g[2].message.contains("Did you mean"),
+            "one place keeps the whole message"
         );
     }
 

@@ -1,0 +1,27 @@
+{
+  "name": "strata",
+  "version": "0.1.3",
+  "description": "Run several coding agents on one TypeScript repo. Connects Strata's MCP server (shared type checker, clash warnings between agents, dev servers) and adds the Strata skill.",
+  "icon": "./apps/macos/icon.png",
+  "author": {
+    "name": "C01",
+    "url": "https://c01.dev"
+  },
+  "homepage": "https://strata.c01.dev",
+  "repository": "https://github.com/C01-Dev/strata",
+  "license": "MIT OR Apache-2.0",
+  "keywords": [
+    "typescript",
+    "worktrees",
+    "mcp",
+    "parallel-agents"
+  ],
+  "mcpServers": {
+    "strata": {
+      "command": "strata",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

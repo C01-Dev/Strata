@@ -12,6 +12,21 @@ fn at(loc: &Value) -> String {
     )
 }
 
+/// " (and 168:32, 170:5)": other places in the file with the same clash.
+pub fn also(c: &Value) -> String {
+    let places: Vec<String> = c["also"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|p| format!("{}:{}", p[0], p[1]))
+        .collect();
+    if places.is_empty() {
+        String::new()
+    } else {
+        format!(" (and {})", places.join(", "))
+    }
+}
+
 fn sharing_note(v: &Value) -> String {
     match v["sharing"]["reason"].as_str() {
         Some(reason) => format!("\n(answered from an unshared snapshot: {reason})"),
@@ -35,8 +50,9 @@ fn clash_lines(pairs: &Value) -> Vec<String> {
         }
         for c in clashes {
             out.push(format!(
-                "  {} error TS{}: {}",
+                "  {}{} error TS{}: {}",
                 at(&c),
+                also(&c),
                 c["code"],
                 c["message"].as_str().unwrap_or_default()
             ));
@@ -171,10 +187,10 @@ mod tests {
             diagnostics(&none),
             "No problems.\n(answered from an unshared snapshot: dependencies differ)"
         );
-        let clash = json!({ "items": [], "total": 0, "conflicts": [{ "with": "fix-login", "clashes": [{ "file": "src/c.ts", "line": 1, "column": 10, "code": 2305, "message": "No 'addOne'." }], "unmerged": ["src/a.ts"], "skipped": null }] });
+        let clash = json!({ "items": [], "total": 0, "conflicts": [{ "with": "fix-login", "clashes": [{ "file": "src/c.ts", "line": 1, "column": 10, "code": 2305, "message": "No 'addOne'.", "also": [[4, 2], [9, 7]] }], "unmerged": ["src/a.ts"], "skipped": null }] });
         assert_eq!(
             diagnostics(&clash),
-            "No problems.\nYour changes and fix-login's break each other once combined (neither is merged yet):\n  src/c.ts:1:10 error TS2305: No 'addOne'.\nYou and fix-login both changed src/a.ts and git cannot merge the two versions."
+            "No problems.\nYour changes and fix-login's break each other once combined (neither is merged yet):\n  src/c.ts:1:10 (and 4:2, 9:7) error TS2305: No 'addOne'.\nYou and fix-login both changed src/a.ts and git cannot merge the two versions."
         );
         assert_eq!(
             conflicts(

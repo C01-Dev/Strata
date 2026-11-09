@@ -597,10 +597,11 @@ fn status(json: bool) -> Result<()> {
             for c in p["clashes"].as_array().into_iter().flatten() {
                 let message = c["message"].as_str().unwrap_or_default();
                 println!(
-                    "    {}:{}:{} TS{}: {} (only with both changes)",
+                    "    {}:{}:{}{} TS{}: {} (only with both changes)",
                     c["file"].as_str().unwrap_or("?"),
                     c["line"],
                     c["column"],
+                    strata_mcp::format::also(c),
                     c["code"],
                     message.lines().next().unwrap_or_default()
                 );
