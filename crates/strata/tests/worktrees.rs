@@ -293,6 +293,7 @@ fn adopt_a_worktree_made_by_plain_git() {
     assert!(out.contains("as other-tool"), "{out}");
     let note = std::fs::read_to_string(other.join(".claude/rules/strata.md")).unwrap();
     assert!(note.contains("instead of running `tsc`"), "{note}");
+    assert!(note.contains("run `strata_conflicts`"), "{note}");
     assert_eq!(e.agent("other-tool").unwrap()["branch"], "(detached)");
     assert!(
         e.strata_err(&["adopt", other.to_str().unwrap()])

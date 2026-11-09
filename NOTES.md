@@ -965,3 +965,40 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - Type-level clashes only, not behaviour.
   - The changed-files mode misses an error that lands in a file neither agent touched (the whole-project mode would catch it, at its memory cost).
   - n agents make n(n-1)/2 pairs: 10 at 5 agents, 28 at 8. Checking only the pairs of the agent that just changed keeps it to n-1 per change.
+
+## Clash warnings in the daemon (2026-11-09)
+
+- **What shipped:** the experiment's changed-files method, run by the daemon (`crates/strata-checker/src/broker/clash.rs`).
+  - **Rounds:** every 5 s, for each repo with at least 2 ready agents. Each round scans the base and every agent's worktree (its own `Tree`s, not the group's: rescanning the group's base here would hide base changes from the next query, which reopens the base on a change).
+  - **Which pairs:** pairs of agents whose layers are both non-empty. A pair is checked once both layers held still since the previous round. It is checked again only when a layer hash or the base content changes. The key is (layer hash, layer hash, base generation), so a checker restart alone does not recheck anything.
+  - **The check:** each agent's errors in every changed code file of the round are read once from a temporary snapshot of its layer, and cached per (layer hash, base generation). Then one combined snapshot per pair holds both layers. Every snapshot is created, read and disposed before the next.
+  - **Files both changed:** merged with `git merge-file` first.
+  - **Starting tsgo:** only when a pair needs checking, so two idle agents never start a checker.
+  - **Memory limit:** while the group is above `group_memory_mb`, background rounds wait. An agent's own `strata_conflicts` call still runs.
+- **Decision: a pair with a file git cannot merge is not type-checked.** The first version used the first agent's version of such a file. On the fixture that made up clashes from the pick: one agent's `a.ts` with the other agent's callers. The combination does not exist until someone resolves the merge, so Strata reports the unmergeable files only.
+- **Decision: agents whose checker would be unshared are skipped**, with the reason shown: a different TypeScript, different dependencies, or a huge diff. Those snapshots are not layered on the base, so their errors cannot be compared with it.
+- **Where it shows:**
+  - `strata_conflicts`, a new MCP tool. It checks the caller's pairs on the spot, settled or not.
+  - A line on `strata_diagnostics` answers, for clashes and unmergeable files only.
+  - A section in `strata status`, the `conflicts` array in `status --json`, and a warning triangle in the menu bar.
+  - The worktree note now tells agents to run `strata_conflicts` before reporting back, and to name the clash rather than change their code to match unmerged work.
+  - `checker.conflicts = false` turns it all off.
+- **Measured on the excalidraw fixture**, with the daemon and 18 agents (the agent-usage worktrees, plus `clash-oldname` and `clash-oldsig` adopted). 14 of the agents had changes, which makes 91 pairs.
+  - **Found:** all 8 expected clashes, with no false type clash. Each of the 4 rename agents clashed with `clash-oldname`, and each of the 4 options-object agents with `clash-oldsig`.
+  - **Unmergeable:** 9 pairs of agents given the same task, which edited the same lines.
+  - **Identical renames** merged cleanly and raised nothing.
+  - **Time:** the first pass took 48 s from a cold daemon, including the checker start and one settling round.
+  - **Memory:** the checker peaked at 755 MB and idled at 414 MB. The experiment's 2.6 GB came from keeping every agent's snapshot alive. One snapshot at a time removes that risk.
+  - **Idle cost:** 1.94 s of daemon CPU per minute with clash checks on, against 0.36 s with them off. The difference is the 5 s rescans of 19 checkouts, about 7 ms each. Daemon RSS was 12 MB.
+- **Not built:**
+  - Events or notifications for a new clash.
+  - Whole-project checking of combinations, which would catch errors in files neither agent changed but costs about 440 MB per snapshot.
+  - Merging identical clash reports across agents in an answer: 4 agents doing the same rename print the same line 4 times.
+- **Tests:** `clashes_between_agents_are_found_before_either_merges` (broker, toy project) covers:
+  - a rename against a new caller;
+  - an agent's own error not counted as a clash;
+  - an unmergeable file;
+  - a clean pair;
+  - the settling round, and an on-demand recheck after a fix.
+
+  Unit tests cover the multiset diff, the merge, and the answer formats.

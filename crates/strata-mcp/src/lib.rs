@@ -196,6 +196,18 @@ impl Server {
             .await)
     }
 
+    #[tool(
+        description = "Checks your changes against every other agent's, before either is merged: type errors that appear only once both are combined, and files you both changed that git cannot merge. strata_diagnostics also reports clashes found in the background."
+    )]
+    async fn strata_conflicts(
+        &self,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self
+            .check(&ctx, json!({ "op": "conflicts" }), format::conflicts)
+            .await)
+    }
+
     #[tool(description = "The type (and documentation) of the symbol at a position.")]
     async fn strata_hover(
         &self,
@@ -545,7 +557,7 @@ impl ServerHandler for Server {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::from_build_env())
             .with_instructions(
-                "Strata answers TypeScript questions for your worktree (errors, types, definitions, references, outlines) from a type checker shared with other agents. Prefer these tools to running tsc.",
+                "Strata answers TypeScript questions for your worktree (errors, types, definitions, references, outlines) from a type checker shared with other agents. Prefer these tools to running tsc. strata_conflicts checks your changes against other agents' before either is merged.",
             )
     }
 }

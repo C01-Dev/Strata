@@ -26,7 +26,7 @@ const DETACHED: &str = "(detached)";
 /// `repo.agent_note = false` in strata.toml turns it off.
 pub const NOTE: &str = ".claude/rules/strata.md";
 
-pub fn write_note(root: &Path, path: &Path) -> Result<()> {
+pub fn write_note(root: &Path, path: &Path, cfg: &Config) -> Result<()> {
     git::exclude(root, &format!("/{NOTE}"))?;
     let mut text = String::from(
         "# Strata\n\nThis worktree is managed by Strata, which shares one TypeScript checker and a dev server supervisor between every agent working on this repo. If the Strata tools named here are not available to you, ignore this file.\n\n",
@@ -36,6 +36,11 @@ pub fn write_note(root: &Path, path: &Path) -> Result<()> {
             "- Check types with the `strata_diagnostics` tool (one file, or the whole project when `file` is omitted) instead of running `tsc`, `tsgo` or the repo's type-check script. It answers from the shared checker in about a second and does not start another checker.\n\
              - `strata_references`, `strata_definition`, `strata_hover` and `strata_symbols` answer questions about the code from the same checker.\n",
         );
+        if cfg.checker.conflicts {
+            text.push_str(
+                "- Before you report back, run `strata_conflicts`. It checks your changes against the other agents' unmerged changes. If it finds clashes, name the other agent and the errors in your summary instead of changing your code to match theirs.\n",
+            );
+        }
     }
     text.push_str(
         "- Start the dev server with `strata_start_dev_server`, which gives this worktree its own port and URL, instead of running the dev command yourself.\n",
@@ -237,7 +242,7 @@ pub fn new_agent(d: &Daemon, req: NewAgent) -> Result<Value> {
     let mut warnings = warnings;
     warnings.extend(seeded.warnings.iter().cloned());
     if cfg.repo.agent_note
-        && let Err(e) = write_note(root, &path)
+        && let Err(e) = write_note(root, &path, &cfg)
     {
         warnings.push(format!("could not write {NOTE}: {e}"));
     }
@@ -670,7 +675,7 @@ pub fn adopt(d: &Daemon, req: Adopt) -> Result<Value> {
     let warnings: Vec<String> = cfg
         .repo
         .agent_note
-        .then(|| write_note(&root, &path).err())
+        .then(|| write_note(&root, &path, &cfg).err())
         .flatten()
         .map(|e| format!("could not write {NOTE}: {e}"))
         .into_iter()
@@ -1070,7 +1075,7 @@ fn tick(d: &Daemon) -> Result<(Orphans, Vec<Repo>)> {
 #[derive(Deserialize)]
 pub struct Check {
     pub repo: PathBuf,
-    /// diagnostics | hover | definition | references | symbols
+    /// diagnostics | hover | definition | references | symbols | conflicts
     pub op: String,
     pub file: Option<String>,
     pub line: Option<u32>,
@@ -1095,8 +1100,69 @@ pub fn ready_agent(d: &Daemon, repo: &Path, name: &str) -> Result<(Repo, Agent, 
     Ok((repo, agent, cfg))
 }
 
+/// Name and worktree of each ready agent of a repo.
+fn ready_worktrees(d: &Daemon, repo: &Repo) -> Result<Vec<(String, PathBuf)>> {
+    Ok(d.store()
+        .agents(repo.id)?
+        .into_iter()
+        .filter(|a| a.state == AgentState::Ready)
+        .map(|a| (a.name, a.path))
+        .collect())
+}
+
+/// Every 5 s: clash checks between each repo's agents (see strata-checker's `clash.rs`).
+pub async fn clashes(d: Arc<Daemon>) {
+    let mut every = tokio::time::interval(Duration::from_secs(5));
+    let mut last_error = String::new();
+    loop {
+        every.tick().await;
+        let repos = d.store().repos().unwrap_or_default();
+        for repo in repos {
+            let Ok(cfg) = Config::load(&repo.root) else {
+                continue;
+            };
+            let agents = ready_worktrees(&d, &repo).unwrap_or_default();
+            if !cfg.checker.conflicts || agents.len() < 2 {
+                continue;
+            }
+            let base = base_path(&repo.root, &cfg);
+            let settings = Settings::from_config(&cfg);
+            match d
+                .checker
+                .check_clashes(&repo.root, &base, &agents, &settings, None)
+                .await
+            {
+                Ok(()) => {}
+                // The checker is off for this repo (`strata doctor` says why).
+                Err(Error::Refused(_)) => {}
+                Err(e) => {
+                    let e = format!("clash check in {}: {e}", repo.root.display());
+                    if e != last_error {
+                        tracing::warn!("{e}");
+                        last_error = e;
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub async fn check(d: &Daemon, name: String, req: Check) -> Result<Value> {
     let (repo, agent, cfg) = ready_agent(d, &req.repo, &name)?;
+    if req.op == "conflicts" {
+        if !cfg.checker.conflicts {
+            return Err(Error::Refused(
+                "clash checks are off (checker.conflicts = false in strata.toml)".into(),
+            ));
+        }
+        let agents = ready_worktrees(d, &repo)?;
+        let base = base_path(&repo.root, &cfg);
+        let settings = Settings::from_config(&cfg);
+        d.checker
+            .check_clashes(&repo.root, &base, &agents, &settings, Some(&name))
+            .await?;
+        return Ok(json!({ "pairs": d.checker.clashes(&repo.root, &name).await }));
+    }
     let need = |what: &str| Error::Refused(format!("{} needs {what}", req.op));
     let file = || req.file.clone().ok_or_else(|| need("file"));
     let at = || -> Result<(String, u32, u32)> {

@@ -46,6 +46,10 @@ struct MenuLabel: View {
         if model.status == nil {
             Image(systemName: "square.stack.3d.up.slash")
                 .accessibilityLabel("Strata is not running")
+        } else if !model.clashing.isEmpty {
+            Image(systemName: "exclamationmark.triangle")
+                .accessibilityLabel("Strata: agents' changes clash")
+            Text("\(model.agentCount)")
         } else {
             Image(systemName: "square.stack.3d.up")
                 .accessibilityLabel("Strata")
@@ -72,6 +76,13 @@ struct Panel: View {
                     Label("Checker: TypeScript \(c.typescript), \(c.agents.count) agents, \(size(c.memoryBytes))", systemImage: "checkmark.seal")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    ForEach(Array((c.conflicts ?? []).enumerated()), id: \.offset) { _, p in
+                        Label(p.summary, systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(p.skipped == nil ? .red : .secondary)
+                            .help(p.clashes.map { "\($0.file):\($0.line) TS\($0.code): \($0.message)" }.joined(separator: "\n"))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             } else {
                 problem

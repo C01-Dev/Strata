@@ -500,3 +500,95 @@ async fn above_the_memory_limit_the_least_recently_used_snapshot_goes() {
     );
     f.broker.shutdown().await;
 }
+
+#[tokio::test]
+async fn clashes_between_agents_are_found_before_either_merges() {
+    let f = fixture();
+    let rename = f.wt.clone();
+    let caller = common::project(f.tmp.path(), "caller");
+    let other = common::project(f.tmp.path(), "other");
+    // rename: addOne becomes plusOne, with its one caller updated. Clean on its own.
+    write(
+        &rename,
+        &[
+            ("src/a.ts", &common::A.replace("addOne", "plusOne")),
+            ("src/b.ts", &common::B.replace("addOne", "plusOne")),
+        ],
+    );
+    // caller: a new file calling addOne, plus an error of its own that is not a clash.
+    write(
+        &caller,
+        &[(
+            "src/c.ts",
+            "import { addOne } from \"./a\";\nexport const bad: string = addOne(2);\n",
+        )],
+    );
+    // other: an unrelated file, and a.ts's comment, next to rename's edit (git cannot merge).
+    write(
+        &other,
+        &[
+            ("src/d.ts", "export const d = 1;\n"),
+            ("src/a.ts", &common::A.replace("Adds one.", "Adds 1.")),
+        ],
+    );
+    let agents = [
+        ("rename".to_string(), rename.clone()),
+        ("caller".to_string(), caller.clone()),
+        ("other".to_string(), other.clone()),
+    ];
+    let round = |only| {
+        let agents = agents.clone();
+        let f = &f;
+        async move {
+            f.broker
+                .check_clashes(&f.base, &f.base, &agents, &settings(), only)
+                .await
+                .unwrap()
+        }
+    };
+    round(None).await;
+    assert_eq!(
+        f.broker.status().await[0]["pairs_checked"],
+        0,
+        "layers must hold still for a round first"
+    );
+    round(None).await;
+    let status = f.broker.status().await;
+    assert_eq!(status[0]["pairs_checked"], 3, "{status}");
+
+    let mine = f.broker.clashes(&f.base, "caller").await;
+    let with = |name: &str| mine.iter().find(|p| p["with"] == name).unwrap().clone();
+    let clash = &with("rename")["clashes"];
+    assert_eq!(clash.as_array().unwrap().len(), 1, "{clash}");
+    assert_eq!(clash[0]["file"], "src/c.ts");
+    assert_eq!(clash[0]["line"], 1);
+    assert!(
+        clash[0]["message"].as_str().unwrap().contains("addOne"),
+        "{clash}"
+    );
+    assert_eq!(with("other")["clashes"], serde_json::json!([]));
+    let unmerged = f.broker.clashes(&f.base, "other").await;
+    let unmerged = unmerged.iter().find(|p| p["with"] == "rename").unwrap();
+    assert_eq!(unmerged["unmerged"], serde_json::json!(["src/a.ts"]));
+    assert_eq!(unmerged["clashes"], serde_json::json!([]));
+
+    // Diagnostics answers carry the clash; the agent's own error stays its own.
+    let d = diagnostics_as(&f, "caller", &caller, &settings()).await;
+    assert_eq!(codes(&d), [("src/c.ts".into(), 2, 14, 2322)]);
+    assert_eq!(d["conflicts"][0]["with"], "rename", "{d}");
+    assert_eq!(
+        d["conflicts"].as_array().unwrap().len(),
+        1,
+        "clean pairs stay out"
+    );
+
+    // Fixed in caller: an on-demand check sees it at once, without waiting to settle.
+    write(&caller, &[("src/c.ts", "export const fine: number = 1;\n")]);
+    round(Some("caller")).await;
+    let now = f.broker.clashes(&f.base, "caller").await;
+    assert!(
+        now.iter().all(|p| p["clashes"] == serde_json::json!([])),
+        "{now:?}"
+    );
+    f.broker.shutdown().await;
+}

@@ -166,6 +166,7 @@ fn run() -> Result<()> {
         fs::set_permissions(&socket, Permissions::from_mode(0o600))?;
         tracing::info!(pid = std::process::id(), socket = %socket.display(), "daemon started");
         tokio::spawn(ops::maintain(daemon.clone()));
+        tokio::spawn(ops::clashes(daemon.clone()));
         tokio::spawn(crate::ports::reconfirm(daemon.clone()));
         let mut term = signal(SignalKind::terminate())?;
         let stop = daemon.clone();

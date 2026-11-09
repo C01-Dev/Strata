@@ -4,6 +4,7 @@ Strata is a local runtime for running several coding agents on one TypeScript re
 
 - **One type checker for every worktree.** A single `tsgo` (TypeScript 7.1) holds the base program, and each agent's changes are layered on top of it. With five agents on excalidraw and cal.com it used 20–30% less memory than five separate checkers when every agent checked the whole project, and 60–65% less when each checked the files it edited (`NOTES.md`, Gate 2). Agents ask it through MCP: diagnostics, hover, definition, references, symbols.
 - **Dependencies by copy-on-write clone.** `strata new` clones `node_modules` (and any other ignored folders you list) from a worktree that has the same lockfile and manifests. On cal.com that takes about 5–8 s, against a fresh install; with the warm pool, under 1 s.
+- **Clashes between agents, before either merges.** When one agent renames a function and another adds a call to the old name, both type-check clean alone and break once merged. Strata checks every pair of agents' changes together in the background and tells the agents, `strata status` and the menu bar.
 - **Dev servers with their own URL, budget and cleanup.** `strata dev <agent>` starts the agent's dev server on its own port behind `http://<agent>.<app>.localhost:7355`, hot reload included. Memory per agent is metered against a budget, and `strata rm` leaves no process or port behind.
 
 It is one binary: CLI, daemon and MCP server.
@@ -136,7 +137,7 @@ Stops its processes, removes the worktree and deletes the branch if it is merged
 
 ![The menu bar app with five agents](docs/menubar.png)
 
-`apps/macos` is a small menu bar app over the same commands. The icon shows how many agents are running, and a crossed-out icon means the daemon is down. Click it to see each agent's state, memory, how its dependencies got there, its port and dev-server URL, and the shared checker. Each agent has actions to start or stop its dev server, open it in Terminal or Finder, copy its path, and remove it. It asks first, and asks again before discarding uncommitted changes. "Status in Terminal" opens `strata status --watch`.
+`apps/macos` is a small menu bar app over the same commands. The icon shows how many agents are running, a crossed-out icon means the daemon is down, and a warning triangle means two agents' changes clash. Click it to see each agent's state, memory, how its dependencies got there, its port and dev-server URL, the shared checker, and each pair of agents whose changes clash. Each agent has actions to start or stop its dev server, open it in Terminal or Finder, copy its path, and remove it. It asks first, and asks again before discarding uncommitted changes. "Status in Terminal" opens `strata status --watch`.
 
 It runs the `strata` CLI, so it needs Strata installed (it looks in `~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin`, or `STRATA_BIN`). macOS 14 or later, Apple silicon. Signed with C01's Developer ID and notarized by Apple:
 
@@ -157,6 +158,7 @@ Or download [Strata-macOS.zip](https://github.com/C01-Dev/Strata/releases/latest
 | `strata_definition` | `file`, `line`, `column` | Where it is declared |
 | `strata_references` | `file`, `line`, `column` | Every reference |
 | `strata_symbols` | `file` | Outline of the file's declarations |
+| `strata_conflicts` | | Type errors that appear only once the agent's changes and another agent's are combined, and files both changed that git cannot merge |
 | `strata_start_dev_server` | `command` (optional) | URL, direct URL and process id, at once |
 | `strata_run` | `command`, `timeout_s` (optional) | Exit code and the last 200 lines |
 | `strata_stop` | `process_id` | Stops one of the agent's processes |
@@ -165,13 +167,25 @@ Or download [Strata-macOS.zip](https://github.com/C01-Dev/Strata/releases/latest
 
 An agent can only stop or read its own processes. Every answer carries a warning when the agent is near or over its memory budget.
 
-**The note in each worktree.** `strata new` and `strata adopt` write `.claude/rules/strata.md` in the worktree. Claude Code reads it, and it tells the agent to check types with `strata_diagnostics` instead of running `tsc` or the repo's type-check script, and to start the dev server through Strata. The file is listed in the repo's `.git/info/exclude`, so it never shows as a change and never gets committed. To stop it, set `agent_note = false` under `[repo]` in `strata.toml`. Worktrees created after that get no note, and existing notes stay until you delete them.
+**The note in each worktree.** `strata new` and `strata adopt` write `.claude/rules/strata.md` in the worktree. Claude Code reads it, and it tells the agent to check types with `strata_diagnostics` instead of running `tsc` or the repo's type-check script, to run `strata_conflicts` before it reports back, and to start the dev server through Strata. The file is listed in the repo's `.git/info/exclude`, so it never shows as a change and never gets committed. To stop it, set `agent_note = false` under `[repo]` in `strata.toml`. Worktrees created after that get no note, and existing notes stay until you delete them.
 
 It matters when a repo's own instructions name a type-check command. In a test on excalidraw, whose `CLAUDE.md` says to run `yarn test:typecheck`:
 - Sonnet ran its own `tsc` in 2 of 3 sessions without the note, and in none with it.
 - Each of those runs peaked at 1.4 GB.
 
 Details are in [`bench/results/agent-usage.md`](bench/results/agent-usage.md).
+
+**Clashes between agents.** Two agents can each finish clean work that breaks once both are merged. Every 5 seconds the daemon looks for pairs of agents whose changes moved, and checks each such pair:
+- The files either agent changed are type-checked three times: with each agent's changes alone, and with both combined. An error only the combination has is a clash.
+- Files both agents changed are merged with `git merge-file` first. When git cannot merge them, Strata reports those files and skips the type check, since the combination does not exist until someone resolves the merge.
+- A pair is checked once both agents' changes have held still for a round, and again only when one of them, or the base branch, changes.
+
+Clashes show up in four places: `strata_diagnostics` answers, `strata_conflicts` (which checks the calling agent's pairs on the spot), `strata status` and the menu bar. On the excalidraw fixture:
+- 14 agents with changes made 91 pairs. The daemon found all 8 planted clashes and reported no type clash that was not real.
+- The first pass took 48 s. The checker stayed under 760 MB, because each combination is checked and freed before the next.
+- Idle, the rounds cost the daemon about 1.6 s of CPU a minute with 18 agents.
+
+It finds type errors, not changes in behaviour, and only in files one of the two agents changed. To turn it off, set `conflicts = false` under `[checker]`.
 
 ## Recipes
 
@@ -256,6 +270,7 @@ idle_dispose_secs = 900           # free an idle agent's snapshot after this
 huge_diff_ratio = 0.2             # above this share of changed files, the agent gets its own checker program
 group_memory_mb = 6144            # above this, dispose the least recently used snapshots
 extra_paths = []                  # per-worktree files under node_modules to layer (e.g. "node_modules/.prisma")
+conflicts = true                  # check every two agents' changes together for clashes
 
 [dev]
 command = "pnpm dev"              # default: the package manager's `dev` script

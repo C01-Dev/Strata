@@ -19,7 +19,64 @@ fn sharing_note(v: &Value) -> String {
     }
 }
 
+/// Clashes between the caller's changes and other agents', one pair at a time.
+fn clash_lines(pairs: &Value) -> Vec<String> {
+    let mut out = vec![];
+    for p in pairs.as_array().into_iter().flatten() {
+        let with = p["with"].as_str().unwrap_or("?");
+        if let Some(reason) = p["skipped"].as_str() {
+            out.push(format!("Not checked against {with}'s changes: {reason}."));
+        }
+        let clashes = p["clashes"].as_array().cloned().unwrap_or_default();
+        if !clashes.is_empty() {
+            out.push(format!(
+                "Your changes and {with}'s break each other once combined (neither is merged yet):"
+            ));
+        }
+        for c in clashes {
+            out.push(format!(
+                "  {} error TS{}: {}",
+                at(&c),
+                c["code"],
+                c["message"].as_str().unwrap_or_default()
+            ));
+        }
+        for f in p["unmerged"].as_array().into_iter().flatten() {
+            out.push(format!(
+                "You and {with} both changed {} and git cannot merge the two versions.",
+                f.as_str().unwrap_or("?")
+            ));
+        }
+    }
+    out
+}
+
+/// `strata_conflicts`: every other agent with changes, checked against the caller's.
+pub fn conflicts(v: &Value) -> String {
+    let lines = clash_lines(&v["pairs"]);
+    if !lines.is_empty() {
+        return lines.join("\n");
+    }
+    match v["pairs"].as_array().map_or(0, Vec::len) {
+        0 => "Nothing to check: you, or every other agent, have no changes yet.".into(),
+        1 => "No clashes: your changes type-check together with the other agent's.".into(),
+        n => format!(
+            "No clashes: your changes type-check together with each of the {n} other agents'."
+        ),
+    }
+}
+
 pub fn diagnostics(v: &Value) -> String {
+    let clashes = clash_lines(&v["conflicts"]);
+    let text = own_diagnostics(v);
+    if clashes.is_empty() {
+        text
+    } else {
+        format!("{text}\n{}", clashes.join("\n"))
+    }
+}
+
+fn own_diagnostics(v: &Value) -> String {
     let items = v["items"].as_array().cloned().unwrap_or_default();
     let total = v["total"].as_u64().unwrap_or(items.len() as u64);
     if total == 0 {
@@ -113,6 +170,23 @@ mod tests {
         assert_eq!(
             diagnostics(&none),
             "No problems.\n(answered from an unshared snapshot: dependencies differ)"
+        );
+        let clash = json!({ "items": [], "total": 0, "conflicts": [{ "with": "fix-login", "clashes": [{ "file": "src/c.ts", "line": 1, "column": 10, "code": 2305, "message": "No 'addOne'." }], "unmerged": ["src/a.ts"], "skipped": null }] });
+        assert_eq!(
+            diagnostics(&clash),
+            "No problems.\nYour changes and fix-login's break each other once combined (neither is merged yet):\n  src/c.ts:1:10 error TS2305: No 'addOne'.\nYou and fix-login both changed src/a.ts and git cannot merge the two versions."
+        );
+        assert_eq!(
+            conflicts(
+                &json!({ "pairs": [{ "with": "a", "clashes": [], "unmerged": [], "skipped": null }, { "with": "b", "clashes": [], "unmerged": [], "skipped": null }] })
+            ),
+            "No clashes: your changes type-check together with each of the 2 other agents'."
+        );
+        assert_eq!(
+            conflicts(
+                &json!({ "pairs": [{ "with": "a", "clashes": [], "unmerged": [], "skipped": "a's dependencies differ from the base's" }] })
+            ),
+            "Not checked against a's changes: a's dependencies differ from the base's."
         );
         assert_eq!(hover(&Value::Null), "No type information at that position.");
         assert_eq!(

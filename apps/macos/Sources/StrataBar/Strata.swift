@@ -40,6 +40,29 @@ struct Checker: Decodable {
     var typescript: String
     var memoryBytes: UInt64
     var agents: [CheckerAgent]
+    /// Pairs of agents whose changes clash (absent from older daemons).
+    var conflicts: [Conflict]?
+}
+
+struct Conflict: Decodable {
+    var agents: [String]
+    var clashes: [Clash]
+    var unmerged: [String]
+    var skipped: String?
+
+    var summary: String {
+        var parts: [String] = []
+        if !clashes.isEmpty { parts.append("\(clashes.count) type error\(clashes.count == 1 ? "" : "s") once combined") }
+        if !unmerged.isEmpty { parts.append("\(unmerged.count) file\(unmerged.count == 1 ? "" : "s") git cannot merge") }
+        return "\(agents.joined(separator: " + ")): " + (skipped.map { "not checked (\($0))" } ?? parts.joined(separator: ", "))
+    }
+}
+
+struct Clash: Decodable {
+    var file: String
+    var line: Int
+    var code: Int
+    var message: String
 }
 
 struct CheckerAgent: Decodable {}
@@ -97,6 +120,8 @@ final class Model {
     var failed = false
 
     var agentCount: Int { status?.repos.reduce(0) { $0 + $1.agents.count } ?? 0 }
+    /// Pairs of agents whose changes break each other.
+    var clashing: [Conflict] { status?.checker.flatMap { $0.conflicts ?? [] }.filter { $0.skipped == nil } ?? [] }
 
     func poll() async {
         while !Task.isCancelled {

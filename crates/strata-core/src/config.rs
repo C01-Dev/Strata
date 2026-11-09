@@ -53,6 +53,8 @@ pub struct Checker {
     pub huge_diff_ratio: f64,
     pub group_memory_mb: u64,
     pub extra_paths: Vec<String>,
+    /// Check every two agents' changes together for type errors neither has alone.
+    pub conflicts: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -109,6 +111,7 @@ impl Default for Checker {
             huge_diff_ratio: 0.2,
             group_memory_mb: 6144,
             extra_paths: vec![],
+            conflicts: true,
         }
     }
 }
@@ -288,6 +291,7 @@ idle_dispose_secs = 900
 huge_diff_ratio = 0.2             # above this share of changed files, the agent gets its own snapshot
 group_memory_mb = 6144            # above this, dispose least recently used snapshots
 extra_paths = []                  # per-worktree files under node_modules to layer
+conflicts = true                  # warn when two agents' changes break each other's types
 
 [dev]
 {dev}
@@ -403,6 +407,13 @@ mod tests {
                 .unwrap()
                 .repo
                 .agent_note
+        );
+        assert!(c.checker.conflicts);
+        assert!(
+            !Config::parse("[checker]\nconflicts = false")
+                .unwrap()
+                .checker
+                .conflicts
         );
         assert_eq!(c.dev.proxy_port, 7355);
         assert_eq!(c.dev.port_range, [4100, 4999]);

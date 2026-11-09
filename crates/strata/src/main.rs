@@ -576,6 +576,36 @@ fn status(json: bool) -> Result<()> {
             size(g["memory_bytes"].as_u64().unwrap_or(0)),
             g["pid"]
         );
+        let conflicts = g["conflicts"].as_array().cloned().unwrap_or_default();
+        if !conflicts.is_empty() {
+            println!("\nbetween agents' changes, before either is merged:");
+        }
+        for p in conflicts {
+            let name = |i: usize| p["agents"][i].as_str().unwrap_or("?").to_string();
+            let pair = format!("{} + {}", name(0), name(1));
+            if let Some(reason) = p["skipped"].as_str() {
+                println!("  {pair}: not checked together ({reason})");
+                continue;
+            }
+            println!("  {pair}");
+            for f in p["unmerged"].as_array().into_iter().flatten() {
+                println!(
+                    "    {}: both changed it; git cannot merge the two versions",
+                    f.as_str().unwrap_or("?")
+                );
+            }
+            for c in p["clashes"].as_array().into_iter().flatten() {
+                let message = c["message"].as_str().unwrap_or_default();
+                println!(
+                    "    {}:{}:{} TS{}: {} (only with both changes)",
+                    c["file"].as_str().unwrap_or("?"),
+                    c["line"],
+                    c["column"],
+                    c["code"],
+                    message.lines().next().unwrap_or_default()
+                );
+            }
+        }
     }
     for u in s["unmanaged"].as_array().into_iter().flatten() {
         println!(

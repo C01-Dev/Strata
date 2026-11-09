@@ -143,6 +143,7 @@ async fn mcp_tools_answer_for_the_worktree_they_run_in() {
     assert_eq!(
         tools,
         [
+            "strata_conflicts",
             "strata_definition",
             "strata_diagnostics",
             "strata_hover",

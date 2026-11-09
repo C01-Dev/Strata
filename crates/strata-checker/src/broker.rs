@@ -9,7 +9,11 @@
 //! Before every query the agent's worktree is rescanned (cheap, see strata-overlay) and the
 //! snapshot updated if its layer changed; the base is rescanned at most every `base_rescan`.
 //! A dead bridge is restarted on the next query, and so is one recycled by `maintain` after
-//! `recycle_after`. Lock order: agent, then group.
+//! `recycle_after`. Lock order: agent, then group. Clash checks between agents live in
+//! `clash.rs`.
+
+mod clash;
+pub use clash::{Clash, Pair};
 
 use crate::bridge::{Bridge, install_script, node};
 use crate::translate::Translator;
@@ -149,6 +153,10 @@ struct Group {
     /// Name -> (worktree, agent). The worktree sits outside the agent's lock so lookups never
     /// wait for a running query.
     agents: Mutex<HashMap<String, (PathBuf, SharedAgent)>>,
+    /// Held for a whole round of clash checks, so rounds never overlap.
+    round: Mutex<clash::Round>,
+    /// The latest clash check of every pair of agents with changes.
+    pairs: std::sync::Mutex<Vec<Pair>>,
 }
 
 type SharedAgent = Arc<Mutex<Agent>>;
@@ -251,6 +259,8 @@ impl Broker {
                 restarts: 0,
             }),
             agents: Default::default(),
+            round: Default::default(),
+            pairs: Default::default(),
         });
         groups.insert(repo.to_path_buf(), g.clone());
         Ok(g)
@@ -321,6 +331,9 @@ impl Broker {
         one_based(&mut result);
         if let Value::Object(map) = &mut result {
             map.insert("sharing".into(), json!(a.sharing));
+            if matches!(req.op, Op::Diagnostics { .. }) {
+                map.insert("conflicts".into(), json!(group.pairs_of(&req.agent, false)));
+            }
         }
         Ok(result)
     }
@@ -406,6 +419,13 @@ impl Broker {
                     "idle_secs": a.last_used.elapsed().as_secs(),
                 }));
             }
+            let (pairs, conflicts) = {
+                let pairs = g.pairs.lock().unwrap();
+                let mut open: Vec<Pair> = pairs.iter().filter(|p| !p.is_clean()).cloned().collect();
+                // Type clashes first, then files git cannot merge, then pairs not checked.
+                open.sort_by_key(|p| (p.clashes.is_empty(), p.skipped.is_some(), p.agents.clone()));
+                (pairs.len(), open)
+            };
             out.push(json!({
                 "repo": g.repo,
                 "pid": pid,
@@ -414,6 +434,8 @@ impl Broker {
                 "restarts": restarts,
                 "memory_bytes": g.memory().await,
                 "agents": agents,
+                "pairs_checked": pairs,
+                "conflicts": conflicts,
             }));
         }
         json!(out)
@@ -523,18 +545,10 @@ impl Group {
         Ok(())
     }
 
-    /// Brings the group up to date and the agent's snapshot in line with its worktree.
-    /// Returns the bridge to query and the path translator for this agent.
-    async fn prepare(
-        &self,
-        name: &str,
-        a: &mut Agent,
-        runtime: &str,
-        home: &Path,
-    ) -> Result<(Arc<Bridge>, Translator)> {
-        let mut s = self.state.lock().await;
+    /// Starts the bridge if it is not running, and reopens the base if its checkout changed.
+    async fn fresh(&self, s: &mut GroupState, runtime: &str, home: &Path) -> Result<()> {
         if !s.bridge.as_ref().is_some_and(|b| b.alive()) {
-            self.start(&mut s, home, runtime).await?;
+            self.start(s, home, runtime).await?;
         } else if s
             .scanned
             .is_none_or(|t| t.elapsed() >= self.settings.base_rescan)
@@ -549,7 +563,7 @@ impl Group {
             if changed {
                 if s.base.dep_key(runtime)? != s.dep_key {
                     tracing::info!("base dependencies changed; restarting the checker group");
-                    self.start(&mut s, home, runtime).await?;
+                    self.start(s, home, runtime).await?;
                 } else {
                     let bridge = s.bridge.clone().expect("alive");
                     let opened = json!({ "group": GROUP, "root": self.base_root, "tsconfigs": self.settings.tsconfigs_at(&self.base_root) });
@@ -560,6 +574,20 @@ impl Group {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Brings the group up to date and the agent's snapshot in line with its worktree.
+    /// Returns the bridge to query and the path translator for this agent.
+    async fn prepare(
+        &self,
+        name: &str,
+        a: &mut Agent,
+        runtime: &str,
+        home: &Path,
+    ) -> Result<(Arc<Bridge>, Translator)> {
+        let mut s = self.state.lock().await;
+        self.fresh(&mut s, runtime, home).await?;
         let bridge = s.bridge.clone().expect("started");
         let diff = layer(&s.base, &a.tree);
         (a.changed, a.removed) = (diff.changed.len(), diff.removed.len());
