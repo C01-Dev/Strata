@@ -1172,3 +1172,29 @@ The owner asked whether the main runs were for the product or the paper. Mostly 
     - An agent calling `strata_conflicts` gets its own pairs checked on demand, once the current round finishes.
     - The background latency mostly delays the human's notification, which still lands well before agents that work for 4 to 6 minutes are done.
     - Upgrade path if it matters: check first the pairs never checked, rather than re-checking known clashes; or give each pair only its own files.
+
+## v0.1.4 (owner approved, 2026-11-09)
+
+- **Ships:**
+  - grouped clash lines;
+  - the new-clash notification and the redesigned menu bar panel;
+  - the Claude Code plugin at 0.1.4;
+  - `strata_conflicts` naming the agents it could not check yet.
+- **Version bumped together:** `Cargo.toml`, `apps/macos/Info.plist`, `.claude-plugin/plugin.json`, the README status line and the site's install note (the site reads `main`, so the push updated it).
+- **rmcp 3.8.0 to 3.9.0, before tagging:**
+  - CI's `deny` failed on the bump commit because RUSTSEC-2026-0462 was published that day.
+  - The bug is in rmcp's Streamable HTTP client, which Strata does not use: it uses stdio for the server and a child process for the test client.
+  - Upgraded anyway, and raised the minimum version in `Cargo.toml` to 3.9.0, so neither the release nor `cargo install` resolves to the flagged version.
+  - The tag went on `1c9fe15` once CI was green there.
+- **Flaky test, not a release problem:** CI on the tag failed `ports::agents_get_distinct_free_ports_and_rm_frees_them` on Ubuntu with `AddrInUse` on 127.0.0.1:46100. The same commit passed on `main`.
+  - Linux gives out ports 32768–60999 to outgoing connections, so another process on the runner can hold 46100 by chance.
+  - macOS uses ports 49152–65535 for that, which is why it only fails on Linux.
+  - Fix: move the tests' fixed ports below 32768.
+- **Release workflow:** every job passed (binaries for 3 targets, the installer, the Homebrew formula, npm). A "What's new" section was added on top of cargo-dist's notes with `gh release edit`.
+- **Menu bar app 0.1.4:** built with `bundle.sh --release`, notarized (Accepted) and stapled. `publish.sh v0.1.4` uploaded it and updated the cask. The old zip was deleted first.
+- **Checked as a user gets it:**
+  - **npm:** `latest: 0.1.4`, and `npm install stratagents@0.1.4` gives `strata 0.1.4`.
+  - **macOS tarball:** its sha256 matches its `.sha256` file, and the binary inside prints `strata 0.1.4`.
+  - **Menu bar zip from the release:** marked quarantined, it passes Gatekeeper ("accepted, source=Notarized Developer ID") and is version 0.1.4.
+  - **Homebrew:** the formula and the cask are both at 0.1.4.
+  - **Site and plugin:** `strata.c01.dev/install.sh` and `releases/latest` both lead to the v0.1.4 installer. The site shows v0.1.4, and `plugin.json` on `main` says 0.1.4.
