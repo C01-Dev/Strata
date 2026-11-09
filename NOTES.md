@@ -1036,3 +1036,17 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 - **Process lesson:** rebuild the release binary before a run that depends on a change. `bench/agent-usage.sh` uses whatever `$STRATA` points at.
 - **Small sample:** 2 runs of 4 agents on one repo. Enough to show the effect, not enough for a clash rate.
 
+## v0.1.3 (2026-11-09)
+
+- **Ships:** clash warnings between agents, `strata_conflicts`, the worktree note's `strata_conflicts` line, and the menu bar warning. The Strata skill was already live, from main.
+- **Process:** CI was green on the release commit (51b712a) before tagging. The release workflow passed every job: binaries for 3 targets, the installer, the Homebrew formula and npm through trusted publishing.
+- **Release notes:** a "What's new" section added on top of cargo-dist's install notes with `gh release edit`. There is no CHANGELOG file.
+- **Menu bar app 0.1.3:** `bundle.sh --release`, then notarized (Accepted) and stapled. `publish.sh v0.1.3` uploaded it and updated the cask.
+  - `publish.sh` reuses `build/Strata-macOS.zip` when present, so the old zip had to be deleted first. Otherwise it would have published the 0.1.2 app again.
+- **Checked as a user gets it:**
+  - npm: showed 0.1.2 for about a minute, then `latest: 0.1.3`; `npm install stratagents@0.1.3` gives `strata 0.1.3`.
+  - The macOS tarball's sha256 matches its `.sha256` file, and the binary inside prints `strata 0.1.3`. The file holds only the hash, so `shasum -c` calls it improperly formatted. Compare the hash by hand.
+  - Homebrew formula and cask are both at 0.1.3.
+  - The menu bar zip from the release, marked quarantined the way a browser marks downloads, passes Gatekeeper ("accepted, source=Notarized Developer ID") and is version 0.1.3.
+  - `strata.c01.dev/install.sh` redirects to the latest installer.
+
