@@ -10,7 +10,8 @@
 #     note   the repo as it is, relying on the note `strata new` writes (.claude/rules/strata.md)
 #
 # MODEL picks the model (Claude Code's default otherwise). AGENT=codex runs Codex instead, with
-# its workspace-write sandbox, which keeps it to its worktree.
+# its workspace-write sandbox, which keeps it to its worktree. SET=related runs four related
+# tasks instead (two refactors, two features around text in shapes), for clash detection.
 #
 # Needs `AGENTS=0 bench/setup.sh excalidraw`, `strata init --no-service` in its base, and a
 # logged-in `claude`. Each session is one real task on your Claude plan.
@@ -21,6 +22,8 @@ BENCH=$(cd "$(dirname "$0")" && pwd)
 BASE=$BENCH/fixtures/excalidraw/base
 AGENT=${AGENT:-claude}
 run=$cond
+[ -z "${SET:-}" ] || run+=-$SET
+[ -z "${TAG:-}" ] || run+=-$TAG   # repeat a run under new worktree names
 [ "$AGENT" = claude ] || run+=-$AGENT
 [ -z "${MODEL:-}" ] || run+=-$MODEL
 OUT=$BENCH/results/agent-usage/$run
@@ -35,12 +38,24 @@ CHECKS="Bash(yarn test*),Bash(yarn tsc*),Bash(yarn vitest*),Bash(yarn fix*),Bash
 CHECKS+=",Bash(npx tsc*),Bash(npx tsgo*),Bash(npx vitest*),Bash(npx eslint*),Bash(npx prettier*)"
 CHECKS+=",Bash(git diff*),Bash(git status*),Bash(git log*),Bash(git show*),Bash(grep *),Bash(rg *),Bash(ls *),Bash(wc *)"
 
-names=(desc rename opts)
-prompts=(
-  "Add an optional \`description\` string to every Excalidraw element, so users can attach a note to any shape. It should survive saving and loading a file, and duplicating an element should copy it. Make sure nothing is broken."
-  "Rename \`hasBoundTextElement\` to \`hasBoundText\` everywhere in the codebase. Behaviour must stay the same."
-  "\`newElementWith\` takes a bare boolean \`force\` as its third argument, which is unreadable at call sites. Change it to an options object, \`{ force?: boolean }\`, and update every caller."
-)
+if [ "${SET:-}" = related ]; then
+  # Two refactors and two features in the same area (text inside shapes), at the same time.
+  # Nothing is planted: whether their changes clash is up to the agents.
+  names=(rename opts clear upper)
+  prompts=(
+    "Rename \`getBoundTextElement\` to \`getBoundText\` everywhere in the codebase. Behaviour must stay the same."
+    "\`newElementWith\` takes a bare boolean \`force\` as its third argument, which is unreadable at call sites. Change it to an options object, \`{ force?: boolean }\`, and update every caller."
+    "Add a \"Clear text\" action: for each selected shape that has text inside it, remove that text and keep the shape. Show it in the context menu for shapes with text, and make it undoable like other actions. Make sure nothing is broken."
+    "Add an \"Uppercase text\" action that turns the text of the selected text elements, including text inside shapes, into uppercase, re-measuring it so it still fits its container. Show it in the context menu. Make sure nothing is broken."
+  )
+else
+  names=(desc rename opts)
+  prompts=(
+    "Add an optional \`description\` string to every Excalidraw element, so users can attach a note to any shape. It should survive saving and loading a file, and duplicating an element should copy it. Make sure nothing is broken."
+    "Rename \`hasBoundTextElement\` to \`hasBoundText\` everywhere in the codebase. Behaviour must stay the same."
+    "\`newElementWith\` takes a bare boolean \`force\` as its third argument, which is unreadable at call sites. Change it to an options object, \`{ force?: boolean }\`, and update every caller."
+  )
+fi
 
 for i in "${!names[@]}"; do
   name=${names[$i]}

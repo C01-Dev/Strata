@@ -1002,3 +1002,17 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - the settling round, and an on-demand recheck after a fix.
 
   Unit tests cover the multiset diff, the merge, and the answer formats.
+
+## The Strata skill (owner request, 2026-11-09)
+
+- **What:** `skills/strata/SKILL.md`, an Agent Skills skill. `npx skills add C01-Dev/strata` finds it, because the `skills` CLI searches a repo's `skills/` folder. It installs it for Claude Code, Codex, Cursor and others.
+- **What it says:** the same rules as the worktree note, plus setup steps for when the tools are missing. In those steps the agent asks before installing anything.
+- **Name:** the owner asked for `C01/strata`. It is not possible: `npx skills add C01/strata` means github.com/C01, a different account (created 2013, no public repos). Two names work instead:
+  - `C01-Dev/strata`, which also gets Strata listed on skills.sh, since skills.sh lists GitHub repos.
+  - `https://strata.c01.dev`, through the CLI's well-known discovery (RFC 8615).
+- **The site route:** the Worker serves `/.well-known/agent-skills/index.json` (discovery schema 0.2.0) and `/.well-known/agent-skills/strata/SKILL.md`.
+  - The index's sha256 digest is computed from the same cached file the Worker serves next to it, so it cannot go stale when the skill changes.
+  - Checked locally against the Worker code: the digest matches.
+- **Checked with the real CLI:** `npx skills@latest add <repo> --list` finds `strata`. Installing it into a scratch project for Claude Code wrote `.claude/skills/strata/SKILL.md`.
+- **Not done:** a Claude Code plugin. A plugin could also connect the MCP server; a skill only describes how.
+

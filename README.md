@@ -189,6 +189,20 @@ It finds type errors, not changes in behaviour, and only in files one of the two
 
 ## Recipes
 
+### Any agent: the Strata skill
+
+```bash
+npx skills add C01-Dev/strata
+```
+
+Or from Strata's site: `npx skills add https://strata.c01.dev`. This installs [`skills/strata`](skills/strata/SKILL.md) for Claude Code, Codex, Cursor and the other agents the `skills` CLI supports. The skill tells the agent to:
+- check types with `strata_diagnostics` instead of `tsc`;
+- run `strata_conflicts` before it reports back;
+- start dev servers through Strata;
+- when Strata is missing, walk the user through setting it up.
+
+It does not install Strata or connect the MCP server; the recipes below do that.
+
 ### Claude Code
 
 MCP: add `.mcp.json` to the repo (or run `claude mcp add --transport stdio --scope project strata -- strata mcp`):
