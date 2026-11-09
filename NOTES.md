@@ -1016,3 +1016,23 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
 - **Checked with the real CLI:** `npx skills@latest add <repo> --list` finds `strata`. Installing it into a scratch project for Claude Code wrote `.claude/skills/strata/SKILL.md`.
 - **Not done:** a Claude Code plugin. A plugin could also connect the MCP server; a skill only describes how.
 
+## Real agents, related tasks: clashes happen, and agents report them (2026-11-09)
+
+- **Setup:** four Claude Code (Opus) sessions at once, each in its own Strata worktree. Two refactors and two features around text inside shapes (`SET=related` in `bench/agent-usage.sh`). Nothing was planted. Run twice, each time on a fresh daemon home.
+- **Results** (`bench/results/agent-clash.md`):
+  - Across 12 pairs, 4 real problems happened on their own:
+    - 3 type clashes, each a new feature calling `getBoundTextElement`, which the rename agent removed;
+    - 1 file both feature agents changed on the same lines (`actions/index.ts`).
+  - Strata caught all 4, with no false alarms.
+- **Run 1 was flawed:** its release binary was built before the note gained the `strata_conflicts` line.
+  - Agents saw clashes only on `strata_diagnostics` answers.
+  - 2 of the 3 agents involved reported them.
+  - The third (upper) checked types once, about a minute before its clash existed.
+- **Run 2 used the shipped note:**
+  - all 4 agents called `strata_conflicts` before reporting back;
+  - both agents in the clash reported it, with the file, line and error;
+  - neither changed its code to match the other's, as the note asks.
+- **Takeaway:** related parallel work clashes often enough to matter: 3 of 8 sessions wrote code that would not compile after merge. The note's "run `strata_conflicts` before you report back" is what makes the report reliable, since background warnings only reach an agent if it checks types after the clash appears.
+- **Process lesson:** rebuild the release binary before a run that depends on a change. `bench/agent-usage.sh` uses whatever `$STRATA` points at.
+- **Small sample:** 2 runs of 4 agents on one repo. Enough to show the effect, not enough for a clash rate.
+
