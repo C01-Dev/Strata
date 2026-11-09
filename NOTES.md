@@ -1087,3 +1087,44 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - The CLI shows `src/cart.ts:11:9 (and 12:10) TS2304`.
   - The panel was rendered with `STRATA_SNAPSHOT` in dark, light and daemon-down states, and is the new `docs/menubar.png`.
   - **Not checked live:** the notification banner. macOS's permission prompt is the owner's to answer.
+
+## Clash study: harness, frozen tasks, dry run (owner chose the full study for FSE 2027, 2026-11-09)
+
+The plan is in `paper/PLAN.md`, kept out of git like `launch/`. A related-work search found the closest prior paper: Xia, Wu and Park, "Passes Alone, Fails Together" (EXPRESS 2026). There, patches that pass alone fail together in 97% of runs on tasks built to collide, but in only 1 of 834 mined PR pairs. This study measures what lies between those two, and adds detection while agents still work, plus whether agents report clashes.
+
+- **Harness:**
+  - `bench/clash-run.sh` runs one run end to end, with a fresh daemon home per run.
+  - `bench/agent-usage.sh` gained `REPO`, `TASKS` (a markdown task file), `CONFLICTS=off` (the control), a 5 s timeline, final commits, `run.json` and `final-status.json`.
+  - `bench/clash-truth.mjs` is the ground truth: a real `git merge` per pair, then the `tsc` CLI and the touched test files, alone and merged, in one scratch worktree seeded with the base's ignored files.
+  - `bench/clash-tally.mjs` gives the rates with Wilson intervals, recall and precision, warning latency, and a `labels.csv` for `paper/rubric.md`.
+- **The control** sets `conflicts = false` in the base's `strata.toml` before `strata new`. That way the note leaves out the `strata_conflicts` line and the daemon checks nothing. Checks are switched back on after the agents finish, so the final trees still get Strata's verdict.
+- **Checked with a stub agent first** (scripted edits, one rename-against-caller clash), in both conditions, before spending real sessions.
+  - It found two harness bugs:
+    - a perl `\s*` swallowed the newline when inserting `conflicts =`, so the TOML broke;
+    - the per-agent tally read `timeline.jsonl` as an agent.
+  - It also found that `bench/agent-usage.sh` was not executable.
+- **Frozen task sets** (sha256, so later edits would show):
+  - `paper/tasks/calcom-related.md` 671824fe4f295b3e8caf970767138b2498897b1df25c8cfae17a6bd31c11ba35
+  - `paper/tasks/calcom-unrelated.md` 33a44eaefb60598bd183f65508a7113eff6eb9ef7b34e6233d82ac8d6a03d6ee
+  - `paper/tasks/excalidraw-related.md` 1f8befa3ee03295ffd1087e2ffa1888d0f9d10e18035780b6e0acbcfb383b632 (the pilot's set, unchanged)
+  - `paper/tasks/excalidraw-unrelated.md` cef60405103f2715ead2b1a28c4d80ce8607c278e0953e27af1acb24291e2961
+  - `paper/rubric.md` 8b6ea2572060242654634dc6f6eb2b1a8f9ef3be3394191d890b610b8dcb27f4
+- **cal.com fixture on this Mac:** set up fresh. `setup.sh` failed at the end with `AGENTS=0`, because `wt*` matched nothing; it now skips folders without `node_modules`.
+  - Under TS 7.1 beta the untouched base has 730 errors, almost all in `apps/web` code using the tRPC client. tRPC 11 beta's collision check and hook inference fail there, though `AppRouter` itself is fully typed.
+  - Patching the check left 423 errors, so it was reverted. The cal.com tasks avoid that code, and the ground truth subtracts errors present alone.
+  - `strata.toml` checks `apps/web/tsconfig.json` and seeds the generated Prisma, zod, kysely and platform files. The old base worktree, seeded before that change, was removed.
+- **Dry run** (excalidraw related, Opus, warnings on):
+  - Natural clash: clear + rename again, `actionBoundText.tsx:162 TS2552`. It is the third run in a row with this clash. The independent ground truth agrees with Strata on all 6 pairs.
+  - The warning came 11 s after the last change. The checker peaked at 2.4 GB, holding the agents' own snapshots plus one pair at a time.
+  - All 4 agents called `strata_conflicts`. Both agents in the clash named the other agent, the file, the line and the error, and left their code alone.
+  - **Finding:** opts finished in 39 s and called `strata_conflicts` before any other agent had changes. A fast agent cannot see a clash that appears after it reports. The paper's discussion needs this. A product answer could be to say, when others are still working, that their changes are not in yet.
+- **Pilot** (cal.com related, Opus, warnings on):
+  - 2 of 6 pairs changed the same lines: passwd + rename in `CalEventParser.ts`, and passwd + when in its test file. There were no type clashes. As expected, this set leans towards textual conflicts.
+  - Strata matched the ground truth on all 6 pairs.
+  - Each agent alone shows the same 730 pre-existing errors, so subtracting them works.
+  - All 4 agents called `strata_conflicts`. The three in a problem pair named the other agent and the file, and none changed its code to match.
+  - The checker peaked at 5.6 GB on cal.com.
+- **Warning latency, measured properly from now on.** The first measure counted from the last change to either tree before the warning. A later, unrelated edit could make it read 0 s, as it did in the pilot.
+  - The timeline now records each worktree as a git tree object, written through a private index so the agent's own index is untouched.
+  - `clash-truth.mjs` walks back from the first warning to the first snapshot where the problem already existed. A stub run gave 6 s.
+  - The dry run and the pilot logged hashes, so they have no latency figure.

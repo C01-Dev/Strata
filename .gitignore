@@ -4,3 +4,4 @@ target/
 bench/fixtures/
 footprint
 bench/results/agent-usage/
+bench/results/clash-study/

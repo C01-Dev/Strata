@@ -75,6 +75,7 @@ ts71() { # name: every checkout of the fixture checks with the pinned TypeScript
           # the repo's own TypeScript stays at node_modules/.typescript-repo
   local d
   for d in "$FIX/$1"/base "$FIX/$1"/wt*; do
+    [ -d "$d/node_modules" ] || continue   # wt* matches nothing with AGENTS=0
     [ -L "$d/node_modules/typescript" ] && continue
     [ -d "$d/node_modules/typescript" ] && mv "$d/node_modules/typescript" "$d/node_modules/.typescript-repo"
     ln -s "$BENCH/node_modules/typescript" "$d/node_modules/typescript"
