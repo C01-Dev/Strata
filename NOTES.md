@@ -1050,3 +1050,12 @@ Gate 5: "a scripted run on clean macOS and Ubuntu VMs goes from install to an ag
   - The menu bar zip from the release, marked quarantined the way a browser marks downloads, passes Gatekeeper ("accepted, source=Notarized Developer ID") and is version 0.1.3.
   - `strata.c01.dev/install.sh` redirects to the latest installer.
 
+
+## Site and README lead with clash warnings (owner request, 2026-11-09)
+
+- **Why:** clash warnings are the one thing Strata does that a worktree manager or a second `tsc` cannot. The memory numbers are why the check is cheap, so they now come second.
+- **README intro:** the first paragraph says Strata tells agents when their changes break each other, then gives the rename example and the real-agent result (4 of 12 pairs clashed, all caught, no false alarms). The shared checker, clones and dev servers follow as "underneath".
+- **Site hero:** "Five agents. Clashes caught early." The layer drawing marks one clash in ember between two layers.
+- **New site section, "Clean alone. Broken together.":** the real `strata_conflicts` answer the clear agent got in run 2, with paths shortened to `actions/...`, and its own words to the user, quoted as written. Three numbers: 4 of 4 caught, 0 false alarms in 103 pairs (12 real, 91 planted), 2 of 2 agents in a clash named it with the note.
+- **Also fixed:** the install line still said v0.1.1. The start section now offers `npx skills add C01-Dev/strata`, and the menu bar blurb mentions the clash warning.
+- **Left as is:** the 18-second film, the OG image ("61% less memory") and the menu bar screenshot are about the shared checker. They are still true; new ones would need a clash on screen.

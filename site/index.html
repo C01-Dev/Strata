@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Strata: five agents, one type checker</title>
-<meta name="description" content="Strata runs several coding agents on one TypeScript repo: one shared type checker, dependencies by clone, and dev servers with their own URL and cleanup. Open source, by C01.">
+<title>Strata: several coding agents, warned before they clash</title>
+<meta name="description" content="Strata runs several coding agents on one TypeScript repo and tells them when their changes break each other, before either merges. One shared type checker, dependencies by clone, dev servers with their own URL. Open source, by C01.">
 <meta property="og:title" content="Strata">
-<meta property="og:description" content="Several coding agents on one TypeScript repo, sharing one type checker.">
+<meta property="og:description" content="Several coding agents on one TypeScript repo, warned when their changes break each other.">
 <meta property="og:url" content="https://strata.c01.dev">
 <meta property="og:image" content="https://strata.c01.dev/strata-og.png">
 <meta property="og:image:width" content="1200">
@@ -76,8 +76,12 @@ svg.draw .wash { fill: var(--ink); fill-opacity: 0.08; }
 
 .hero .strata { margin-top: clamp(48px, 7vh, 88px); }
 .strata .edit { stroke-width: 3; }
+svg.draw .hot { stroke: var(--ember); stroke-opacity: 1; }
+svg.draw .warn { fill: var(--ember); }
+.strata .link { stroke-dasharray: 3 3; }
 @media (prefers-reduced-motion: no-preference) {
   .strata .line { stroke-dasharray: 1600; stroke-dashoffset: 1600; animation: draw 1.6s var(--ease) forwards; animation-delay: calc(0.3s + var(--i, 0) * 0.14s); }
+  .strata .line.link { stroke-dasharray: 3 3; stroke-dashoffset: 0; opacity: 0; animation: show 0.9s var(--ease) forwards; animation-delay: 1.5s; }
   .strata text { opacity: 0; animation: show 0.9s var(--ease) forwards; animation-delay: calc(0.7s + var(--i, 0) * 0.14s); }
   @keyframes draw { to { stroke-dashoffset: 0; } }
   @keyframes show { to { opacity: 1; } }
@@ -87,6 +91,18 @@ svg.draw .wash { fill: var(--ink); fill-opacity: 0.08; }
 .cmd::before { content: "$ "; color: var(--ink-dim); }
 .note { font-size: 14px; color: var(--ink-dim); }
 .note i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ember); margin-right: 10px; vertical-align: 1px; }
+
+/* Clashes */
+.clash { display: grid; grid-template-columns: 5fr 7fr; gap: clamp(32px, 5vw, 96px); align-items: start; }
+.clash > * { min-width: 0; }
+.clash .why p { color: var(--ink-soft); max-width: 44ch; }
+.clash .why p + p { margin-top: 18px; }
+.clash .label { font: 400 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 12px; }
+.term { background: var(--raised); border: 1px solid var(--rule); padding: 16px 18px; overflow-x: auto; color: var(--ink); line-height: 1.7; margin-bottom: 32px; }
+.term .dim { color: var(--ink-dim); }
+.clash blockquote { font: 300 clamp(20px, 1.9vw, 26px)/1.35 var(--display); letter-spacing: -0.02em; padding-left: 20px; border-left: 2px solid var(--ember); }
+.stats { margin-top: clamp(56px, 8vh, 96px); }
+.stats .big { margin-top: 0; }
 
 /* Without and with */
 /* The film */
@@ -122,7 +138,7 @@ footer .small { margin-top: clamp(40px, 7vh, 80px); display: flex; flex-wrap: wr
 footer .small a { color: var(--ink-soft); }
 
 @media (max-width: 900px) {
-  .compare, .charts, .app { grid-template-columns: 1fr; }
+  .compare, .charts, .app, .clash { grid-template-columns: 1fr; }
   .steps li { grid-template-columns: 40px 1fr; }
   .steps pre { grid-column: 2; }
 }
@@ -146,6 +162,7 @@ footer .small a { color: var(--ink-soft); }
       <span>Strata</span>
     </a>
     <nav aria-label="Main">
+      <a class="optional" href="#clashes">Clashes</a>
       <a class="optional" href="#numbers">Numbers</a>
       <a href="https://github.com/C01-Dev/strata#readme">Docs</a>
       <a href="https://github.com/C01-Dev/strata">GitHub</a>
@@ -155,22 +172,58 @@ footer .small a { color: var(--ink-soft); }
 
 <main class="wrap">
   <section class="hero" aria-labelledby="title"><div class="inner">
-    <h1 id="title">Five agents.<br>One type checker<span class="end">.</span></h1>
-    <p class="lede">Run several coding agents on one TypeScript repo, sharing everything that is expensive.</p>
+    <h1 id="title">Five agents.<br>Clashes caught early<span class="end">.</span></h1>
+    <p class="lede">Run several coding agents on one TypeScript repo. When one agent's changes break another's, both hear about it while they work, not after the merge.</p>
     <div class="install">
       <code class="cmd">curl -LsSf https://strata.c01.dev/install.sh | sh</code>
-      <span class="note"><i aria-hidden="true"></i>v0.1.1. Also <code>brew install c01-dev/tap/strata</code> or <code>npm install -g stratagents</code>. macOS and Linux.</span>
+      <span class="note"><i aria-hidden="true"></i>v0.1.3. Also <code>brew install c01-dev/tap/strata</code> or <code>npm install -g stratagents</code>. macOS and Linux.</span>
     </div>
     <figure class="strata">
-      <svg class="draw" viewBox="0 0 1200 290" role="img" aria-label="Five agent layers, each holding only the files that agent changed, stacked on one shared base">
+      <svg class="draw" viewBox="0 0 1200 290" role="img" aria-label="Five agent layers, each holding only the files that agent changed, stacked on one shared base. Two of them, api-retry and checkout, clash.">
         <g style="--i:4"><line class="line dim" x1="0" y1="20" x2="1200" y2="20"/><line class="line edit" x1="300" y1="20" x2="336" y2="20"/><text x="0" y="12">docs-update, 1 file</text></g>
-        <g style="--i:3"><line class="line dim" x1="0" y1="68" x2="1200" y2="68"/><line class="line edit" x1="212" y1="68" x2="262" y2="68"/><line class="line edit" x1="880" y1="68" x2="902" y2="68"/><text x="0" y="60">api-retry, 3 files</text></g>
-        <g style="--i:2"><line class="line dim" x1="0" y1="116" x2="1200" y2="116"/><line class="line edit" x1="420" y1="116" x2="520" y2="116"/><text x="0" y="108">checkout, 6 files</text></g>
+        <g style="--i:3"><line class="line dim" x1="0" y1="68" x2="1200" y2="68"/><line class="line edit" x1="212" y1="68" x2="262" y2="68"/><line class="line edit hot" x1="440" y1="68" x2="470" y2="68"/><line class="line edit" x1="880" y1="68" x2="902" y2="68"/><text x="0" y="60">api-retry, 3 files</text></g>
+        <g style="--i:2"><line class="line dim" x1="0" y1="116" x2="1200" y2="116"/><line class="line edit" x1="420" y1="116" x2="520" y2="116"/><line class="line edit hot" x1="440" y1="116" x2="470" y2="116"/><text x="0" y="108">checkout, 6 files</text></g>
+        <g style="--i:5"><line class="line hot link" x1="455" y1="72" x2="455" y2="112"/><text class="warn" x="472" y="97">clash</text></g>
         <g style="--i:1"><line class="line dim" x1="0" y1="164" x2="1200" y2="164"/><line class="line edit" x1="96" y1="164" x2="118" y2="164"/><line class="line edit" x1="760" y1="164" x2="812" y2="164"/><text x="0" y="156">search-page, 4 files</text></g>
         <g style="--i:0"><line class="line dim" x1="0" y1="212" x2="1200" y2="212"/><line class="line edit" x1="170" y1="212" x2="206" y2="212"/><line class="line edit" x1="1010" y1="212" x2="1046" y2="212"/><text x="0" y="204">fix-login, 2 files</text></g>
         <g style="--i:0"><line class="line" x1="0" y1="268" x2="1200" y2="268" style="stroke-width:2"/><text class="hi" x="0" y="290">base: the whole project, loaded once</text></g>
       </svg>
     </figure>
+  </div></section>
+
+  <section id="clashes" aria-labelledby="clash-title"><div class="inner">
+    <h2 id="clash-title">Clean alone. Broken together<span class="end">.</span></h2>
+    <div class="clash">
+      <div class="why">
+        <p>One agent renames a function. Another adds a call to the old name. Each branch type-checks clean, and the build breaks once both land.</p>
+        <p>Strata checks every pair of agents' changes together while they work, on the type checker they already share. It tells both agents, <code>strata status</code> and the menu bar. Files that git cannot merge show up too.</p>
+        <p>The agents do not rewrite each other's work. They name the clash in their summary, and you decide which branch lands first.</p>
+      </div>
+      <div class="seen">
+        <p class="label">What the agent saw</p>
+        <pre class="term"><span class="dim">clear &rsaquo; strata_conflicts</span>
+Your changes and rename's break each other once combined (neither is merged yet):
+  actions/actionBoundText.tsx:160:26 error TS2552: Cannot find name 'getBoundTextElement'.
+  actions/actionBoundText.tsx:168:32 error TS2552: Cannot find name 'getBoundTextElement'.</pre>
+        <p class="label">What it told the user</p>
+        <blockquote>I left my code as it is rather than changing it to match theirs. Whichever branch merges second will need to switch to the new name.</blockquote>
+      </div>
+    </div>
+    <div class="charts stats">
+      <div class="chart">
+        <h3>Clashes caught, four real agents on related tasks, nothing planted</h3>
+        <p class="big">4 of 4<small>in 12 pairs</small></p>
+      </div>
+      <div class="chart">
+        <h3>False alarms, real runs and 91 planted pairs</h3>
+        <p class="big">0<small>in 103 pairs</small></p>
+      </div>
+      <div class="chart">
+        <h3>Agents in a clash that named it in their summary</h3>
+        <p class="big">2 of 2<small>with Strata's note</small></p>
+      </div>
+    </div>
+    <p class="more">The runs, the agents' tasks and what each one reported: <a href="https://github.com/C01-Dev/strata/blob/main/bench/results/agent-clash.md">the clash test</a>.</p>
   </div></section>
 
   <section class="film" aria-labelledby="film-title"><div class="inner">
@@ -269,7 +322,7 @@ footer .small a { color: var(--ink-soft); }
   <section aria-labelledby="app-title"><div class="inner app">
     <div>
       <h2 id="app-title">Every agent, from the menu bar<span class="end">.</span></h2>
-      <p>State, memory, port and dev server for each agent. Start, stop, open or remove in one click.</p>
+      <p>State, memory, port and dev server for each agent, and a warning when two agents' changes clash. Start, stop, open or remove in one click.</p>
       <p class="note" style="margin-top:20px"><a href="https://github.com/C01-Dev/Strata/releases/latest/download/Strata-macOS.zip">Download for macOS</a>, or <code>brew install --cask c01-dev/tap/strata-menubar</code>. Signed and notarized.</p>
     </div>
     <img src="/menubar.png" alt="Strata's menu bar panel with five agents, their ports, one running dev server, and the shared checker serving all five." width="720" height="638" loading="lazy">
@@ -282,7 +335,7 @@ footer .small a { color: var(--ink-soft); }
       <li><span>Give an agent a worktree</span><pre>strata new fix-login</pre></li>
       <li><span>Connect the agent (MCP)</span><pre>strata mcp</pre></li>
     </ol>
-    <p class="more">Setup for Claude Code, Codex, Cursor and Conductor is in the <a href="https://github.com/C01-Dev/strata#recipes">docs</a>.</p>
+    <p class="more">Or let your agent set it up: <code>npx skills add C01-Dev/strata</code>. Setup for Claude Code, Codex, Cursor and Conductor is in the <a href="https://github.com/C01-Dev/strata#recipes">docs</a>.</p>
   </div></section>
 </main>
 

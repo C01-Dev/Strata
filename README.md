@@ -1,10 +1,15 @@
 # Strata
 
-Strata is a local runtime for running several coding agents on one TypeScript repo at once. Each agent gets its own git worktree, and Strata makes the expensive parts shared or cheap:
+Strata runs several coding agents on one TypeScript repo at once, each in its own git worktree, and tells them when their changes break each other, before either is merged.
 
-- **One type checker for every worktree.** A single `tsgo` (TypeScript 7.1) holds the base program, and each agent's changes are layered on top of it. With five agents on excalidraw and cal.com it used 20–30% less memory than five separate checkers when every agent checked the whole project, and 60–65% less when each checked the files it edited (`NOTES.md`, Gate 2). Agents ask it through MCP: diagnostics, hover, definition, references, symbols.
+One agent renames a function. Another adds a call to the old name. Each branch type-checks clean, and the build breaks once both land. Strata checks every pair of agents' changes together while they work, and tells both agents, `strata status` and the menu bar. The agents name the clash in their summary instead of rewriting each other's code, and you decide which branch lands first.
+
+In a test with four Claude Code agents on related tasks in excalidraw, with nothing planted, 4 of 12 pairs ended up breaking each other. Strata caught all 4, with no false alarms ([the clash test](bench/results/agent-clash.md)).
+
+Underneath, Strata makes the expensive parts of running several agents shared or cheap:
+
+- **One type checker for every worktree.** A single `tsgo` (TypeScript 7.1) holds the base program, and each agent's changes are layered on top of it. With five agents on excalidraw and cal.com it used 20–30% less memory than five separate checkers when every agent checked the whole project, and 60–65% less when each checked the files it edited (`NOTES.md`, Gate 2). Agents ask it through MCP: diagnostics, hover, definition, references, symbols. The clash check runs on the same checker.
 - **Dependencies by copy-on-write clone.** `strata new` clones `node_modules` (and any other ignored folders you list) from a worktree that has the same lockfile and manifests. On cal.com that takes about 5–8 s, against a fresh install; with the warm pool, under 1 s.
-- **Clashes between agents, before either merges.** When one agent renames a function and another adds a call to the old name, both type-check clean alone and break once merged. Strata checks every pair of agents' changes together in the background and tells the agents, `strata status` and the menu bar.
 - **Dev servers with their own URL, budget and cleanup.** `strata dev <agent>` starts the agent's dev server on its own port behind `http://<agent>.<app>.localhost:7355`, hot reload included. Memory per agent is metered against a budget, and `strata rm` leaves no process or port behind.
 
 It is one binary: CLI, daemon and MCP server.
