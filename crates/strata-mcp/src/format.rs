@@ -67,19 +67,41 @@ fn clash_lines(pairs: &Value) -> Vec<String> {
     out
 }
 
-/// `strata_conflicts`: every other agent with changes, checked against the caller's.
+/// `strata_conflicts`: every other agent with changes, checked against the caller's, and the
+/// agents with no pair against the caller because one of the two has no changes yet.
 pub fn conflicts(v: &Value) -> String {
-    let lines = clash_lines(&v["pairs"]);
-    if !lines.is_empty() {
-        return lines.join("\n");
+    let mut lines = clash_lines(&v["pairs"]);
+    let checked = v["pairs"].as_array().map_or(0, Vec::len);
+    let unchecked: Vec<&str> = v["unchecked"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    let (names, has, it) = match unchecked.as_slice() {
+        [] => (String::new(), "", ""),
+        [one] => (one.to_string(), "has", "it"),
+        [rest @ .., last] => (format!("{} and {last}", rest.join(", ")), "have", "them"),
+    };
+    let later = format!("A clash with {it} can still appear after this check.");
+    if lines.is_empty() {
+        lines.push(match checked {
+            0 if unchecked.is_empty() => "Nothing to check: no other agent is working here.".into(),
+            0 => format!(
+                "Nothing to check yet: {names} {has} no changes so far, or you have none. {later}"
+            ),
+            1 => "No clashes: your changes type-check together with the other agent's.".into(),
+            n => format!(
+                "No clashes: your changes type-check together with each of the {n} other agents'."
+            ),
+        });
     }
-    match v["pairs"].as_array().map_or(0, Vec::len) {
-        0 => "Nothing to check: you, or every other agent, have no changes yet.".into(),
-        1 => "No clashes: your changes type-check together with the other agent's.".into(),
-        n => format!(
-            "No clashes: your changes type-check together with each of the {n} other agents'."
-        ),
+    if checked > 0 && !unchecked.is_empty() {
+        lines.push(format!(
+            "Not checked yet: {names} {has} no changes so far. {later}"
+        ));
     }
+    lines.join("\n")
 }
 
 pub fn diagnostics(v: &Value) -> String {
@@ -197,6 +219,20 @@ mod tests {
                 &json!({ "pairs": [{ "with": "a", "clashes": [], "unmerged": [], "skipped": null }, { "with": "b", "clashes": [], "unmerged": [], "skipped": null }] })
             ),
             "No clashes: your changes type-check together with each of the 2 other agents'."
+        );
+        assert_eq!(
+            conflicts(
+                &json!({ "pairs": [{ "with": "a", "clashes": [], "unmerged": [], "skipped": null }], "unchecked": ["b", "c", "d"] })
+            ),
+            "No clashes: your changes type-check together with the other agent's.\nNot checked yet: b, c and d have no changes so far. A clash with them can still appear after this check."
+        );
+        assert_eq!(
+            conflicts(&json!({ "pairs": [], "unchecked": ["b", "c"] })),
+            "Nothing to check yet: b and c have no changes so far, or you have none. A clash with them can still appear after this check."
+        );
+        assert_eq!(
+            conflicts(&json!({ "pairs": [], "unchecked": [] })),
+            "Nothing to check: no other agent is working here."
         );
         assert_eq!(
             conflicts(

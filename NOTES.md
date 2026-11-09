@@ -1128,3 +1128,47 @@ The plan is in `paper/PLAN.md`, kept out of git like `launch/`. A related-work s
   - The timeline now records each worktree as a git tree object, written through a private index so the agent's own index is untouched.
   - `clash-truth.mjs` walks back from the first warning to the first snapshot where the problem already existed. A stub run gave 6 s.
   - The dry run and the pilot logged hashes, so they have no latency figure.
+
+## Product first: the gaps the pilot found (owner chose this before the paper's main runs, 2026-11-09)
+
+The owner asked whether the main runs were for the product or the paper. Mostly the paper: the dry run and pilot had already shown what the product needed to know. So the gaps they found are fixed and measured first, and stages A and B will run on the release that has the fixes.
+
+- **The clash tool now names who it could not check.** Before, in the pilot, an agent got "No clashes … with each of the 2 other agents'" while a third agent had no changes yet. Nothing said the third was missing, so an agent finishing early could read it as all clear.
+  - The `conflicts` op returns `unchecked`: the other ready agents with no pair against the caller.
+    - The check runs with the caller's pairs forced, settled or not, and past the memory limit.
+    - So a missing pair means one of the two has no changes yet.
+  - When at least one pair was checked, the answer adds: "Not checked yet: b, c and d have no changes so far. A clash with them can still appear after this check."
+  - With no pairs it says "Nothing to check yet: b and c have no changes so far, or you have none." and gives the same warning. That is the early finisher's case in both excalidraw runs: opts asked before anyone else had changes.
+    - The daemon can't tell which side has no changes without the layers, and the agent knows its own.
+  - Alone in the repo, it says "Nothing to check: no other agent is working here."
+  - An end-to-end test covers the agent with no changes: agents a, b and c, where b has none.
+  - A later clash still reaches only the human, through the menu bar notification and `strata status`. The agent may have finished by then.
+- **Checker memory on cal.com is the program's size, not a leak.**
+  - A full `tsc --noEmit --incremental false` on cal.com's `apps/web` peaks at 3.0 GB and takes 8.8 s: 10,445 files, 12.0 M instantiations.
+  - The checker holds that base program plus one snapshot at a time (about 1.3 GB, Phase 0's figure). Go returns freed memory late, which accounts for the rest. That fits the pilot's 4.3 GB after the first pair and 5.6 GB at the peak.
+  - Four agents each running their own `tsc` would need about 12 GB.
+  - The risk is the limit: `group_memory_mb` defaults to 6144. Above it, background clash checks wait until the next eviction of an agent's snapshot. Agents calling `strata_conflicts` themselves are not held back. The runs below measure whether this delays warnings.
+- **The ground truth type check is never incremental now.** cal.com's `packages/tsconfig/nextjs.json` sets `incremental: true`. The `.tsbuildinfo` seeded into the scratch worktree let plain `tsc` answer from cache: it reported a 5 ms check and 1.3 GB.
+  - At the base, the full check gives the same 730 errors, so the pilot's verdicts stand.
+  - The truth is now independent of any cache, at about 7 s more per cal.com check.
+- **Two product runs on the fixed build** (Opus, warnings on, `RESULTS=clash-product`, kept apart from the paper's runs):
+  - **v1, excalidraw related:** clear + rename clashed at `actionBoundText.tsx:163 TS2552`, the fourth run in a row.
+    - Strata matched the ground truth on 6 of 6 pairs.
+    - clear + upper briefly changed the same lines. Strata warned 21 s after that appeared; by the end the pair merged cleanly, and both verdicts say clean.
+  - **v2, cal.com related:** 3 of 6 pairs had a file git cannot merge: `CalEventParser.ts` twice, and its test file once.
+    - Strata matched the ground truth on 6 of 6 pairs.
+    - The checker peaked at 5.6 GB again.
+    - None of the agents' clash checks hit the new "Not checked yet" case.
+- **Warning latency**, from the first snapshot showing the problem to Strata's warning:
+  - Files git cannot merge: 13, 20, 20 and 21 s. No type check is needed, so this is waiting for both layers to settle plus the queue.
+  - The type clash: 47 s. Both trees had stopped changing 35 s before the warning.
+  - Why:
+    - A round re-checks every pair of an agent whose layer changed: one snapshot per agent alone, and one per pair.
+    - The daemon log shows clear + upper re-checked every 20 to 25 s while clear kept editing.
+    - Meanwhile the agents ran vitest and eslint; one agent's processes reached 4 GB.
+  - The bridge alone is not the cost. A snapshot of v1's clear and rename layers (42 files, 40 of them code) is made in 60 to 75 ms, and diagnostics for its 40 files take 1.0 to 1.3 s on an idle machine.
+  - Sending the 40 requests at once instead of one at a time saved nothing, so the bridge stays sequential.
+  - Not changed now:
+    - An agent calling `strata_conflicts` gets its own pairs checked on demand, once the current round finishes.
+    - The background latency mostly delays the human's notification, which still lands well before agents that work for 4 to 6 minutes are done.
+    - Upgrade path if it matters: check first the pairs never checked, rather than re-checking known clashes; or give each pair only its own files.

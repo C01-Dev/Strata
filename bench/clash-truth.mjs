@@ -46,9 +46,10 @@ function checkout(commit) {
   git(scratch, "clean", "-q", "-fd"); // untracked only; ignored files stay
 }
 
-/** TypeScript errors in the scratch tree: [{file, line, column, code, message}]. */
+/** TypeScript errors in the scratch tree: [{file, line, column, code, message}]. Never incremental:
+ * cal.com turns it on, and a seeded .tsbuildinfo would answer from cache. */
 function typecheck() {
-  const r = spawnSync(join(scratch, "node_modules/typescript/bin/tsc"), ["-p", tsconfig, "--noEmit", "--pretty", "false"], { cwd: scratch, encoding: "utf8", maxBuffer: 1 << 28 });
+  const r = spawnSync(join(scratch, "node_modules/typescript/bin/tsc"), ["-p", tsconfig, "--noEmit", "--incremental", "false", "--pretty", "false"], { cwd: scratch, encoding: "utf8", maxBuffer: 1 << 28 });
   const out = [];
   for (const l of (r.stdout ?? "").split("\n")) {
     const m = l.match(/^(.+?)\((\d+),(\d+)\): error TS(\d+): (.*)$/);

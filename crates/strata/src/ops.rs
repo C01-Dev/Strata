@@ -1161,7 +1161,15 @@ pub async fn check(d: &Daemon, name: String, req: Check) -> Result<Value> {
         d.checker
             .check_clashes(&repo.root, &base, &agents, &settings, Some(&name))
             .await?;
-        return Ok(json!({ "pairs": d.checker.clashes(&repo.root, &name).await }));
+        let pairs = d.checker.clashes(&repo.root, &name).await;
+        // Agents with no pair against the caller: one of the two has no changes yet, so a
+        // clash with them can still appear after this answer.
+        let unchecked: Vec<&String> = agents
+            .iter()
+            .map(|(a, _)| a)
+            .filter(|a| **a != name && !pairs.iter().any(|p| p["with"].as_str() == Some(a)))
+            .collect();
+        return Ok(json!({ "pairs": pairs, "unchecked": unchecked }));
     }
     let need = |what: &str| Error::Refused(format!("{} needs {what}", req.op));
     let file = || req.file.clone().ok_or_else(|| need("file"));

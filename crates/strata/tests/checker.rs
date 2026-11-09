@@ -203,6 +203,26 @@ async fn mcp_tools_answer_for_the_worktree_they_run_in() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn conflicts_names_the_agents_it_could_not_check_yet() {
+    let e = ts_initialized();
+    let wt = agent_with_error(&e);
+    let c = PathBuf::from(e.strata(&["new", "c"]).trim());
+    write_file(&c, "src/c.ts", "export const c = 1;\n");
+    e.strata(&["new", "b"]);
+    let client =
+        ().serve(TokioChildProcess::new(mcp_command(&e, &wt, &[])).unwrap())
+            .await
+            .unwrap();
+    let (err, text) = call(&client, "strata_conflicts", json!({})).await;
+    assert!(!err, "{text}");
+    assert_eq!(
+        text,
+        "No clashes: your changes type-check together with the other agent's.\nNot checked yet: b has no changes so far. A clash with it can still appear after this check."
+    );
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn mcp_finds_the_agent_from_roots_then_the_environment() {
     let e = ts_initialized();
     let wt = agent_with_error(&e);
