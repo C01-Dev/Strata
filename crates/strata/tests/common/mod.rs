@@ -112,8 +112,13 @@ pub fn initialized() -> Env {
 }
 
 /// Sets `dev.port_range` and `dev.proxy_port` in the repo's strata.toml (tests run in parallel,
-/// so each picks its own range).
+/// so each picks its own range). Below 32768 only: Linux gives 32768-60999 to outgoing
+/// connections, so a fixed port there can already be taken on a busy CI runner.
 pub fn set_ports(e: &Env, lo: u16, hi: u16, proxy: u16) {
+    assert!(
+        hi < 32768 && proxy < 32768,
+        "test ports must stay below 32768"
+    );
     let config = std::fs::read_to_string(e.root.join("strata.toml")).unwrap();
     let config: Vec<String> = config
         .lines()

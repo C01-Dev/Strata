@@ -19,7 +19,7 @@ macro_rules! fixture {
 }
 
 const AGENTS: [&str; 5] = ["a1", "a2", "a3", "a4", "a5"];
-const PROXY: u16 = 47150;
+const PROXY: u16 = 27150;
 
 fn host(agent: &str) -> String {
     format!("{agent}.app.localhost:{PROXY}")
@@ -136,7 +136,7 @@ fn five_next_servers_hot_reload_behind_the_proxy_and_rm_leaves_nothing() {
         &[("NEXT_TELEMETRY_DISABLED", "1")],
     );
     assert!(init.status.success(), "{init:?}");
-    set_ports(&e, 47100, 47149, PROXY);
+    set_ports(&e, 27100, 27149, PROXY);
 
     for agent in AGENTS {
         let t = Instant::now();
@@ -245,7 +245,7 @@ fn five_servers(install: bool) -> (u64, i64) {
     }
     let init = e.strata_with(&e.root, &["init", "--no-service"], &envs);
     assert!(init.status.success(), "{init:?}");
-    set_ports(&e, 47100, 47149, PROXY);
+    set_ports(&e, 27100, 27149, PROXY);
     common::no_pool(&e);
     for agent in AGENTS {
         e.strata(&["new", agent]);

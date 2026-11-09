@@ -300,13 +300,9 @@ pub async fn meter(d: &Arc<Daemon>) {
         } else {
             Level::Ok
         };
-        let previous = d
-            .meter
-            .lock()
-            .unwrap()
-            .insert(agent_id, (bytes, level))
-            .map(|(_, l)| l);
+        let previous = d.meter.lock().unwrap().get(&agent_id).map(|&(_, l)| l);
         if previous == Some(level) || level == Level::Ok {
+            d.meter.lock().unwrap().insert(agent_id, (bytes, level));
             continue;
         }
         let detail = format!(
@@ -321,7 +317,10 @@ pub async fn meter(d: &Arc<Daemon>) {
             "budget.warning"
         };
         tracing::warn!("{detail}");
+        // The event goes in before the new level is shown, so a status that says "over budget"
+        // always has its event.
         let _ = d.store().event(Some(agent_id), kind, &detail);
+        d.meter.lock().unwrap().insert(agent_id, (bytes, level));
         if level == Level::Over && budget.action == strata_core::config::BudgetAction::Stop {
             stop_agent(d, &agent).await;
             let _ = d.store().event(

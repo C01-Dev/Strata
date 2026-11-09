@@ -1198,3 +1198,14 @@ The owner asked whether the main runs were for the product or the paper. Mostly 
   - **Menu bar zip from the release:** marked quarantined, it passes Gatekeeper ("accepted, source=Notarized Developer ID") and is version 0.1.4.
   - **Homebrew:** the formula and the cask are both at 0.1.4.
   - **Site and plugin:** `strata.c01.dev/install.sh` and `releases/latest` both lead to the v0.1.4 installer. The site shows v0.1.4, and `plugin.json` on `main` says 0.1.4.
+
+## Two Linux-only test flakes fixed (owner request, 2026-11-09)
+
+- **Ports:** `ports.rs` and `nextjs.rs` used fixed ports at 46xxx and 47xxx, inside Linux's range for outgoing connections (32768-60999). On the tag's CI, another process already held 127.0.0.1:46100 (`AddrInUse`).
+  - The tests now use 26xxx and 27xxx.
+  - `set_ports` asserts that every test port stays below 32768.
+  - `own_ports` already did: it starts at 30000 and adds 100 per test, at most 16 tests per file.
+- **Budget:** `memory_is_metered_and_over_budget_warns` failed once on Ubuntu: the agent showed "over" with no `budget.exceeded` event.
+  - This was a real ordering bug: `procs::meter` published the new level before writing the event, so a `strata status` in between showed "over budget" with no event behind it.
+  - The event is now written first. Only `meter` writes the meter, from the maintenance tick, so reading and then writing it cannot race.
+- **Checked:** all 175 tests pass. The budget and ports tests passed 5 runs in a row on macOS, where neither flake happens, so CI on Linux is the real check.
