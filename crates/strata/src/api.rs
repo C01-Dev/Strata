@@ -233,7 +233,15 @@ async fn adopt(State(d): State<Shared>, Json(req): Json<ops::Adopt>) -> ApiResul
 }
 
 async fn gc(State(d): State<Shared>) -> ApiResult {
-    blocking(d, ops::gc).await
+    let Json(mut out) = blocking(d.clone(), ops::gc).await?;
+    // Strata's own git folders for clash checks only grow; the next round rebuilds them.
+    let repos = d.store().repos().map_err(ApiError)?;
+    let mut emptied = 0;
+    for repo in repos {
+        emptied += u64::from(d.checker.empty_clash_store(&repo.root).await);
+    }
+    out["clash_stores_emptied"] = json!(emptied);
+    Ok(Json(out))
 }
 
 async fn remove(

@@ -30,24 +30,183 @@ fn utf8(path: &Path) -> Result<&str> {
         .ok_or_else(|| Error::Refused(format!("{} is not valid UTF-8", path.display())))
 }
 
-/// `worktree list --porcelain -z` needs git 2.36.
-pub fn check_version() -> Result<()> {
+/// (major, minor) and the whole `git --version` line.
+fn version() -> Result<((u32, u32), String)> {
     let out = Command::new("git").arg("--version").output()?;
-    let text = String::from_utf8_lossy(&out.stdout);
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
     let mut nums = text
         .split_whitespace()
         .nth(2)
         .unwrap_or("")
         .split('.')
         .map(|n| n.parse::<u32>().unwrap_or(0));
-    let version = (nums.next().unwrap_or(0), nums.next().unwrap_or(0));
+    Ok(((nums.next().unwrap_or(0), nums.next().unwrap_or(0)), text))
+}
+
+/// `worktree list --porcelain -z` needs git 2.36.
+pub fn check_version() -> Result<()> {
+    let (version, text) = version()?;
     if version < (2, 36) {
         return Err(Error::Refused(format!(
-            "Strata needs git 2.36 or later; found {}",
-            text.trim()
+            "Strata needs git 2.36 or later; found {text}"
         )));
     }
     Ok(())
+}
+
+/// Whether this git can merge two trees without a checkout (`merge-tree --write-tree`, git
+/// 2.38), which the clash checks between agents use (see `Shadow`). Asked once per process.
+pub fn merges_trees() -> bool {
+    static CAN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *CAN.get_or_init(|| version().is_ok_and(|(v, _)| v >= (2, 38)))
+}
+
+/// What merging two agents' work gives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Merge {
+    /// The merged tree's id.
+    Clean(String),
+    /// The files git cannot merge (sorted).
+    Unmerged(Vec<String>),
+}
+
+/// Strata's own git state for one repo, for looking at worktrees without touching them: a
+/// folder of private index files, and a private object folder that reads the repo's own objects
+/// as alternates. Nothing is written into the repo, and no worktree's own index changes, so
+/// agents' `git status`, staging and commits are unaffected.
+pub struct Shadow {
+    dir: PathBuf,
+    /// The repo's own object folder.
+    alternates: PathBuf,
+}
+
+impl Shadow {
+    /// `dir` is Strata's folder for this repo; it is created when first used.
+    pub fn open(dir: &Path, repo: &Path) -> Result<Self> {
+        let common = git(
+            repo,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )?;
+        Ok(Self {
+            dir: dir.to_path_buf(),
+            alternates: Path::new(&common).join("objects"),
+        })
+    }
+
+    /// The private index of the worktree called `name`.
+    pub fn index(&self, name: &str) -> PathBuf {
+        self.dir.join(format!("{name}.index"))
+    }
+
+    /// `git -C <cwd> <args>` reading and writing Strata's objects, and `index` if given.
+    fn run(&self, cwd: &Path, index: Option<&Path>, args: &[&str]) -> Result<std::process::Output> {
+        let objects = self.dir.join("objects");
+        // git calls a missing object folder "not a git repository".
+        std::fs::create_dir_all(&objects)?;
+        let mut cmd = Command::new("git");
+        cmd.arg("-C")
+            .arg(cwd)
+            .args(args)
+            .env("LC_ALL", "C")
+            .env("GIT_OBJECT_DIRECTORY", objects)
+            .env("GIT_ALTERNATE_OBJECT_DIRECTORIES", &self.alternates);
+        if let Some(index) = index {
+            cmd.env("GIT_INDEX_FILE", index);
+        }
+        // `commit-tree` needs an identity, and a fixed one (with a fixed date) gives the same
+        // commit for the same tree and parent.
+        for who in ["AUTHOR", "COMMITTER"] {
+            cmd.env(format!("GIT_{who}_NAME"), "strata")
+                .env(format!("GIT_{who}_EMAIL"), "strata@localhost")
+                .env(format!("GIT_{who}_DATE"), "1700000000 +0000");
+        }
+        Ok(cmd.output()?)
+    }
+
+    fn ok(&self, cwd: &Path, index: Option<&Path>, args: &[&str]) -> Result<String> {
+        let out = self.run(cwd, index, args)?;
+        if !out.status.success() {
+            return Err(failed(args, &out));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+    }
+
+    /// The worktree's files as a git tree: everything tracked or untracked that is not ignored,
+    /// whether committed, staged or neither. Returns the tree's id. `index` is this worktree's
+    /// private index (see `index`); it is made on first use and makes later calls cheap, since
+    /// git rehashes only files whose stat changed.
+    pub fn tree(&self, worktree: &Path, index: &Path) -> Result<String> {
+        let tree = self.write_tree(worktree, index)?;
+        if self
+            .run(worktree, None, &["cat-file", "-e", &tree])?
+            .status
+            .success()
+        {
+            return Ok(tree);
+        }
+        // The index outlived its objects (the object folder was emptied): `write-tree` answered
+        // from the index's own record of a tree that is gone. Start over.
+        std::fs::remove_file(index)?;
+        self.write_tree(worktree, index)
+    }
+
+    fn write_tree(&self, worktree: &Path, index: &Path) -> Result<String> {
+        if !index.exists() {
+            self.ok(worktree, Some(index), &["read-tree", "HEAD"])?;
+        }
+        self.ok(worktree, Some(index), &["add", "-A"])?;
+        self.ok(worktree, Some(index), &["write-tree"])
+    }
+
+    /// A commit of `tree` on top of the worktree's `HEAD`, so a merge of two worktrees finds
+    /// their real common ancestor. The same tree on the same `HEAD` gives the same commit.
+    pub fn commit(&self, worktree: &Path, tree: &str) -> Result<String> {
+        self.ok(
+            worktree,
+            None,
+            &["commit-tree", tree, "-p", "HEAD", "-m", "strata"],
+        )
+    }
+
+    /// Three-way merge of two commits made by `commit`, with git's rename detection, without
+    /// a checkout. Needs `merges_trees()`.
+    pub fn merge(&self, repo: &Path, a: &str, b: &str) -> Result<Merge> {
+        let args = [
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "--no-messages",
+            "--allow-unrelated-histories",
+            "-z",
+            a,
+            b,
+        ];
+        let out = self.run(repo, None, &args)?;
+        let text = String::from_utf8_lossy(&out.stdout);
+        let mut fields = text.split('\0').filter(|f| !f.is_empty());
+        match (out.status.code(), fields.next()) {
+            (Some(0), Some(tree)) => Ok(Merge::Clean(tree.to_string())),
+            (Some(1), Some(_)) => {
+                let mut files: Vec<String> = fields.map(String::from).collect();
+                files.sort();
+                files.dedup();
+                Ok(Merge::Unmerged(files))
+            }
+            _ => Err(failed(&args, &out)),
+        }
+    }
+}
+
+fn failed(args: &[&str], out: &std::process::Output) -> Error {
+    Error::Git {
+        args: args.join(" "),
+        stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+    }
+}
+
+/// The tree id of `dir`'s `HEAD` commit.
+pub fn head_tree(dir: &Path) -> Result<String> {
+    git(dir, &["rev-parse", "--verify", "--quiet", "HEAD^{tree}"])
 }
 
 /// Root of the main checkout that owns `dir`, also when `dir` is inside a linked worktree.
@@ -521,6 +680,130 @@ mod tests {
         forget(&root, &wt).unwrap();
         assert_eq!(list(&root).unwrap().len(), 1);
         forget(&root, &wt).unwrap(); // already gone is fine
+    }
+
+    /// Files under the repo's own `.git/objects`.
+    fn objects(root: &Path) -> usize {
+        fn count(dir: &Path) -> usize {
+            std::fs::read_dir(dir)
+                .unwrap()
+                .map(|e| e.unwrap())
+                .map(|e| match e.file_type().unwrap().is_dir() {
+                    true => count(&e.path()),
+                    false => 1,
+                })
+                .sum()
+        }
+        count(&root.join(".git/objects"))
+    }
+
+    fn files(shadow: &Shadow, root: &Path, tree: &str) -> Vec<String> {
+        let out = shadow.ok(root, None, &["ls-tree", "-r", "--name-only", tree]);
+        out.unwrap().lines().map(String::from).collect()
+    }
+
+    #[test]
+    fn a_worktree_as_a_tree_touches_neither_it_nor_the_repo() {
+        let (dir, root) = repo();
+        let wt = dir.path().join("wt");
+        add(&root, &wt, "x", Some("main")).unwrap();
+        let shadow = Shadow::open(&dir.path().join("shadow"), &root).unwrap();
+        let index = shadow.index("x");
+        assert_eq!(
+            shadow.tree(&wt, &index).unwrap(),
+            head_tree(&root).unwrap(),
+            "an untouched worktree is the base's tree"
+        );
+
+        // Committed, staged, unstaged, untracked, deleted and ignored.
+        std::fs::write(wt.join("committed.txt"), "1").unwrap();
+        git(&wt, &["add", "committed.txt"]).unwrap();
+        commit(&wt);
+        std::fs::write(wt.join("staged.txt"), "2").unwrap();
+        git(&wt, &["add", "staged.txt"]).unwrap();
+        std::fs::write(wt.join("untracked.txt"), "3").unwrap();
+        std::fs::remove_file(wt.join("README.md")).unwrap();
+        exclude(&wt, "/ignored.txt").unwrap();
+        std::fs::write(wt.join("ignored.txt"), "4").unwrap();
+        let (status, before) = (
+            git(&wt, &["status", "--porcelain"]).unwrap(),
+            objects(&root),
+        );
+
+        let tree = shadow.tree(&wt, &index).unwrap();
+        assert_eq!(
+            files(&shadow, &root, &tree),
+            ["committed.txt", "staged.txt", "untracked.txt"]
+        );
+        assert_eq!(shadow.tree(&wt, &index).unwrap(), tree);
+        let commit = shadow.commit(&wt, &tree).unwrap();
+        assert_eq!(shadow.commit(&wt, &tree).unwrap(), commit);
+        assert_eq!(
+            git(&wt, &["status", "--porcelain"]).unwrap(),
+            status,
+            "the worktree's own index is as it was"
+        );
+        assert_eq!(objects(&root), before, "nothing written into the repo");
+        assert!(
+            git(&root, &["cat-file", "-e", &commit]).is_err(),
+            "the commit exists only in Strata's objects"
+        );
+
+        // An emptied object folder with a kept index: the objects are written again.
+        std::fs::remove_dir_all(dir.path().join("shadow/objects")).unwrap();
+        assert_eq!(shadow.tree(&wt, &index).unwrap(), tree);
+        assert_eq!(files(&shadow, &root, &tree).len(), 3);
+    }
+
+    #[test]
+    fn two_worktrees_merge_or_name_the_files_that_cannot() {
+        if !merges_trees() {
+            return; // git older than 2.38
+        }
+        let (dir, root) = repo();
+        std::fs::write(root.join("f.txt"), "one\ntwo\nthree\n").unwrap();
+        std::fs::write(root.join("old.txt"), "a\nb\nc\nd\ne\nf\n").unwrap();
+        git(&root, &["add", "."]).unwrap();
+        commit(&root);
+        let shadow = Shadow::open(&dir.path().join("shadow"), &root).unwrap();
+        let agent = |name: &str, edit: &dyn Fn(&Path)| {
+            let wt = dir.path().join(name);
+            add(&root, &wt, name, Some("main")).unwrap();
+            edit(&wt);
+            let tree = shadow.tree(&wt, &shadow.index(name)).unwrap();
+            shadow.commit(&wt, &tree).unwrap()
+        };
+        let write = |file: &'static str, text: &'static str| {
+            move |wt: &Path| std::fs::write(wt.join(file), text).unwrap()
+        };
+        let top = agent("top", &write("f.txt", "ONE\ntwo\nthree\n"));
+        let bottom = agent("bottom", &write("f.txt", "one\ntwo\nTHREE\n"));
+        let other = agent("other", &write("f.txt", "uno\ntwo\nthree\n"));
+        let moved = agent("moved", &|wt| {
+            std::fs::rename(wt.join("old.txt"), wt.join("new.txt")).unwrap()
+        });
+        let edited = agent("edited", &write("old.txt", "a\nb\nc\nd\ne\nF\n"));
+
+        let Merge::Clean(tree) = shadow.merge(&root, &top, &bottom).unwrap() else {
+            panic!("edits to different lines merge");
+        };
+        let merged = shadow.ok(&root, None, &["cat-file", "-p", &format!("{tree}:f.txt")]);
+        assert_eq!(merged.unwrap(), "ONE\ntwo\nTHREE");
+        assert_eq!(
+            shadow.merge(&root, &top, &other).unwrap(),
+            Merge::Unmerged(vec!["f.txt".into()])
+        );
+        // A rename in one and an edit of the old path in the other: git follows the rename.
+        let Merge::Clean(tree) = shadow.merge(&root, &moved, &edited).unwrap() else {
+            panic!("a rename and an edit merge");
+        };
+        assert_eq!(
+            files(&shadow, &root, &tree),
+            ["README.md", "f.txt", "new.txt"]
+        );
+        let followed = shadow.ok(&root, None, &["cat-file", "-p", &format!("{tree}:new.txt")]);
+        assert!(followed.unwrap().ends_with('F'));
+        assert!(shadow.merge(&root, &top, "0000").is_err());
     }
 
     #[test]

@@ -1,30 +1,43 @@
-//! Clash checks: type errors that appear only once two agents' changes are combined, found
-//! before either is merged (NOTES: "Clash detection").
+//! Clash checks between agents, before either is merged (NOTES: "Clash detection";
+//! docs/spec-clash-any-repo.md).
 //!
-//! For a pair of agents whose layers both changed, the code files either agent changed are
-//! checked with each agent's layer alone and with both layers at once. Files both edited get a
-//! three-way merge (`git merge-file`); a pair with a file git cannot merge reports that file
-//! and is not type-checked. An error the combination has and neither agent's own layer has is
-//! a clash. Each snapshot is made, read and disposed before the next, so a round adds one
-//! snapshot at a time to the group. Errors in files neither agent changed are missed; on
-//! excalidraw this found the same clashes as checking the whole project, 3 to 30 times faster.
+//! A round looks at every agent's worktree in two ways:
 //!
-//! The daemon runs a round every few seconds. A pair is checked once both layers have held
+//! - As a git tree (`strata_git::Shadow`), in any repo. Two agents' trees are merged by git, and
+//!   the files it cannot merge are reported, whatever their type. Needs git 2.38.
+//! - As a layer on the shared checker's base, where the repo has that checker. For a pair git
+//!   can merge, the code files either agent changed are type-checked with each agent's layer
+//!   alone and with both at once. An error the combination has and neither has alone is a
+//!   clash. Each snapshot is made, read and disposed before the next, so a round adds one
+//!   snapshot at a time to the group. Errors in files neither agent changed are missed; on
+//!   excalidraw this found the same clashes as checking the whole project, 3 to 30 times faster.
+//!
+//! A pair with a file git cannot merge is not type-checked: the combination does not exist
+//! until someone resolves the merge.
+//!
+//! The daemon runs a round every few seconds. A pair is checked once both agents have held
 //! still since the previous round, then again only when one of them, or the base, changes.
 
-use super::{
-    Broker, GROUP, Group, OPEN_TIMEOUT, QUERY_TIMEOUT, Settings, scan, typescript_version,
-};
+use super::{Broker, GROUP, OPEN_TIMEOUT, QUERY_TIMEOUT, Settings, scan, typescript_version};
 use crate::bridge::Bridge;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use strata_core::{Error, Result};
+use strata_git::{Merge, Shadow};
 use strata_overlay::{Layer, Tree, layer};
+use xxhash_rust::xxh3::xxh3_64;
 
 /// Files the checker reports errors in.
 const CODE: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
+
+/// An agent whose files did not change at the last look is looked at again every this many
+/// rounds (30 s at the daemon's 5 s), not every round: taking a worktree as a git tree costs
+/// 30 to 150 ms, against 7 to 55 ms for the layer scan.
+// ponytail: polling with back-off; a file watcher replaces both scans if the CPU shows.
+const LOOK_EVERY: u32 = 6;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Clash {
@@ -46,14 +59,13 @@ pub struct Pair {
     pub agents: [String; 2],
     /// Type errors only the combination has.
     pub clashes: Vec<Clash>,
-    /// Files both agents changed that git cannot merge, or that one removed and the other
-    /// edited. A pair with any is not type-checked.
+    /// Files git cannot merge. A pair with any is not type-checked.
     pub unmerged: Vec<String>,
-    /// Why the pair was not checked.
+    /// Why the pair's types were not checked.
     pub skipped: Option<String>,
-    /// The two layer hashes and the base generation it was checked at.
+    /// Both agents' files and layers, and the base, that it was checked at.
     #[serde(skip)]
-    key: (u64, u64, u64),
+    key: u64,
 }
 
 impl Pair {
@@ -81,27 +93,91 @@ impl Diag {
 /// Errors per file.
 type Files = HashMap<String, Vec<Diag>>;
 
+/// One repo's clash checks. It belongs to the broker, not to the checker group, so a repo
+/// without the shared checker has one too.
 #[derive(Default)]
-pub(super) struct Round {
+pub(super) struct State {
+    /// Held for a whole round, so rounds never overlap.
+    round: tokio::sync::Mutex<Round>,
+    /// The latest check of every pair of agents with changes.
+    pairs: std::sync::Mutex<Vec<Pair>>,
+}
+
+impl State {
+    /// How many pairs are checked, and those with something to report: type clashes first,
+    /// then files git cannot merge, then pairs whose types were not checked.
+    pub(super) fn open(&self) -> (usize, Vec<Pair>) {
+        let pairs = self.pairs.lock().unwrap();
+        let mut open: Vec<Pair> = pairs.iter().filter(|p| !p.is_clean()).cloned().collect();
+        open.sort_by_key(|p| (p.clashes.is_empty(), p.skipped.is_some(), p.agents.clone()));
+        (pairs.len(), open)
+    }
+}
+
+#[derive(Default)]
+struct Round {
+    /// What the layers below were scanned with. Other settings start them over.
+    settings: Option<Settings>,
     /// The round's own scan of the base checkout. The group's is left alone: rescanning it
     /// here would hide base changes from the next query, which reopens the base on a change.
     base: Option<Tree>,
     /// Bumped whenever the base checkout's content changes.
     base_gen: u64,
     trees: HashMap<String, Tree>,
-    /// Each agent's layer hash at the previous round.
-    last: HashMap<String, u64>,
+    /// Each agent's git tree and layer hash at the previous round.
+    last: HashMap<String, (String, u64)>,
     /// Errors per file with one agent's layer alone, for (layer hash, base_gen).
     alone: HashMap<String, ((u64, u64), Files)>,
+    shadow: Option<Arc<Shadow>>,
+    /// Each agent's worktree as git last saw it.
+    seen: HashMap<String, Seen>,
+}
+
+struct Seen {
+    tree: String,
+    commit: String,
+    /// Rounds since the tree last changed.
+    idle: u32,
 }
 
 struct Side {
     name: String,
     worktree: PathBuf,
+    /// Its files as a git tree, and a commit of that tree (empty when git could not say).
+    tree: String,
+    commit: String,
+    /// Its layer on the checker's base (empty without the shared checker).
     layer: Layer,
     /// Changed code files.
     code: Vec<String>,
     settled: bool,
+}
+
+impl Side {
+    fn layered(&self) -> bool {
+        !self.layer.changed.is_empty() || !self.layer.removed.is_empty()
+    }
+}
+
+/// What git made of merging a pair's trees.
+#[derive(PartialEq)]
+enum Merged {
+    Yes,
+    /// The files it cannot merge.
+    No(Vec<String>),
+    /// This git cannot merge trees: the checker's own file-by-file merge decides.
+    Unknown,
+    /// The merge itself failed; the pair is tried again next round.
+    Failed,
+}
+
+/// What a round needs from a running checker group.
+struct Checker {
+    bridge: Arc<Bridge>,
+    runtime: String,
+    typescript: String,
+    program_files: u64,
+    base_dep: String,
 }
 
 fn is_code(rel: &str) -> bool {
@@ -109,10 +185,28 @@ fn is_code(rel: &str) -> bool {
         .is_some_and(|(_, ext)| CODE.contains(&ext))
 }
 
+/// Strata's own git folder for a repo's clash checks (see `strata_git::Shadow`), also holding
+/// the merged files of a pair while it is type-checked.
+fn store(home: &Path, repo: &Path) -> PathBuf {
+    let key = xxh3_64(repo.as_os_str().as_encoded_bytes());
+    home.join("clash").join(format!("{key:016x}"))
+}
+
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| Error::Checker(e.to_string()))?
+}
+
 impl Broker {
+    fn clash_state(&self, repo: &Path) -> Arc<State> {
+        let mut all = self.clashes.lock().unwrap();
+        all.entry(repo.to_path_buf()).or_default().clone()
+    }
+
     /// One round of clash checks between a repo's agents (each name with its worktree). With
-    /// `only`, that agent's pairs are checked now, settled or not, and the memory limit does
-    /// not hold them back.
+    /// `only`, every agent is looked at now and that agent's pairs are checked, settled or not,
+    /// and the memory limit does not hold them back.
     pub async fn check_clashes(
         &self,
         repo: &Path,
@@ -121,40 +215,134 @@ impl Broker {
         settings: &Settings,
         only: Option<&str>,
     ) -> Result<()> {
-        let runtime = self.runtime().await?.to_string();
-        let group = self.group(repo, base, settings).await?;
-        let mut round = group.round.lock().await;
+        let git = strata_git::merges_trees() && base.join(".git").exists();
+        let group = match self.group(repo, base, settings).await {
+            Ok(g) => Some(g),
+            // No shared checker here: git's merges are still checked.
+            Err(Error::Refused(_)) if git => None,
+            Err(e) => return Err(e),
+        };
+        let state = self.clash_state(repo);
+        let mut round = state.round.lock().await;
         let r = &mut *round;
-        let unscanned = || Tree::new(base, &settings.extra_paths);
-        let (base_tree, moved) = scan(r.base.take().unwrap_or_else(unscanned)).await?;
-        r.base_gen += u64::from(moved);
-        r.trees.retain(|n, _| agents.iter().any(|(a, _)| a == n));
-        r.last.retain(|n, _| agents.iter().any(|(a, _)| a == n));
+        if r.settings.as_ref() != Some(settings) {
+            (r.settings, r.base) = (Some(settings.clone()), None);
+            r.trees.clear();
+            r.alone.clear();
+            r.base_gen += 1;
+        }
+        let live = |n: &String| agents.iter().any(|(a, _)| a == n);
+        r.trees.retain(|n, _| live(n));
+        r.last.retain(|n, _| live(n));
+        r.seen.retain(|n, _| live(n));
+
+        let base_tree = match &group {
+            Some(_) => {
+                let unscanned = || Tree::new(base, &settings.extra_paths);
+                let (tree, moved) = scan(r.base.take().unwrap_or_else(unscanned)).await?;
+                r.base_gen += u64::from(moved);
+                Some(tree)
+            }
+            None => None,
+        };
+        let shadow = match (git, &r.shadow) {
+            (false, _) => None,
+            (true, Some(shadow)) => Some(shadow.clone()),
+            (true, None) => {
+                let (dir, repo) = (store(&self.home, repo), repo.to_path_buf());
+                let shadow = Arc::new(blocking(move || Shadow::open(&dir, &repo)).await?);
+                r.shadow = Some(shadow.clone());
+                Some(shadow)
+            }
+        };
+        let base_id = match &shadow {
+            Some(_) => {
+                let base = base.to_path_buf();
+                blocking(move || strata_git::head_tree(&base)).await?
+            }
+            None => String::new(),
+        };
+
         let mut sides = vec![];
         for (name, wt) in agents {
-            let tree = match r.trees.remove(name) {
-                Some(t) if t.root() == wt => t,
-                _ => Tree::new(wt, &settings.extra_paths),
+            let layer = match &base_tree {
+                Some(base_tree) => {
+                    let tree = match r.trees.remove(name) {
+                        Some(t) if t.root() == wt => t,
+                        _ => Tree::new(wt, &settings.extra_paths),
+                    };
+                    // A worktree being removed fails its scan; it leaves the list next round.
+                    let Ok((tree, _)) = scan(tree).await else {
+                        continue;
+                    };
+                    let l = layer(base_tree, &tree);
+                    r.trees.insert(name.clone(), tree);
+                    l
+                }
+                None => Layer::default(),
             };
-            // A worktree being removed fails its scan; it leaves the list next round.
-            let Ok((tree, _)) = scan(tree).await else {
-                continue;
-            };
-            let l = layer(&base_tree, &tree);
-            r.trees.insert(name.clone(), tree);
-            let settled = r.last.insert(name.clone(), l.hash) == Some(l.hash);
-            if l.changed.is_empty() && l.removed.is_empty() {
-                continue;
+            if let Some(shadow) = &shadow {
+                let idle = r.seen.get(name).map(|s| s.idle);
+                // The index goes with a removed agent, so a new one of the same name is new.
+                let look = only.is_some()
+                    || idle.is_none_or(|idle| idle % LOOK_EVERY == 0)
+                    || r.last
+                        .get(name)
+                        .is_some_and(|(_, hash)| *hash != layer.hash)
+                    || !shadow.index(name).exists();
+                if look {
+                    let (shadow, wt, index) = (shadow.clone(), wt.clone(), shadow.index(name));
+                    let taken = blocking(move || {
+                        let tree = shadow.tree(&wt, &index)?;
+                        let commit = shadow.commit(&wt, &tree)?;
+                        Ok((tree, commit))
+                    });
+                    match taken.await {
+                        Ok((tree, commit)) => {
+                            let idle = match r.seen.get(name) {
+                                Some(s) if s.tree == tree => s.idle + 1,
+                                _ => 0,
+                            };
+                            let seen = Seen { tree, commit, idle };
+                            r.seen.insert(name.clone(), seen);
+                        }
+                        // A worktree being removed, or one git cannot add (a folder with its
+                        // own empty repo): the agent goes on without a tree, as on a git too
+                        // old to merge trees.
+                        Err(e) => {
+                            tracing::debug!(agent = name, "cannot take its files as a tree: {e}");
+                            r.seen.remove(name);
+                        }
+                    }
+                } else if let Some(s) = r.seen.get_mut(name) {
+                    s.idle += 1;
+                }
             }
-            sides.push(Side {
+            let (tree, commit) = match r.seen.get(name) {
+                Some(s) => (s.tree.clone(), s.commit.clone()),
+                None => Default::default(),
+            };
+            let now = (tree.clone(), layer.hash);
+            let settled = r.last.insert(name.clone(), now.clone()) == Some(now);
+            let side = Side {
                 name: name.clone(),
                 worktree: wt.clone(),
-                code: l.changed.iter().filter(|f| is_code(f)).cloned().collect(),
-                layer: l,
+                code: layer
+                    .changed
+                    .iter()
+                    .filter(|f| is_code(f))
+                    .cloned()
+                    .collect(),
+                layer,
+                tree,
+                commit,
                 settled,
-            });
+            };
+            if side.layered() || (!side.tree.is_empty() && side.tree != base_id) {
+                sides.push(side);
+            }
         }
-        r.base = Some(base_tree);
+        r.base = base_tree;
         sides.sort_by(|a, b| a.name.cmp(&b.name));
         r.alone.retain(|n, _| sides.iter().any(|s| s.name == *n));
 
@@ -166,12 +354,16 @@ impl Broker {
                 current.push([a.name.clone(), b.name.clone()]);
                 let settled = only.map_or(a.settled && b.settled, |o| o == a.name || o == b.name);
                 if settled {
-                    wanted.push((i, j, (a.layer.hash, b.layer.hash, r.base_gen)));
+                    let key = format!(
+                        "{} {} {} {} {base_id} {}",
+                        a.tree, b.tree, a.layer.hash, b.layer.hash, r.base_gen
+                    );
+                    wanted.push((i, j, xxh3_64(key.as_bytes())));
                 }
             }
         }
         let needed: Vec<_> = {
-            let mut pairs = group.pairs.lock().unwrap();
+            let mut pairs = state.pairs.lock().unwrap();
             pairs.retain(|p| current.contains(&p.agents));
             wanted
                 .into_iter()
@@ -186,39 +378,109 @@ impl Broker {
         if needed.is_empty() {
             return Ok(());
         }
-        if only.is_none() && group.memory().await > settings.group_memory_bytes {
-            tracing::debug!("checker group above group_memory_mb; clash checks wait");
-            return Ok(());
+
+        // First what git makes of each pair, which is cheap and holds no checker memory.
+        let mut failed = None;
+        let mut merges = vec![];
+        for &(i, j, _) in &needed {
+            let (a, b) = (&sides[i], &sides[j]);
+            merges.push(match &shadow {
+                None => Merged::Unknown,
+                Some(_) if a.tree.is_empty() || b.tree.is_empty() => Merged::Unknown,
+                // One has only ignored files in its layer, or both made the same changes.
+                Some(_) if a.tree == base_id || b.tree == base_id || a.tree == b.tree => {
+                    Merged::Yes
+                }
+                Some(shadow) => {
+                    let (shadow, repo) = (shadow.clone(), repo.to_path_buf());
+                    let (a, b) = (a.commit.clone(), b.commit.clone());
+                    match blocking(move || shadow.merge(&repo, &a, &b)).await {
+                        Ok(Merge::Clean(_)) => Merged::Yes,
+                        Ok(Merge::Unmerged(files)) => Merged::No(files),
+                        Err(e) => {
+                            failed.get_or_insert(e);
+                            Merged::Failed
+                        }
+                    }
+                }
+            });
         }
 
-        let (bridge, typescript, program_files) = {
-            let mut s = group.state.lock().await;
-            group.fresh(&mut s, &runtime, &self.home).await?;
-            let bridge = s.bridge.clone().expect("started");
-            (bridge, s.typescript.clone(), s.program_files)
+        // What git alone decides is recorded at once: the type checks after it can take minutes.
+        let blank = |i: usize, j: usize, key, skipped| Pair {
+            agents: [sides[i].name.clone(), sides[j].name.clone()],
+            clashes: vec![],
+            unmerged: vec![],
+            skipped,
+            key,
         };
-        let base_dep = r.base.as_ref().expect("scanned").dep_key(&runtime)?;
+        let record = |pair: Pair| {
+            if !pair.clashes.is_empty() || !pair.unmerged.is_empty() {
+                tracing::info!(a = %pair.agents[0], b = %pair.agents[1], clashes = pair.clashes.len(), unmerged = pair.unmerged.len(), "agents' changes clash");
+            }
+            let mut pairs = state.pairs.lock().unwrap();
+            pairs.retain(|p| p.agents != pair.agents);
+            pairs.push(pair);
+        };
+        // Left for the checker: the pairs git can merge, where both layers changed something and
+        // the repo has the shared checker.
+        let mut typed = vec![];
+        for ((i, j, key), merged) in needed.into_iter().zip(merges) {
+            match merged {
+                Merged::Failed => {}
+                Merged::No(unmerged) => record(Pair {
+                    unmerged,
+                    ..blank(i, j, key, None)
+                }),
+                merged if group.is_some() && sides[i].layered() && sides[j].layered() => {
+                    typed.push((i, j, key, merged))
+                }
+                _ => record(blank(i, j, key, None)),
+            }
+        }
+        // tsgo starts only when a pair needs it. While the group is above its memory limit,
+        // type checks in the background wait, and nothing is recorded for their pairs.
+        let c = match &group {
+            Some(group) if !typed.is_empty() => {
+                if only.is_none() && group.memory().await > settings.group_memory_bytes {
+                    tracing::debug!("checker group above group_memory_mb; clash checks wait");
+                    return failed.map_or(Ok(()), Err);
+                }
+                let runtime = self.runtime().await?.to_string();
+                let mut s = group.state.lock().await;
+                group.fresh(&mut s, &runtime, &self.home).await?;
+                Checker {
+                    bridge: s.bridge.clone().expect("started"),
+                    typescript: s.typescript.clone(),
+                    program_files: s.program_files,
+                    base_dep: r.base.as_ref().expect("scanned").dep_key(&runtime)?,
+                    runtime,
+                }
+            }
+            _ => return failed.map_or(Ok(()), Err),
+        };
         let mut unshared: HashMap<&str, String> = HashMap::new();
         let mut check = BTreeSet::new();
-        for &(i, j, _) in &needed {
+        let mut judged = HashSet::new();
+        for &(i, j, ..) in &typed {
             for side in [&sides[i], &sides[j]] {
-                if unshared.contains_key(side.name.as_str()) {
+                if !judged.insert(side.name.as_str()) {
                     continue;
                 }
                 let reason = if let Some(v) =
-                    typescript_version(&side.worktree).filter(|v| *v != typescript)
+                    typescript_version(&side.worktree).filter(|v| *v != c.typescript)
                 {
                     Some(format!(
-                        "{}'s TypeScript {v} differs from the base's {typescript}",
-                        side.name
+                        "{}'s TypeScript {v} differs from the base's {}",
+                        side.name, c.typescript
                     ))
-                } else if r.trees[&side.name].dep_key(&runtime)? != base_dep {
+                } else if r.trees[&side.name].dep_key(&c.runtime)? != c.base_dep {
                     Some(format!(
                         "{}'s dependencies differ from the base's",
                         side.name
                     ))
                 } else if side.layer.changed.len() as f64
-                    > settings.huge_diff_ratio * program_files.max(1) as f64
+                    > settings.huge_diff_ratio * c.program_files.max(1) as f64
                 {
                     Some(format!(
                         "{} changed too many files to check against",
@@ -234,142 +496,56 @@ impl Broker {
             }
         }
 
-        for (i, j, key) in needed {
+        for (i, j, key, merged) in typed {
             let (a, b) = (&sides[i], &sides[j]);
             let skipped = [a, b]
                 .iter()
                 .find_map(|s| unshared.get(s.name.as_str()).cloned());
-            let pair = match skipped {
-                Some(reason) => Pair {
-                    agents: [a.name.clone(), b.name.clone()],
-                    clashes: vec![],
-                    unmerged: vec![],
-                    skipped: Some(reason),
-                    key,
-                },
-                None => {
-                    for side in [a, b] {
-                        alone(r, &bridge, side, &check, base).await?;
-                    }
-                    self.combine(r, &bridge, a, b, base, key).await?
-                }
-            };
-            if !pair.clashes.is_empty() || !pair.unmerged.is_empty() {
-                tracing::info!(a = %a.name, b = %b.name, clashes = pair.clashes.len(), unmerged = pair.unmerged.len(), "agents' changes clash");
+            if skipped.is_some() {
+                record(blank(i, j, key, skipped));
+                continue;
             }
-            let mut pairs = group.pairs.lock().unwrap();
-            pairs.retain(|p| p.agents != pair.agents);
-            pairs.push(pair);
-        }
-        Ok(())
-    }
-
-    /// Checks both layers at once and keeps the errors neither has alone.
-    async fn combine(
-        &self,
-        r: &Round,
-        bridge: &Bridge,
-        a: &Side,
-        b: &Side,
-        base: &Path,
-        key: (u64, u64, u64),
-    ) -> Result<Pair> {
-        let tmp = self
-            .home
-            .join("clash")
-            .join(format!("{}+{}", a.name, b.name));
-        let at = |rel: &str| base.join(rel).to_string_lossy().into_owned();
-        let mut files: Map<String, Value> = a
-            .layer
-            .changed
-            .iter()
-            .map(|rel| (at(rel), json!(a.worktree.join(rel))))
-            .collect();
-        let mut unmerged = vec![];
-        for rel in &b.layer.changed {
-            let read = if a.layer.changed.binary_search(rel).is_ok() {
-                let out = tmp.join(rel);
-                let a_b = (&a.worktree.join(rel), &b.worktree.join(rel));
-                if !merge(a_b.0, &base.join(rel), a_b.1, &out).await? {
-                    unmerged.push(rel.clone());
-                }
-                out
-            } else {
-                b.worktree.join(rel)
-            };
-            files.insert(at(rel), json!(read));
-        }
-        for (x, y) in [(a, b), (b, a)] {
-            for rel in &x.layer.removed {
-                if y.layer.changed.binary_search(rel).is_ok() {
-                    unmerged.push(rel.clone());
-                }
+            for side in [a, b] {
+                alone(r, &c.bridge, side, &check, base).await?;
             }
-        }
-        let pair = |clashes, mut unmerged: Vec<String>| {
-            unmerged.sort();
-            Pair {
-                agents: [a.name.clone(), b.name.clone()],
-                clashes,
-                unmerged,
-                skipped: None,
-                key,
-            }
-        };
-        // Until someone resolves the merge there is no combination to check; picking one
-        // side's version would report errors that come from the pick.
-        if !unmerged.is_empty() {
+            let tmp = store(&self.home, repo)
+                .join("tmp")
+                .join(format!("{}+{}", a.name, b.name));
+            let both = combine(r, &c.bridge, a, b, base, &tmp).await;
             let _ = tokio::fs::remove_dir_all(&tmp).await;
-            return Ok(pair(vec![], unmerged));
+            record(match both? {
+                Ok(clashes) => Pair {
+                    clashes,
+                    ..blank(i, j, key, None)
+                },
+                // git merged the two trees, so these files merge with what a merge file by
+                // file lacks. Without that, the combination cannot be put on the checker.
+                Err(files) if merged == Merged::Yes => blank(
+                    i,
+                    j,
+                    key,
+                    Some(format!(
+                        "git merges {} only by following a rename or the branches' history, so their types cannot be checked together",
+                        files.join(", ")
+                    )),
+                ),
+                Err(unmerged) => Pair {
+                    unmerged,
+                    ..blank(i, j, key, None)
+                },
+            });
         }
-        let removed: BTreeSet<String> = a
-            .layer
-            .removed
-            .iter()
-            .chain(&b.layer.removed)
-            .map(|rel| at(rel))
-            .filter(|p| !files.contains_key(p))
-            .collect();
-        let touched: BTreeSet<String> = a.code.iter().chain(&b.code).cloned().collect();
-        let name = format!("clash:{}+{}", a.name, b.name);
-        let both = diagnose(bridge, &name, files, removed, &touched, base).await;
-        let _ = tokio::fs::remove_dir_all(&tmp).await;
-        let both: Vec<Diag> = both?.into_values().flatten().collect();
-        let own: Vec<&Diag> = [a, b]
-            .iter()
-            .flat_map(|s| touched.iter().flat_map(|f| &r.alone[&s.name].1[f]))
-            .collect();
-        let mut clashes: Vec<Clash> = only_together(&both, &own)
-            .into_iter()
-            .map(|d| Clash {
-                file: d.file,
-                line: d.line + 1,
-                column: d.character + 1,
-                code: d.code,
-                message: d.message,
-                also: vec![],
-            })
-            .collect();
-        clashes.sort_by(|x, y| (&x.file, x.line, x.column).cmp(&(&y.file, y.line, y.column)));
-        Ok(pair(grouped(clashes), unmerged))
+        failed.map_or(Ok(()), Err)
     }
 
-    /// Every pair including `agent`, from its side (see `Group::pairs_of`).
-    pub async fn clashes(&self, repo: &Path, agent: &str) -> Vec<Value> {
-        match self.groups.lock().await.get(repo) {
-            Some(g) => g.pairs_of(agent, true),
-            None => vec![],
-        }
-    }
-}
-
-impl Group {
     /// Pairs including `agent`, with the other one as `with`. Unless `all`, only those with
     /// clashes or files git cannot merge.
-    pub(super) fn pairs_of(&self, agent: &str, all: bool) -> Vec<Value> {
-        self.pairs
-            .lock()
-            .unwrap()
+    pub(super) fn pairs_of(&self, repo: &Path, agent: &str, all: bool) -> Vec<Value> {
+        let Some(state) = self.clashes.lock().unwrap().get(repo).cloned() else {
+            return vec![];
+        };
+        let pairs = state.pairs.lock().unwrap();
+        pairs
             .iter()
             .filter(|p| p.agents.iter().any(|a| a == agent))
             .filter(|p| all || !p.clashes.is_empty() || !p.unmerged.is_empty())
@@ -379,6 +555,108 @@ impl Group {
             })
             .collect()
     }
+
+    /// Every pair including `agent`, from its side (see `pairs_of`).
+    pub async fn clashes(&self, repo: &Path, agent: &str) -> Vec<Value> {
+        self.pairs_of(repo, agent, true)
+    }
+
+    /// A removed agent: its pairs, and its index in Strata's git folder.
+    pub(super) fn forget_clashes(&self, repo: &Path, agent: &str) {
+        if let Some(state) = self.clashes.lock().unwrap().get(repo) {
+            let mut pairs = state.pairs.lock().unwrap();
+            pairs.retain(|p| !p.agents.iter().any(|a| a == agent));
+        }
+        let _ = std::fs::remove_file(store(&self.home, repo).join(format!("{agent}.index")));
+    }
+
+    /// Removes Strata's git folder for a repo (it is rebuilt by the next round that needs it):
+    /// its objects only grow while agents work. For a repo left without agents, and `strata gc`.
+    pub async fn empty_clash_store(&self, repo: &Path) -> bool {
+        let dir = store(&self.home, repo);
+        if !dir.exists() {
+            return false;
+        }
+        let state = self.clash_state(repo);
+        let mut round = state.round.lock().await;
+        round.seen.clear();
+        tokio::fs::remove_dir_all(&dir).await.is_ok()
+    }
+}
+
+/// Checks both layers at once and returns the errors neither has alone, or the files both
+/// changed that a merge file by file cannot combine (`tmp` holds the merged ones meanwhile).
+async fn combine(
+    r: &Round,
+    bridge: &Bridge,
+    a: &Side,
+    b: &Side,
+    base: &Path,
+    tmp: &Path,
+) -> Result<std::result::Result<Vec<Clash>, Vec<String>>> {
+    let at = |rel: &str| base.join(rel).to_string_lossy().into_owned();
+    let mut files: Map<String, Value> = a
+        .layer
+        .changed
+        .iter()
+        .map(|rel| (at(rel), json!(a.worktree.join(rel))))
+        .collect();
+    let mut unmerged = vec![];
+    for rel in &b.layer.changed {
+        let read = if a.layer.changed.binary_search(rel).is_ok() {
+            let out = tmp.join(rel);
+            let a_b = (&a.worktree.join(rel), &b.worktree.join(rel));
+            if !merge(a_b.0, &base.join(rel), a_b.1, &out).await? {
+                unmerged.push(rel.clone());
+            }
+            out
+        } else {
+            b.worktree.join(rel)
+        };
+        files.insert(at(rel), json!(read));
+    }
+    for (x, y) in [(a, b), (b, a)] {
+        for rel in &x.layer.removed {
+            if y.layer.changed.binary_search(rel).is_ok() {
+                unmerged.push(rel.clone());
+            }
+        }
+    }
+    // Until someone resolves the merge there is no combination to check; picking one side's
+    // version would report errors that come from the pick.
+    if !unmerged.is_empty() {
+        unmerged.sort();
+        return Ok(Err(unmerged));
+    }
+    let removed: BTreeSet<String> = a
+        .layer
+        .removed
+        .iter()
+        .chain(&b.layer.removed)
+        .map(|rel| at(rel))
+        .filter(|p| !files.contains_key(p))
+        .collect();
+    let touched: BTreeSet<String> = a.code.iter().chain(&b.code).cloned().collect();
+    let name = format!("clash:{}+{}", a.name, b.name);
+    let both = diagnose(bridge, &name, files, removed, &touched, base).await?;
+    let both: Vec<Diag> = both.into_values().flatten().collect();
+    let own: Vec<&Diag> = [a, b]
+        .iter()
+        .flat_map(|s| touched.iter().flat_map(|f| &r.alone[&s.name].1[f]))
+        .collect();
+    let mut clashes: Vec<Clash> = only_together(&both, &own)
+        .into_iter()
+        .map(|d| Clash {
+            file: d.file,
+            line: d.line + 1,
+            column: d.character + 1,
+            code: d.code,
+            message: d.message,
+            also: vec![],
+        })
+        .collect();
+    clashes.sort_by(|x, y| (&x.file, x.line, x.column).cmp(&(&y.file, y.line, y.column)));
+    Ok(Ok(grouped(clashes)))
 }
 
 /// Fills in the agent's own errors in `check` files it has none recorded for.

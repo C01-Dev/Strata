@@ -99,6 +99,9 @@ fn daemon(status: Option<&Value>) -> Check {
 fn git() -> Check {
     let version = output("git", &["--version"]).unwrap_or_default();
     match strata_git::check_version() {
+        Ok(()) if !strata_git::merges_trees() => check("git", Level::Warn, version).hint(
+            "git 2.38 or later lets Strata warn about files two agents changed that git cannot merge",
+        ),
         Ok(()) => check("git", Level::Ok, version),
         Err(e) => check("git", Level::Fail, e.to_string()),
     }

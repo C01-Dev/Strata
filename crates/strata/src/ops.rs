@@ -31,16 +31,22 @@ pub fn write_note(root: &Path, path: &Path, cfg: &Config) -> Result<()> {
     let mut text = String::from(
         "# Strata\n\nThis worktree is managed by Strata, which shares one TypeScript checker and a dev server supervisor between every agent working on this repo. If the Strata tools named here are not available to you, ignore this file.\n\n",
     );
-    if detect::detect(path).checker_off_reason().is_none() {
+    let checker = detect::detect(path).checker_off_reason().is_none();
+    if checker {
         text.push_str(
             "- Check types with the `strata_diagnostics` tool (one file, or the whole project when `file` is omitted) instead of running `tsc`, `tsgo` or the repo's type-check script. It answers from the shared checker in about a second and does not start another checker.\n\
              - `strata_references`, `strata_definition`, `strata_hover` and `strata_symbols` answer questions about the code from the same checker.\n",
         );
-        if cfg.checker.conflicts {
-            text.push_str(
-                "- Before you report back, run `strata_conflicts`. It checks your changes against the other agents' unmerged changes. If it finds clashes, name the other agent and the errors in your summary instead of changing your code to match theirs.\n",
-            );
-        }
+    }
+    if cfg.checker.conflicts && checker {
+        text.push_str(
+            "- Before you report back, run `strata_conflicts`. It checks your changes against the other agents' unmerged changes. If it finds clashes, name the other agent and the errors in your summary instead of changing your code to match theirs.\n",
+        );
+    } else if cfg.checker.conflicts && git::merges_trees() {
+        // Without the shared checker, git's merges are still checked between agents.
+        text.push_str(
+            "- Before you report back, run `strata_conflicts`. It checks whether git can merge your changes with the other agents' unmerged changes. If it names files that cannot be merged, name the other agent and the files in your summary instead of changing your code to match theirs.\n",
+        );
     }
     text.push_str(
         "- Start the dev server with `strata_start_dev_server`, which gives this worktree its own port and URL, instead of running the dev command yourself.\n",
@@ -1122,6 +1128,10 @@ pub async fn clashes(d: Arc<Daemon>) {
                 continue;
             };
             let agents = ready_worktrees(&d, &repo).unwrap_or_default();
+            if agents.is_empty() {
+                // Strata's git folder for the repo held only its agents' files.
+                d.checker.empty_clash_store(&repo.root).await;
+            }
             if !cfg.checker.conflicts || agents.len() < 2 {
                 continue;
             }
@@ -1169,7 +1179,9 @@ pub async fn check(d: &Daemon, name: String, req: Check) -> Result<Value> {
             .map(|(a, _)| a)
             .filter(|a| **a != name && !pairs.iter().any(|p| p["with"].as_str() == Some(a)))
             .collect();
-        return Ok(json!({ "pairs": pairs, "unchecked": unchecked }));
+        // Without the shared checker only git's merges were checked, and the answer says so.
+        let types_off = detect::detect(&base).checker_off_reason();
+        return Ok(json!({ "pairs": pairs, "unchecked": unchecked, "types_off": types_off }));
     }
     let need = |what: &str| Error::Refused(format!("{} needs {what}", req.op));
     let file = || req.file.clone().ok_or_else(|| need("file"));

@@ -1209,3 +1209,90 @@ The owner asked whether the main runs were for the product or the paper. Mostly 
   - This was a real ordering bug: `procs::meter` published the new level before writing the event, so a `strata status` in between showed "over budget" with no event behind it.
   - The event is now written first. Only `meter` writes the meter, from the maintenance tick, so reading and then writing it cannot race.
 - **Checked:** all 175 tests pass. The budget and ports tests passed 5 runs in a row on macOS, where neither flake happens, so CI on Linux is the real check.
+
+## Phase 6: what git cannot merge, in every repo (owner: "Build Phase 6", 2026-11-10)
+
+The plan is `docs/spec-clash-any-repo.md`, written on 2026-11-09 after an audit and a probe on the excalidraw fixture. Its five decisions for the owner were not answered before the build, so Phase 6 follows the spec's own recommendations: tree merges run in TypeScript 7.1 repos too, and git 2.38 is needed only for the clash checks.
+
+- **Why:** before this, a repo without TypeScript 7.1 got no clash warning at all, not even for files git cannot merge, because the whole clash path sat behind the checker group. Conflicts in files the overlay does not walk (`.css`, `.prisma`, `.md`) were invisible everywhere, and a rename against an edit was called unmergeable.
+- **`strata_git::Shadow`** takes a worktree's files as a git tree without touching it:
+  - a private index per agent and a private object folder under `$STRATA_HOME/clash/<hash of the repo's path>/`, with the repo's own objects read as alternates;
+  - `tree` (`read-tree HEAD` once, `add -A`, `write-tree`), `commit` (`commit-tree` on the worktree's `HEAD`) and `merge` (`merge-tree --write-tree`).
+- **git facts found on 2.52.0:**
+  - With `GIT_OBJECT_DIRECTORY` pointing at a missing folder, git says "not a git repository". `Shadow` creates it before every call.
+  - `write-tree` answers from the index's own record of its tree. After the object folder is emptied it still returns the old id, and `commit-tree` accepts a tree that is not there. Only a merge notices. So `tree` asks `cat-file -e` for what `write-tree` returned and rebuilds the index when it is missing.
+  - `merge-tree --write-tree --name-only --no-messages -z` prints the tree id, then the files it cannot merge, each ended by NUL. It exits 1 with conflicts.
+  - `--allow-unrelated-histories` is passed, so two branches without a common ancestor are merged, not refused.
+  - A fixed author and date make `commit-tree` give the same commit for the same tree and parent.
+- **Rounds** (`broker/clash.rs`, rewritten around this):
+  - **Order:** each agent's tree, then git's merge of every pair that needs checking, then those results recorded, then the type checks. The files git cannot merge show within seconds even when the type checks of the same round take minutes.
+  - **Back-off:** an agent whose tree did not change at its last look is looked at every sixth round (30 s). It is looked at once more right after a change, when its layer hash moves, when its index is missing, and whenever an agent calls `strata_conflicts`.
+  - **Who is in a pair:** an agent whose tree differs from the base commit's tree, or whose layer is not empty (a layer can hold ignored files that a tree leaves out).
+  - **Key:** both tree ids, both layer hashes, the base tree and the base generation.
+  - **Types** are checked as before, for pairs git can merge where both layers changed something. tsgo still starts only when such a pair exists, and waits above `group_memory_mb`; the merges do not wait.
+  - **State moved:** the round and the list of pairs belong to the broker, per repo, not to the checker group. A repo with the checker off has both.
+  - **Without tree merges** (git older than 2.38, or a worktree git cannot add) the round runs as it did: layers only, files merged one by one. The plain-folder broker test runs that path.
+- **Decision: a pair git merges but the file-by-file merge cannot is not type-checked.** That happens with a rename against an edit, or branches that started apart. The layers cannot hold that combination, so the pair says "git merges src/old.ts only by following a rename or the branches' history, so their types cannot be checked together". Phase 7's copy check will cover it.
+- **Where it shows in a repo without the shared checker:**
+  - `strata_conflicts` answers. It names the files, or says "Git can merge your changes with the other agent's.", and always adds why types were not checked.
+  - The worktree note gets a `strata_conflicts` line about merges. The spec had this in 7.5; without it no agent in such a repo would call the tool.
+  - `status --json` lists the repo in `checker` with `typescript: ""`, `pid: null` and every field the menu bar app requires. `strata status` prints "no shared checker: N pair(s) of agents checked for files git cannot merge", and the menu bar line says "No shared checker".
+  - `strata doctor` warns below git 2.38.
+- **Cleanup:** `strata rm` removes the agent's index. `strata gc`, and a repo left without agents, remove the repo's whole folder; the next round rebuilds it.
+  - `ponytail:` objects are pruned only then. A session of many hours keeps every version of every changed file until its agents are gone.
+- **Deviations from the spec:**
+  - The folder is named by a hash of the repo's path, not its id: the broker does not know ids.
+  - `commit` runs at every look, not only when the tree changed. It is one process, and it puts the commit back after the folder was emptied.
+  - The merged files of a pair being type-checked moved from `$STRATA_HOME/clash/<a>+<b>` to the repo's folder.
+- **Fixed on the way:**
+  - A removed agent's pairs stayed in `status` when fewer than two agents were left, because no round ran to drop them. `dispose_agent` drops them now.
+  - Two repos with agents of the same names shared the folder for merged files. A `strata_conflicts` call in one could race the background round of the other.
+  - The reason an agent cannot be layered was computed once per pair it was in, reading its lockfiles each time. It is once per agent per round now.
+- **Limits, unchanged from before:** an agent whose branch is behind the base counts as having changes, and one round holds the repo's clash lock until all its pairs are done.
+- **Tests:** 180 pass (175 before), 4 ignored as before; `cargo fmt --check` and `clippy -D warnings` are clean, the bridge's 4 tests pass and the menu bar app builds.
+  - `a_worktree_as_a_tree_touches_neither_it_nor_the_repo`: committed, staged, unstaged, untracked, deleted and ignored files; the worktree's `git status` and the repo's object count are unchanged; an emptied object folder is rebuilt.
+  - `two_worktrees_merge_or_name_the_files_that_cannot`: a clean merge, a conflict, a rename followed.
+  - `in_a_git_repo_git_says_what_merges_and_the_checker_what_type_checks`: six agents; a type clash, a `.css` conflict, a rename against an edit, a removed agent, an emptied folder.
+  - `without_the_shared_checker_git_still_says_what_cannot_merge` (broker) and `without_the_checker_conflicts_still_names_files_git_cannot_merge` (CLI and MCP end to end).
+
+## Gate 6 (2026-11-10): PASSED on macOS, with one number that needs the owner's eye
+
+Gate 6: "On the excalidraw fixture with its 18 agents: the same 9 unmergeable pairs as the snapshot check reported, or each difference explained. A planted clash in a `.css` file is found. With TypeScript 5.9.3 in the repo (checker off) the list is the same. Idle daemon CPU stays under 4 s a minute. The repo's `.git` is unchanged."
+
+- **Setup:** Apple M5 Pro, macOS, APFS, git 2.52.0. The fixture now holds 26 agent worktrees (the agent-usage and clash runs), not 18. Each run used a fresh `STRATA_HOME`, `strata init --no-service`, then `strata adopt` of all 26.
+  - "Old" is a release build of `0b51631`, made in a throwaway worktree. "New" is this phase.
+  - 22 of the 26 agents have changes, which makes 231 pairs.
+
+| | Old build | New build | New build, repo on TypeScript 5.9.3 |
+| --- | --- | --- | --- |
+| Shared checker | on | on | off |
+| Pairs checked | 231 | 231 | 231 |
+| Pairs with files git cannot merge | 30 | 30, the same files | 30, the same files |
+| Pairs with type clashes | 20 | 20, the same errors | none (no checker) |
+| Pairs with types not checked | 0 | 0 | |
+| First pass, from daemon start | 178 s | 209 s | 32 s |
+
+- **Unmergeable pairs: identical.** No pair differs between the old file-by-file merge and git's tree merge on this fixture. It has no rename against an edit, and every agent started from the base commit, so the two ways could not disagree here. The broker test covers the cases where they do.
+- **Type clashes: identical**, pair by pair and error by error. The rewrite of the round did not change what the snapshot check finds.
+- **TypeScript 5.9.3:** the main checkout's `node_modules/typescript` was pointed at the fixture's own 5.9.3 for the run, and both links were restored after. `strata init` said "checker: off". Before this phase that repo got no warning at all; now it gets the same 30 pairs.
+- **Planted conflict:** two new agents each added a different first line to `packages/excalidraw/css/theme.scss`. `strata status` named the file 6 s after the second was adopted.
+- **First pass:** 31 s slower with the checker on (26 indexes built once at about 0.65 s each, 231 merges, and the commits). With the checker off every pair is checked 32 s after the daemon starts: 7 s to adopt the agents, then the indexes and the merges.
+- **The repo is untouched:** 553 files under `.git/objects` before and after every run, 29 worktrees before and after, and the combined `git status --porcelain` of all agent worktrees is the same hash throughout.
+- **Strata's own folder** held 9.3 MB in 908 files for 28 agents.
+- **Idle cost, 26 agents, 180 s after everything settled:**
+
+| Per minute | Old build | New build |
+| --- | --- | --- |
+| The daemon's own CPU | 2.35 s | 2.34 s |
+| git processes it starts | 4.14 s in 870 calls | 5.30 s in 1,090 calls |
+| Together | 6.49 s | 7.64 s |
+
+  - **The gate's line passes as it was meant** (the daemon's own CPU, which is what the 1.94 s in "Clash warnings in the daemon" measured): 2.34 s, unchanged.
+  - **This phase adds 1.16 s of git a minute**, 220 calls, about 0.045 s per agent. A look costs about 22 ms of git (1.16 s over 52 looks), so without the back-off, at 312 looks a minute, it would have been about 7 s.
+  - **Found, not fixed:** the old build already spends 4.14 s a minute in git at idle. That number was never measured before, because git runs as child processes and the earlier figure counted only the daemon. By the code's count it is the maintenance tick asking `git symbolic-ref` for every agent's branch every 2 s: 26 agents at 30 ticks a minute is 780 of the 870 calls. Reading each worktree's `HEAD` file, or asking every 10 s, would remove most of it. It is outside this phase, and it is the owner's call.
+  - Measured with a `git` wrapper first on the daemon's `PATH` that logs each call's CPU time from bash's `times`. `ps -S` on macOS did not add exited children to the daemon's time: it printed the same value with and without `-S`.
+- **Not covered:**
+  - Linux. The code has no platform-specific part, and CI will run the new tests there.
+  - A repo where the two merges disagree, beyond the broker test's toy project.
+  - More than one repo at once.
+- **Process lesson:** the first baseline run was lost. A background task was writing `old.json`, and a command of mine wrote the same file at the same moment and emptied it. All three runs were then repeated from one script, one after the other, with nothing else touching the result files.

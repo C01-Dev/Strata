@@ -84,17 +84,30 @@ pub fn conflicts(v: &Value) -> String {
         [rest @ .., last] => (format!("{} and {last}", rest.join(", ")), "have", "them"),
     };
     let later = format!("A clash with {it} can still appear after this check.");
+    // Without the shared checker, only git's merges were checked.
+    let types_off = v["types_off"].as_str();
     if lines.is_empty() {
-        lines.push(match checked {
-            0 if unchecked.is_empty() => "Nothing to check: no other agent is working here.".into(),
-            0 => format!(
+        lines.push(match (checked, types_off) {
+            (0, _) if unchecked.is_empty() => {
+                "Nothing to check: no other agent is working here.".into()
+            }
+            (0, _) => format!(
                 "Nothing to check yet: {names} {has} no changes so far, or you have none. {later}"
             ),
-            1 => "No clashes: your changes type-check together with the other agent's.".into(),
-            n => format!(
+            (1, None) => {
+                "No clashes: your changes type-check together with the other agent's.".into()
+            }
+            (n, None) => format!(
                 "No clashes: your changes type-check together with each of the {n} other agents'."
             ),
+            (1, Some(_)) => "Git can merge your changes with the other agent's.".into(),
+            (n, Some(_)) => {
+                format!("Git can merge your changes with each of the {n} other agents'.")
+            }
         });
+    }
+    if let Some(why) = types_off.filter(|_| checked > 0) {
+        lines.push(format!("Types were not checked together: {why}."));
     }
     if checked > 0 && !unchecked.is_empty() {
         lines.push(format!(
@@ -239,6 +252,23 @@ mod tests {
                 &json!({ "pairs": [{ "with": "a", "clashes": [], "unmerged": [], "skipped": "a's dependencies differ from the base's" }] })
             ),
             "Not checked against a's changes: a's dependencies differ from the base's."
+        );
+        let off = "TypeScript 5.9.3 is older than 7.1, so the shared checker is off";
+        assert_eq!(
+            conflicts(
+                &json!({ "pairs": [{ "with": "a", "clashes": [], "unmerged": [], "skipped": null }], "unchecked": [], "types_off": off })
+            ),
+            format!(
+                "Git can merge your changes with the other agent's.\nTypes were not checked together: {off}."
+            )
+        );
+        assert_eq!(
+            conflicts(
+                &json!({ "pairs": [{ "with": "a", "clashes": [], "unmerged": ["README.md"], "skipped": null }], "unchecked": [], "types_off": off })
+            ),
+            format!(
+                "You and a both changed README.md and git cannot merge the two versions.\nTypes were not checked together: {off}."
+            )
         );
         assert_eq!(hover(&Value::Null), "No type information at that position.");
         assert_eq!(

@@ -35,10 +35,14 @@ fn new_creates_a_locked_worktree_and_rm_removes_it() {
         (agent["state"].as_str(), agent["branch"].as_str()),
         (Some("ready"), Some("fix-login"))
     );
-    // The note for the agent: dev server only (no TypeScript here), invisible to git, and no
-    // obstacle to `rm`.
+    // The note for the agent: the dev server and git's merges only (no TypeScript here),
+    // invisible to git, and no obstacle to `rm`.
     let note = std::fs::read_to_string(path.join(".claude/rules/strata.md")).unwrap();
     assert!(note.contains("strata_start_dev_server") && !note.contains("strata_diagnostics"));
+    assert!(
+        !note.contains("your changes against the other agents'"),
+        "{note}"
+    );
     assert_eq!(git(&path, &["status", "--porcelain"]), "");
 
     assert!(e.strata(&["rm", "fix-login"]).contains("removed fix-login"));

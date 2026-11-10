@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{Env, ts_initialized, write_file};
+use common::{Env, git, initialized, ts_initialized, wait_until, write_file};
 use rmcp::model::{
     CallToolRequestParams, ClientCapabilities, ClientConfig, Implementation, ListRootsResult, Root,
 };
@@ -256,4 +256,52 @@ async fn mcp_finds_the_agent_from_roots_then_the_environment() {
         "never answers from base: {text}"
     );
     client.cancel().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_the_checker_conflicts_still_names_files_git_cannot_merge() {
+    if !strata_git::merges_trees() {
+        return; // git older than 2.38
+    }
+    let e = initialized(); // no TypeScript here, so no shared checker
+    let a = PathBuf::from(e.strata(&["new", "a"]).trim());
+    let b = PathBuf::from(e.strata(&["new", "b"]).trim());
+    write_file(&a, "README.md", "from a\n");
+    write_file(&b, "README.md", "from b\n");
+    let note = std::fs::read_to_string(a.join(".claude/rules/strata.md")).unwrap();
+    assert!(
+        note.contains("run `strata_conflicts`") && note.contains("whether git can merge"),
+        "{note}"
+    );
+    let client = ().serve(TokioChildProcess::new(mcp_command(&e, &a, &[])).unwrap()).await.unwrap();
+    let (err, text) = call(&client, "strata_conflicts", json!({})).await;
+    assert!(!err, "{text}");
+    assert_eq!(
+        text,
+        "You and b both changed README.md and git cannot merge the two versions.\nTypes were not checked together: TypeScript is not installed in node_modules, so the shared checker is off (it needs 7.1 or later)."
+    );
+    client.cancel().await.unwrap();
+
+    let status = e.status();
+    let conflict = &status["checker"][0]["conflicts"][0];
+    assert_eq!(conflict["agents"], json!(["a", "b"]), "{status}");
+    assert_eq!(conflict["unmerged"], json!(["README.md"]), "{status}");
+    let text = e.strata(&["status"]);
+    assert!(
+        text.contains("no shared checker")
+            && text.contains("README.md: both changed it; git cannot merge the two versions"),
+        "{text}"
+    );
+    // The agents' own git state is as they left it, and nothing of Strata's is in the repo.
+    assert_eq!(git(&a, &["status", "--porcelain"]), " M README.md");
+    assert_eq!(git(&e.root, &["status", "--porcelain"]), "?? strata.toml");
+
+    // A removed agent takes its pairs with it, and the last one Strata's git folder.
+    e.strata(&["rm", "b", "--force"]);
+    assert_eq!(e.status()["checker"], json!([]));
+    e.strata(&["rm", "a", "--force"]);
+    wait_until(
+        "Strata's git folder for the repo goes with its last agent",
+        || std::fs::read_dir(e.home.join("clash")).is_ok_and(|d| d.count() == 0),
+    );
 }

@@ -336,7 +336,10 @@ struct CheckerLine: View {
     }
 
     private var text: String {
-        var parts = ["Shared checker", "TypeScript \(checker.typescript)", size(checker.memoryBytes)]
+        // A repo without the shared checker still has git's merges checked between agents.
+        var parts = checker.typescript.isEmpty
+            ? ["No shared checker"]
+            : ["Shared checker", "TypeScript \(checker.typescript)", size(checker.memoryBytes)]
         if let n = checker.pairsChecked, n > 0 { parts.append("\(n) pair\(n == 1 ? "" : "s") checked") }
         return parts.joined(separator: " · ")
     }
