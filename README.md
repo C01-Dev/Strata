@@ -19,7 +19,7 @@ It is one binary: CLI, daemon and MCP server.
 ## Requirements
 
 - macOS (Apple silicon) or Linux (x86_64, arm64)
-- git 2.36 or later
+- git 2.36 or later (2.38 for the warnings about files two agents changed that git cannot merge)
 - Node.js 20 or later (the shared checker runs `tsgo` through Node)
 - For the shared checker: the repo's own TypeScript 7.1 or later in `node_modules`. Without it, worktrees, seeding, dev servers and budgets still work.
 - For fast seeding: a filesystem with clones (APFS; btrfs, XFS with `reflink=1` or OpenZFS 2.2+ on Linux). Elsewhere (ext4) each new worktree installs its dependencies instead.
@@ -129,7 +129,7 @@ Stops its processes, removes the worktree and deletes the branch if it is merged
 | `strata logs <name> [process] [--lines <n>]` | The end of a process's output |
 | `strata status [--json \| --watch]` | Repos, agents, processes, checker; `--watch` redraws every 2 s |
 | `strata doctor [--report]` | Check the setup; `--report` prints a redacted summary to paste into an issue |
-| `strata gc` | Remove what nothing uses any more: orphaned agents, stale donors, leftovers, trash, old logs |
+| `strata gc` | Remove what nothing uses any more: orphaned agents, stale donors, leftovers, trash, old logs, Strata's own git objects for clash checks |
 | `strata mcp [--agent <name>]` | The MCP server for an agent, on stdio |
 | `strata daemon start\|stop\|status\|install\|uninstall` | Manage the daemon and its service |
 | `strata bench <fixture>` | The memory benchmark (see [Benchmarks](#benchmarks)) |
@@ -185,9 +185,11 @@ It matters when a repo's own instructions name a type-check command. In a test o
 Details are in [`bench/results/agent-usage.md`](bench/results/agent-usage.md).
 
 **Clashes between agents.** Two agents can each finish clean work that breaks once both are merged. Every 5 seconds the daemon looks for pairs of agents whose changes moved, and checks each such pair:
-- The files either agent changed are type-checked three times: with each agent's changes alone, and with both combined. An error only the combination has is a clash.
-- Files both agents changed are merged with `git merge-file` first. When git cannot merge them, Strata reports those files and skips the type check, since the combination does not exist until someone resolves the merge.
+- Git merges the two agents' files first: a real three-way merge with rename detection, of every file type, committed or not. When git cannot merge them, Strata reports those files and skips the type check, since the combination does not exist until someone resolves the merge.
+- The files either agent changed are then type-checked three times: with each agent's changes alone, and with both combined. An error only the combination has is a clash.
 - A pair is checked once both agents' changes have held still for a round, and again only when one of them, or the base branch, changes.
+
+The merge needs no type checker, so it runs in every repo: without TypeScript 7.1, `strata_conflicts`, `strata status` and the menu bar still name the files git cannot merge (git 2.38 or later). Strata reads each worktree through its own index and object folder under `~/.strata/clash/`. Nothing is written into your repo, and no agent's `git status` or staging changes. An agent whose files have not changed is looked at every 30 seconds, not every round.
 
 Clashes show up in four places: `strata_diagnostics` answers, `strata_conflicts` (which checks the calling agent's pairs on the spot), `strata status` and the menu bar. The same error in several places of one file is one line, with the other places after it: `src/cart.ts:11:9 (and 12:10) error TS2304: Cannot find name 'fetchJson'.` When TypeScript's "Did you mean" guess differs between those places, the line keeps only the first sentence. On the excalidraw fixture:
 - 14 agents with changes made 91 pairs. The daemon found all 8 planted clashes and reported no type clash that was not real.

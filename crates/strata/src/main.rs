@@ -469,6 +469,7 @@ fn gc() -> Result<()> {
         "trash folders deleting in the background: {}",
         n("trash_removed")
     );
+    println!("clash check folders emptied: {}", n("clash_stores_emptied"));
     println!(
         "old agent logs removed: {}",
         match names("logs_removed") {
@@ -569,13 +570,19 @@ fn status(json: bool) -> Result<()> {
         }
     }
     for g in s["checker"].as_array().into_iter().flatten() {
-        println!(
-            "\nchecker: TypeScript {}, {} agents, {}, pid {}",
-            g["typescript"].as_str().unwrap_or("?"),
-            g["agents"].as_array().map_or(0, |a| a.len()),
-            size(g["memory_bytes"].as_u64().unwrap_or(0)),
-            g["pid"]
-        );
+        match g["typescript"].as_str().filter(|t| !t.is_empty()) {
+            Some(typescript) => println!(
+                "\nchecker: TypeScript {typescript}, {} agents, {}, pid {}",
+                g["agents"].as_array().map_or(0, |a| a.len()),
+                size(g["memory_bytes"].as_u64().unwrap_or(0)),
+                g["pid"]
+            ),
+            // A repo without the shared checker: git's merges are still checked.
+            None => println!(
+                "\nno shared checker: {} pair(s) of agents checked for files git cannot merge",
+                g["pairs_checked"]
+            ),
+        }
         let conflicts = g["conflicts"].as_array().cloned().unwrap_or_default();
         if !conflicts.is_empty() {
             println!("\nbetween agents' changes, before either is merged:");

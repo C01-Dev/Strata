@@ -153,10 +153,6 @@ struct Group {
     /// Name -> (worktree, agent). The worktree sits outside the agent's lock so lookups never
     /// wait for a running query.
     agents: Mutex<HashMap<String, (PathBuf, SharedAgent)>>,
-    /// Held for a whole round of clash checks, so rounds never overlap.
-    round: Mutex<clash::Round>,
-    /// The latest clash check of every pair of agents with changes.
-    pairs: std::sync::Mutex<Vec<Pair>>,
 }
 
 type SharedAgent = Arc<Mutex<Agent>>;
@@ -165,6 +161,8 @@ pub struct Broker {
     home: PathBuf,
     runtime: tokio::sync::OnceCell<String>,
     groups: Mutex<HashMap<PathBuf, Arc<Group>>>,
+    /// Clash checks between agents, per repo (see `clash.rs`).
+    clashes: std::sync::Mutex<HashMap<PathBuf, Arc<clash::State>>>,
 }
 
 async fn scan(mut tree: Tree) -> Result<(Tree, bool)> {
@@ -213,6 +211,7 @@ impl Broker {
             home: home.to_path_buf(),
             runtime: Default::default(),
             groups: Default::default(),
+            clashes: Default::default(),
         }
     }
 
@@ -259,8 +258,6 @@ impl Broker {
                 restarts: 0,
             }),
             agents: Default::default(),
-            round: Default::default(),
-            pairs: Default::default(),
         });
         groups.insert(repo.to_path_buf(), g.clone());
         Ok(g)
@@ -332,7 +329,8 @@ impl Broker {
         if let Value::Object(map) = &mut result {
             map.insert("sharing".into(), json!(a.sharing));
             if matches!(req.op, Op::Diagnostics { .. }) {
-                map.insert("conflicts".into(), json!(group.pairs_of(&req.agent, false)));
+                let pairs = self.pairs_of(&req.repo, &req.agent, false);
+                map.insert("conflicts".into(), json!(pairs));
             }
         }
         Ok(result)
@@ -340,6 +338,7 @@ impl Broker {
 
     /// Drops an agent's snapshot (and its own bridge, if any).
     pub async fn dispose_agent(&self, repo: &Path, name: &str) {
+        self.forget_clashes(repo, name);
         let Some(group) = self.groups.lock().await.get(repo).cloned() else {
             return;
         };
@@ -397,6 +396,7 @@ impl Broker {
 
     pub async fn status(&self) -> Value {
         let groups: Vec<_> = self.groups.lock().await.values().cloned().collect();
+        let mut clashes = self.clashes.lock().unwrap().clone();
         let mut out = vec![];
         for g in groups {
             let (typescript, files, restarts, pid) = {
@@ -419,13 +419,7 @@ impl Broker {
                     "idle_secs": a.last_used.elapsed().as_secs(),
                 }));
             }
-            let (pairs, conflicts) = {
-                let pairs = g.pairs.lock().unwrap();
-                let mut open: Vec<Pair> = pairs.iter().filter(|p| !p.is_clean()).cloned().collect();
-                // Type clashes first, then files git cannot merge, then pairs not checked.
-                open.sort_by_key(|p| (p.clashes.is_empty(), p.skipped.is_some(), p.agents.clone()));
-                (pairs.len(), open)
-            };
+            let (pairs, conflicts) = clashes.remove(&g.repo).map_or((0, vec![]), |c| c.open());
             out.push(json!({
                 "repo": g.repo,
                 "pid": pid,
@@ -437,6 +431,24 @@ impl Broker {
                 "pairs_checked": pairs,
                 "conflicts": conflicts,
             }));
+        }
+        // Repos without the shared checker: what git cannot merge between their agents. The
+        // entry has every field one with a checker has, for clients that require them.
+        for (repo, c) in clashes {
+            let (pairs, conflicts) = c.open();
+            if pairs > 0 {
+                out.push(json!({
+                    "repo": repo,
+                    "pid": null,
+                    "typescript": "",
+                    "program_files": 0,
+                    "restarts": 0,
+                    "memory_bytes": 0,
+                    "agents": [],
+                    "pairs_checked": pairs,
+                    "conflicts": conflicts,
+                }));
+            }
         }
         json!(out)
     }

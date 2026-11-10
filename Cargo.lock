@@ -1367,6 +1367,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strata-core",
+ "strata-git",
  "strata-overlay",
  "strata-proc",
  "tempfile",

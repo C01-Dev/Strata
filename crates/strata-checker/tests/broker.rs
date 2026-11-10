@@ -592,3 +592,183 @@ async fn clashes_between_agents_are_found_before_either_merges() {
     );
     f.broker.shutdown().await;
 }
+
+fn git(dir: &std::path::Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Commits what is in `base` on `main` and returns a way to make worktrees of it.
+fn repo(base: &std::path::Path) -> impl Fn(&str) -> (String, PathBuf) + '_ {
+    git(base, &["init", "-q", "-b", "main"]);
+    git(base, &["add", "."]);
+    git(base, &["commit", "-q", "-m", "init"]);
+    move |name| {
+        let wt = base.parent().unwrap().join(name);
+        git(
+            base,
+            &["worktree", "add", "-q", "-b", name, wt.to_str().unwrap()],
+        );
+        (name.to_string(), wt.canonicalize().unwrap())
+    }
+}
+
+/// The agent's pair with `with`.
+async fn pair(broker: &Broker, repo: &std::path::Path, agent: &str, with: &str) -> Value {
+    let pairs = broker.clashes(repo, agent).await;
+    let found = pairs.iter().find(|p| p["with"] == with);
+    found
+        .unwrap_or_else(|| panic!("no pair {agent}+{with}"))
+        .clone()
+}
+
+#[tokio::test]
+async fn in_a_git_repo_git_says_what_merges_and_the_checker_what_type_checks() {
+    if !strata_git::merges_trees() {
+        return; // git older than 2.38: covered by the plain-folder test above
+    }
+    let f = fixture();
+    let old = "export const one = 1;\nexport const two = 2;\nexport const three = 3;\nexport const four = 4;\n";
+    write(
+        &f.base,
+        &[
+            (".gitignore", "node_modules\n"),
+            ("styles.css", "a { color: red; }\n"),
+            ("src/old.ts", old),
+        ],
+    );
+    let agent = repo(&f.base);
+    let agents = ["rename", "caller", "blue", "green", "mover", "editor"].map(|name| {
+        let (name, wt) = agent(name);
+        common::link_typescript(&wt);
+        (name, wt)
+    });
+    let wt = |name: &str| agents.iter().find(|(n, _)| n == name).unwrap().1.clone();
+    // A type clash between two agents that git merges: the rename and a new caller.
+    write(
+        &wt("rename"),
+        &[
+            ("src/a.ts", &common::A.replace("addOne", "plusOne")),
+            ("src/b.ts", &common::B.replace("addOne", "plusOne")),
+        ],
+    );
+    let c = "import { addOne } from \"./a\";\nexport const three = addOne(2);\n";
+    write(&wt("caller"), &[("src/c.ts", c)]);
+    // The same line of a file the checker never reads.
+    write(&wt("blue"), &[("styles.css", "a { color: blue; }\n")]);
+    write(&wt("green"), &[("styles.css", "a { color: green; }\n")]);
+    // A rename, and an edit of the file under its old name.
+    std::fs::rename(
+        wt("mover").join("src/old.ts"),
+        wt("mover").join("src/new.ts"),
+    )
+    .unwrap();
+    write(&wt("editor"), &[("src/old.ts", &old.replace("4", "40"))]);
+
+    let round = |only| {
+        let (f, agents) = (&f, agents.to_vec());
+        async move {
+            f.broker
+                .check_clashes(&f.base, &f.base, &agents, &settings(), only)
+                .await
+                .unwrap()
+        }
+    };
+    round(None).await;
+    round(None).await;
+    let status = f.broker.status().await;
+    assert_eq!(status[0]["pairs_checked"], 15, "{status}");
+    let open = status[0]["conflicts"].as_array().unwrap();
+    assert_eq!(open.len(), 3, "{status}");
+
+    let clash = pair(&f.broker, &f.base, "caller", "rename").await;
+    assert_eq!(clash["clashes"][0]["file"], "src/c.ts", "{clash}");
+    assert_eq!(clash["unmerged"], serde_json::json!([]));
+    let css = pair(&f.broker, &f.base, "blue", "green").await;
+    assert_eq!(css["unmerged"], serde_json::json!(["styles.css"]), "{css}");
+    let moved = pair(&f.broker, &f.base, "editor", "mover").await;
+    assert_eq!(moved["unmerged"], serde_json::json!([]), "git follows it");
+    let skipped = moved["skipped"].as_str().unwrap();
+    assert!(
+        skipped.contains("src/old.ts") && skipped.contains("rename"),
+        "{skipped}"
+    );
+
+    // Each agent has an index in Strata's own folder. A removed agent's goes, with its pairs.
+    let store = std::fs::read_dir(f.tmp.path().join("home/clash")).unwrap();
+    let store = store.map(|e| e.unwrap().path()).next().unwrap();
+    assert!(store.join("blue.index").exists() && store.join("objects").is_dir());
+    assert!(!store.join("tmp/caller+rename").exists(), "merged files go");
+    f.broker.dispose_agent(&f.base, "blue").await;
+    assert!(!store.join("blue.index").exists());
+    assert!(
+        f.broker
+            .clashes(&f.base, "green")
+            .await
+            .iter()
+            .all(|p| p["with"] != "blue")
+    );
+
+    // The folder can go at any time: the next round rebuilds it and answers the same.
+    assert!(f.broker.empty_clash_store(&f.base).await);
+    assert!(!store.exists());
+    round(Some("caller")).await;
+    let clash = pair(&f.broker, &f.base, "caller", "rename").await;
+    assert_eq!(clash["clashes"][0]["file"], "src/c.ts", "{clash}");
+    assert!(store.join("caller.index").exists());
+    f.broker.shutdown().await;
+}
+
+#[tokio::test]
+async fn without_the_shared_checker_git_still_says_what_cannot_merge() {
+    if !strata_git::merges_trees() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().join("base");
+    write(&base, &[("README.md", "one\ntwo\n"), ("notes.txt", "x\n")]);
+    let base = base.canonicalize().unwrap();
+    let agent = repo(&base);
+    let agents = ["a", "b", "c"].map(agent);
+    write(&agents[0].1, &[("README.md", "ONE\ntwo\n")]);
+    write(&agents[1].1, &[("README.md", "uno\ntwo\n")]);
+    write(&agents[2].1, &[("notes.txt", "y\n")]);
+    let broker = Broker::new(&tmp.path().join("home"));
+    for _ in 0..2 {
+        broker
+            .check_clashes(&base, &base, &agents, &settings(), None)
+            .await
+            .unwrap();
+    }
+    let status = broker.status().await;
+    assert_eq!(status[0]["typescript"], "", "{status}");
+    assert_eq!(status[0]["pairs_checked"], 3, "{status}");
+    let open = status[0]["conflicts"].as_array().unwrap();
+    assert_eq!(open.len(), 1, "{status}");
+    assert_eq!(open[0]["agents"], serde_json::json!(["a", "b"]));
+    assert_eq!(open[0]["unmerged"], serde_json::json!(["README.md"]));
+
+    // Resolved in b: seen at its next look, without waiting for the back-off.
+    write(
+        &agents[1].1,
+        &[("README.md", "one\ntwo\n"), ("b.txt", "b\n")],
+    );
+    broker
+        .check_clashes(&base, &base, &agents, &settings(), Some("b"))
+        .await
+        .unwrap();
+    assert_eq!(broker.status().await[0]["conflicts"], serde_json::json!([]));
+}

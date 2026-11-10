@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 strata-core.workspace = true
+strata-git.workspace = true
 strata-overlay.workspace = true
 strata-proc.workspace = true
 serde.workspace = true
